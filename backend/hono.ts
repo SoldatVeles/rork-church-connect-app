@@ -13,7 +13,11 @@ app.use("*", cors());
 // Add logging middleware
 app.use("*", async (c, next) => {
   console.log(`[Hono] ${c.req.method} ${c.req.url}`);
+  console.log(`[Hono] Headers:`, c.req.header());
+  const start = Date.now();
   await next();
+  const end = Date.now();
+  console.log(`[Hono] ${c.req.method} ${c.req.url} - ${end - start}ms`);
 });
 
 // Mount tRPC router at /trpc
@@ -32,7 +36,23 @@ app.use(
 // Simple health check endpoint
 app.get("/", (c) => {
   console.log('[Hono] Health check endpoint hit');
-  return c.json({ status: "ok", message: "API is running" });
+  return c.json({ status: "ok", message: "API is running", timestamp: new Date().toISOString() });
+});
+
+// Test endpoint for debugging
+app.get("/test", (c) => {
+  console.log('[Hono] Test endpoint hit');
+  return c.json({ message: "Test endpoint working", timestamp: new Date().toISOString() });
+});
+
+// tRPC health check
+app.get("/trpc-health", (c) => {
+  console.log('[Hono] tRPC health check endpoint hit');
+  return c.json({ 
+    message: "tRPC server is configured", 
+    router: "appRouter",
+    timestamp: new Date().toISOString() 
+  });
 });
 
 // Catch-all route for debugging

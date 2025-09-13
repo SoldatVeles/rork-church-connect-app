@@ -35,7 +35,8 @@ export default function PrayersScreen() {
   const utils = trpc.useUtils();
   
   const createPrayerMutation = trpc.prayers.create.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('[Prayers] Prayer created successfully:', data);
       utils.prayers.list.invalidate();
       setNewPrayer({
         title: '',
@@ -44,10 +45,10 @@ export default function PrayersScreen() {
         isUrgent: false,
       });
       setShowAddModal(false);
-      Alert.alert('Success', 'Your prayer request has been submitted');
+      Alert.alert('Success', data.message || 'Your prayer request has been submitted');
     },
     onError: (error) => {
-      console.error('Error creating prayer:', error);
+      console.error('[Prayers] Error creating prayer:', error);
       Alert.alert('Error', error.message || 'Failed to create prayer request');
     },
   });

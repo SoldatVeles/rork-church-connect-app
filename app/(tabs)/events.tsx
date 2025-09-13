@@ -104,7 +104,7 @@ export default function EventsScreen() {
         maxAttendees: '' 
       });
       setShowAddModal(false);
-      Alert.alert('Success', 'Event has been created successfully!');
+      Alert.alert('Success', data.message || 'Event has been created successfully!');
     },
     onError: (error) => {
       console.error('[Events] Error creating event:', error);
@@ -113,7 +113,7 @@ export default function EventsScreen() {
         data: error.data,
         shape: error.shape,
       });
-      Alert.alert('Error', error.message ?? 'Failed to create event. Please check if the backend is running.');
+      Alert.alert('Error', error.message ?? 'Failed to create event. Please try again.');
     },
   });
 

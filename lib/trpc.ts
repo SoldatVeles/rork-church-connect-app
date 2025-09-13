@@ -47,6 +47,27 @@ export const trpcClient = trpc.createClient({
           'Content-Type': 'application/json',
         };
       },
+      fetch(url, options) {
+        console.log('[trpc] Fetching:', url, options);
+        return fetch(url, {
+          ...options,
+          headers: {
+            ...options?.headers,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+        }).then(response => {
+          console.log('[trpc] Response status:', response.status);
+          console.log('[trpc] Response headers:', Object.fromEntries(response.headers.entries()));
+          if (!response.ok) {
+            console.error('[trpc] Response not ok:', response.status, response.statusText);
+          }
+          return response;
+        }).catch(error => {
+          console.error('[trpc] Fetch error:', error);
+          throw error;
+        });
+      },
     }),
   ],
 });
