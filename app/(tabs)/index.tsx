@@ -12,8 +12,9 @@ import {
 } from 'react-native';
 import { useAuth } from '@/providers/auth-provider';
 import { router } from 'expo-router';
-import { trpc } from '@/lib/trpc';
 import NotificationDropdown from '@/components/NotificationDropdown';
+import { supabase } from '@/lib/supabase';
+import { useQuery } from '@tanstack/react-query';
 
 export default function HomeScreen() {
   const { user } = useAuth();
@@ -21,43 +22,67 @@ export default function HomeScreen() {
   const bellButtonRef = useRef<View>(null);
   const [bellPosition, setBellPosition] = useState({ x: 0, y: 0 });
 
-  const eventsQuery = trpc.events.list.useQuery({}, { suspense: false });
-  const prayersActiveQuery = trpc.prayers.list.useQuery({ status: 'active' }, { suspense: false });
-  const usersQuery = trpc.users.list.useQuery(undefined, { suspense: false });
-  const notificationsQuery = trpc.notifications.list.useQuery(undefined, { 
-    suspense: false,
-    refetchInterval: 30000, // Refetch every 30 seconds
+  const eventsQuery = useQuery({
+    queryKey: ['events'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('events')
+        .select('*')
+        .order('start_at', { ascending: true });
+      
+      if (error) throw new Error(error.message);
+      return data || [];
+    },
   });
 
-  // Test tRPC connection
-  const testQuery = trpc.example.hi.useQuery({ name: 'Test' }, { 
-    suspense: false,
-    retry: 1
+  const prayersActiveQuery = useQuery({
+    queryKey: ['prayers', 'active'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('prayers')
+        .select('*')
+        .eq('is_answered', false)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw new Error(error.message);
+      return data || [];
+    },
   });
-  
-  // Log test results
-  React.useEffect(() => {
-    if (testQuery.error) {
-      console.error('[Home] tRPC test error:', testQuery.error);
-    }
-    if (testQuery.data) {
-      console.log('[Home] tRPC test success:', testQuery.data);
-    }
-  }, [testQuery.data, testQuery.error]);
+
+  const usersQuery = useQuery({
+    queryKey: ['users'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*');
+      
+      if (error) throw new Error(error.message);
+      return data || [];
+    },
+  });
+
+  const notificationsQuery = useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => {
+      // For now, return empty array as notifications table doesn't exist yet
+      return [];
+    },
+    refetchInterval: 30000, // Refetch every 30 seconds
+  });
 
   const eventsThisWeekCount = useMemo(() => {
     const events = eventsQuery.data ?? [];
     const now = new Date();
     const in7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     return events.filter((e) => {
-      const d = new Date(e.date as unknown as string);
+      const d = new Date(e.start_at);
       return d >= now && d <= in7;
     }).length;
   }, [eventsQuery.data]);
 
   const activeRequestsCount = prayersActiveQuery.data?.length ?? 0;
   const membersCount = usersQuery.data?.length ?? 0;
-  const unreadNotificationsCount = notificationsQuery.data?.filter(n => !n.isRead).length ?? 0;
+  const unreadNotificationsCount = 0; // Notifications not implemented yet
 
   const quickActions = useMemo(() => [
     {
