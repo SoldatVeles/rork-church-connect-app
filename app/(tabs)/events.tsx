@@ -12,9 +12,7 @@ import {
   Modal,
   Alert,
   ActivityIndicator,
-  Platform,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '@/providers/auth-provider';
 import type { Event, EventType } from '@/types/event';
 import { trpc } from '@/lib/trpc';
@@ -44,27 +42,20 @@ export default function EventsScreen() {
   const [form, setForm] = useState<{
     title: string;
     description: string;
-    startDate: Date;
-    startTime: Date;
-    endDate: Date | null;
-    endTime: Date | null;
+    date: string;
+    endDate: string;
     location: string;
     type: EventType;
     maxAttendees?: string;
   }>({
     title: '',
     description: '',
-    startDate: new Date(),
-    startTime: new Date(),
-    endDate: null,
-    endTime: null,
+    date: '',
+    endDate: '',
     location: '',
     type: 'sabbath',
     maxAttendees: '',
   });
-
-  const [showDatePicker, setShowDatePicker] = useState<'startDate' | 'startTime' | 'endDate' | 'endTime' | null>(null);
-  const [tempDate, setTempDate] = useState<Date>(new Date());
 
   const utils = trpc.useUtils();
 
@@ -89,30 +80,21 @@ export default function EventsScreen() {
   });
 
   const createMutation = trpc.events.create.useMutation({
-    onSuccess: (data) => {
-      console.log('[Events] Event created successfully:', data);
+    onSuccess: () => {
       utils.events.list.invalidate();
       setForm({ 
         title: '', 
         description: '', 
-        startDate: new Date(), 
-        startTime: new Date(), 
-        endDate: null, 
-        endTime: null, 
+        date: '',
+        endDate: '',
         location: '', 
         type: 'sabbath', 
         maxAttendees: '' 
       });
       setShowAddModal(false);
-      Alert.alert('Success', data.message || 'Event has been created successfully!');
+      Alert.alert('Success', 'Event has been created successfully!');
     },
     onError: (error) => {
-      console.error('[Events] Error creating event:', error);
-      console.error('[Events] Error details:', {
-        message: error.message,
-        data: error.data,
-        shape: error.shape,
-      });
       Alert.alert('Error', error.message ?? 'Failed to create event. Please try again.');
     },
   });
@@ -150,61 +132,23 @@ export default function EventsScreen() {
       return;
     }
 
-    if (!form.title.trim() || !form.description.trim() || !form.location.trim()) {
-      Alert.alert('Error', 'Please fill in title, description, and location');
+    if (!form.title.trim() || !form.description.trim() || !form.location.trim() || !form.date.trim()) {
+      Alert.alert('Error', 'Please fill in all required fields');
       return;
     }
 
-    try {
-      console.log('[Events] Starting event creation...');
-      console.log('[Events] Form data:', {
-        title: form.title,
-        description: form.description,
-        startDate: form.startDate,
-        startTime: form.startTime,
-        endDate: form.endDate,
-        endTime: form.endTime,
-        location: form.location,
-        type: form.type,
-        maxAttendees: form.maxAttendees
-      });
+    const payload = {
+      title: form.title.trim(),
+      description: form.description.trim(),
+      date: form.date,
+      endDate: form.endDate || undefined,
+      location: form.location.trim(),
+      type: form.type,
+      maxAttendees: form.maxAttendees ? Number(form.maxAttendees) : undefined,
+      createdBy: user.id,
+    };
 
-      console.log('[Events] Proceeding with event creation...');
-
-      // Combine start date and time
-      const startDateTime = new Date(form.startDate);
-      startDateTime.setHours(form.startTime.getHours(), form.startTime.getMinutes(), 0, 0);
-
-      // Combine end date and time if provided
-      let endDateTime: Date | undefined;
-      if (form.endDate && form.endTime) {
-        endDateTime = new Date(form.endDate);
-        endDateTime.setHours(form.endTime.getHours(), form.endTime.getMinutes(), 0, 0);
-      }
-
-      const payload = {
-        title: form.title.trim(),
-        description: form.description.trim(),
-        date: startDateTime.toISOString(),
-        endDate: endDateTime ? endDateTime.toISOString() : undefined,
-        location: form.location.trim(),
-        type: form.type,
-        maxAttendees: form.maxAttendees ? Number(form.maxAttendees) : undefined,
-        createdBy: user.id,
-      };
-
-      if (payload.maxAttendees !== undefined && Number.isNaN(payload.maxAttendees)) {
-        Alert.alert('Error', 'Max attendees must be a number');
-        return;
-      }
-
-      console.log('[Events] Payload to send:', payload);
-      const result = await createMutation.mutateAsync(payload);
-      console.log('[Events] Event created successfully:', result);
-    } catch (error) {
-      console.error('[Events] Error in handleCreate:', error);
-      Alert.alert('Error', 'Failed to create event. Please try again.');
-    }
+    createMutation.mutate(payload);
   };
 
   const filters: { key: EventType | 'all'; label: string }[] = [
@@ -225,10 +169,7 @@ export default function EventsScreen() {
           <TouchableOpacity
             testID="add-event-button"
             style={styles.addButton}
-            onPress={() => {
-              console.log('[Events] + pressed');
-              setShowAddModal(true);
-            }}
+            onPress={() => setShowAddModal(true)}
           >
             <Plus size={20} color="white" />
           </TouchableOpacity>
@@ -379,11 +320,7 @@ export default function EventsScreen() {
         visible={showAddModal}
         animationType="slide"
         presentationStyle="pageSheet"
-        onShow={() => console.log('[Events] Modal shown')}
-        onRequestClose={() => {
-          console.log('[Events] Modal request close');
-          setShowAddModal(false);
-        }}
+        onRequestClose={() => setShowAddModal(false)}
       >
         <SafeAreaView style={styles.modalContainer} testID="event-modal">
           <View style={styles.modalHeader}>
@@ -395,7 +332,6 @@ export default function EventsScreen() {
               onPress={handleCreate} 
               disabled={createMutation.isPending}
               testID="submit-event-button"
-              style={createMutation.isPending ? styles.disabledButton : undefined}
             >
               <Text style={[styles.modalSubmitText, createMutation.isPending && styles.modalSubmitTextDisabled]}>
                 {createMutation.isPending ? 'Creating...' : 'Create'}
@@ -431,114 +367,26 @@ export default function EventsScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Start Date *</Text>
-              <TouchableOpacity
-                testID="event-startDate-picker"
-                style={styles.datePickerButton}
-                onPress={() => {
-                  console.log('[Events] Start Date picker pressed');
-                  setTempDate(form.startDate);
-                  setShowDatePicker('startDate');
-                }}
-              >
-                <Calendar size={20} color="#1e3a8a" />
-                <Text style={styles.datePickerText}>
-                  {form.startDate.toLocaleDateString('en-US', {
-                    weekday: 'short',
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                  })}
-                </Text>
-              </TouchableOpacity>
+              <Text style={styles.inputLabel}>Start Date & Time</Text>
+              <TextInput
+                testID="event-date-input"
+                style={styles.textInput}
+                placeholder="2025-01-15T10:00:00"
+                value={form.date}
+                onChangeText={(text) => setForm(prev => ({ ...prev, date: text }))}
+              />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Start Time *</Text>
-              <TouchableOpacity
-                testID="event-startTime-picker"
-                style={styles.datePickerButton}
-                onPress={() => {
-                  console.log('[Events] Start Time picker pressed');
-                  setTempDate(form.startTime);
-                  setShowDatePicker('startTime');
-                }}
-              >
-                <Clock size={20} color="#1e3a8a" />
-                <Text style={styles.datePickerText}>
-                  {form.startTime.toLocaleTimeString('en-US', {
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    hour12: true,
-                  })}
-                </Text>
-              </TouchableOpacity>
+              <Text style={styles.inputLabel}>End Date & Time (Optional)</Text>
+              <TextInput
+                testID="event-endDate-input"
+                style={styles.textInput}
+                placeholder="2025-01-15T12:00:00"
+                value={form.endDate}
+                onChangeText={(text) => setForm(prev => ({ ...prev, endDate: text }))}
+              />
             </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>End Date (Optional)</Text>
-              <TouchableOpacity
-                testID="event-endDate-picker"
-                style={styles.datePickerButton}
-                onPress={() => {
-                  console.log('[Events] End Date picker pressed');
-                  setTempDate(form.endDate || new Date(form.startDate.getTime() + 24 * 60 * 60 * 1000));
-                  setShowDatePicker('endDate');
-                }}
-              >
-                <Calendar size={20} color={form.endDate ? "#1e3a8a" : "#94a3b8"} />
-                <Text style={[styles.datePickerText, !form.endDate && styles.datePickerPlaceholder]}>
-                  {form.endDate ? (
-                    form.endDate.toLocaleDateString('en-US', {
-                      weekday: 'short',
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                    })
-                  ) : (
-                    'Tap to set end date'
-                  )}
-                </Text>
-                {form.endDate && (
-                  <TouchableOpacity
-                    onPress={() => {
-                      setForm(prev => ({ ...prev, endDate: null, endTime: null }));
-                    }}
-                    style={styles.clearButton}
-                  >
-                    <Text style={styles.clearButtonText}>Clear</Text>
-                  </TouchableOpacity>
-                )}
-              </TouchableOpacity>
-            </View>
-
-            {form.endDate && (
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>End Time</Text>
-                <TouchableOpacity
-                  testID="event-endTime-picker"
-                  style={styles.datePickerButton}
-                  onPress={() => {
-                    console.log('[Events] End Time picker pressed');
-                    setTempDate(form.endTime || new Date(form.startTime.getTime() + 2 * 60 * 60 * 1000));
-                    setShowDatePicker('endTime');
-                  }}
-                >
-                  <Clock size={20} color={form.endTime ? "#1e3a8a" : "#94a3b8"} />
-                  <Text style={[styles.datePickerText, !form.endTime && styles.datePickerPlaceholder]}>
-                    {form.endTime ? (
-                      form.endTime.toLocaleTimeString('en-US', {
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        hour12: true,
-                      })
-                    ) : (
-                      'Tap to set end time'
-                    )}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
 
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Location</Text>
@@ -555,7 +403,7 @@ export default function EventsScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Event Type</Text>
               <View style={styles.typesWrap}>
-                {(Object.keys(eventTypeLabels) as Array<keyof typeof eventTypeLabels>).map((key) => (
+                {(Object.keys(eventTypeLabels) as EventType[]).map((key) => (
                   <TouchableOpacity
                     key={key}
                     testID={`type-${key}`}
@@ -582,144 +430,6 @@ export default function EventsScreen() {
               />
             </View>
           </ScrollView>
-
-          {Platform.OS !== 'web' && showDatePicker && (
-            <DateTimePicker
-              testID="dateTimePicker"
-              value={tempDate}
-              mode={showDatePicker === 'startDate' || showDatePicker === 'endDate' ? 'date' : 'time'}
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={(event, selectedDate) => {
-                console.log('[DatePicker] onChange called:', { event, selectedDate, showDatePicker });
-                
-                if (Platform.OS === 'android') {
-                  setShowDatePicker(null);
-                }
-                
-                if (selectedDate) {
-                  setTempDate(selectedDate);
-                  
-                  if (Platform.OS === 'android') {
-                    if (showDatePicker === 'startDate') {
-                      setForm(prev => ({ ...prev, startDate: selectedDate }));
-                    } else if (showDatePicker === 'startTime') {
-                      setForm(prev => ({ ...prev, startTime: selectedDate }));
-                    } else if (showDatePicker === 'endDate') {
-                      setForm(prev => ({ ...prev, endDate: selectedDate }));
-                    } else if (showDatePicker === 'endTime') {
-                      setForm(prev => ({ ...prev, endTime: selectedDate }));
-                    }
-                  }
-                }
-              }}
-            />
-          )}
-
-          {Platform.OS === 'web' && showDatePicker && (
-            <View style={styles.webDatePickerContainer}>
-              <View style={styles.webDatePickerHeader}>
-                <TouchableOpacity
-                  onPress={() => setShowDatePicker(null)}
-                  style={styles.webDatePickerButton}
-                >
-                  <Text style={styles.webDatePickerButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <Text style={styles.webDatePickerTitle}>
-                  {showDatePicker === 'startDate' ? 'Select Start Date' :
-                   showDatePicker === 'startTime' ? 'Select Start Time' :
-                   showDatePicker === 'endDate' ? 'Select End Date' :
-                   'Select End Time'}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    if (showDatePicker === 'startDate') {
-                      setForm(prev => ({ ...prev, startDate: tempDate }));
-                    } else if (showDatePicker === 'startTime') {
-                      setForm(prev => ({ ...prev, startTime: tempDate }));
-                    } else if (showDatePicker === 'endDate') {
-                      setForm(prev => ({ ...prev, endDate: tempDate }));
-                    } else if (showDatePicker === 'endTime') {
-                      setForm(prev => ({ ...prev, endTime: tempDate }));
-                    }
-                    setShowDatePicker(null);
-                  }}
-                  style={styles.webDatePickerButton}
-                >
-                  <Text style={[styles.webDatePickerButtonText, styles.webDatePickerDoneText]}>Done</Text>
-                </TouchableOpacity>
-              </View>
-              
-              <View style={styles.webDatePickerContent}>
-                {(showDatePicker === 'startDate' || showDatePicker === 'endDate') ? (
-                  <input
-                    type="date"
-                    value={tempDate.toISOString().split('T')[0]}
-                    onChange={(e) => {
-                      const newDate = new Date(e.target.value + 'T00:00:00');
-                      setTempDate(newDate);
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '12px',
-                      fontSize: '16px',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '8px',
-                      backgroundColor: '#f8fafc'
-                    }}
-                  />
-                ) : (
-                  <input
-                    type="time"
-                    value={tempDate.toTimeString().slice(0, 5)}
-                    onChange={(e) => {
-                      const [hours, minutes] = e.target.value.split(':');
-                      const newDate = new Date(tempDate);
-                      newDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-                      setTempDate(newDate);
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '12px',
-                      fontSize: '16px',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '8px',
-                      backgroundColor: '#f8fafc'
-                    }}
-                  />
-                )}
-              </View>
-            </View>
-          )}
-
-          {Platform.OS === 'ios' && showDatePicker && (
-            <View style={styles.iosDatePickerContainer}>
-              <View style={styles.iosDatePickerHeader}>
-                <TouchableOpacity
-                  onPress={() => setShowDatePicker(null)}
-                  style={styles.iosDatePickerButton}
-                >
-                  <Text style={styles.iosDatePickerButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    if (showDatePicker === 'startDate') {
-                      setForm(prev => ({ ...prev, startDate: tempDate }));
-                    } else if (showDatePicker === 'startTime') {
-                      setForm(prev => ({ ...prev, startTime: tempDate }));
-                    } else if (showDatePicker === 'endDate') {
-                      setForm(prev => ({ ...prev, endDate: tempDate }));
-                    } else if (showDatePicker === 'endTime') {
-                      setForm(prev => ({ ...prev, endTime: tempDate }));
-                    }
-                    setShowDatePicker(null);
-                  }}
-                  style={styles.iosDatePickerButton}
-                >
-                  <Text style={[styles.iosDatePickerButtonText, styles.iosDatePickerDoneText]}>Done</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
@@ -946,13 +656,6 @@ const styles = StyleSheet.create({
     height: 120,
     textAlignVertical: 'top',
   },
-  rowInputs: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  rowItem: {
-    flex: 1,
-  },
   typesWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1001,112 +704,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#64748b',
     textAlign: 'center',
-  },
-  datePickerButton: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  datePickerText: {
-    fontSize: 16,
-    color: '#1e293b',
-    flex: 1,
-  },
-  datePickerPlaceholder: {
-    color: '#94a3b8',
-  },
-  clearButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: '#ef4444',
-    borderRadius: 6,
-  },
-  clearButtonText: {
-    fontSize: 12,
-    color: 'white',
-    fontWeight: '600',
-  },
-  iosDatePickerContainer: {
-    backgroundColor: 'white',
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-  },
-  iosDatePickerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-  },
-  iosDatePickerButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  iosDatePickerButtonText: {
-    fontSize: 16,
-    color: '#64748b',
-  },
-  iosDatePickerDoneText: {
-    color: '#1e3a8a',
-    fontWeight: '600',
-  },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  webDatePickerContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  webDatePickerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: 'white',
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    minWidth: 300,
-  },
-  webDatePickerTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1e293b',
-  },
-  webDatePickerContent: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
-    minWidth: 300,
-  },
-  webDatePickerButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  webDatePickerButtonText: {
-    fontSize: 16,
-    color: '#64748b',
-  },
-  webDatePickerDoneText: {
-    color: '#1e3a8a',
-    fontWeight: '600',
   },
 });
