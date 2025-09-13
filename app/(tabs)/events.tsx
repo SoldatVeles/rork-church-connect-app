@@ -12,7 +12,9 @@ import {
   Modal,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '@/providers/auth-provider';
 import type { Event, EventType } from '@/types/event';
 import { supabase } from '@/lib/supabase';
@@ -43,20 +45,29 @@ export default function EventsScreen() {
   const [form, setForm] = useState<{
     title: string;
     description: string;
-    date: string;
-    endDate: string;
+    startDate: Date;
+    startTime: Date;
+    endDate: Date;
+    endTime: Date;
     location: string;
     type: EventType;
     maxAttendees?: string;
   }>({
     title: '',
     description: '',
-    date: '',
-    endDate: '',
+    startDate: new Date(),
+    startTime: new Date(),
+    endDate: new Date(),
+    endTime: new Date(),
     location: '',
     type: 'sabbath',
     maxAttendees: '',
   });
+
+  const [showDatePicker, setShowDatePicker] = useState<{
+    field: 'startDate' | 'startTime' | 'endDate' | 'endTime' | null;
+    mode: 'date' | 'time';
+  }>({ field: null, mode: 'date' });
 
   const queryClient = useQueryClient();
 
@@ -130,11 +141,14 @@ export default function EventsScreen() {
     onSuccess: (data) => {
       console.log('[Events] Mutation success, invalidating queries');
       queryClient.invalidateQueries({ queryKey: ['events'] });
+      const now = new Date();
       setForm({ 
         title: '', 
         description: '', 
-        date: '',
-        endDate: '',
+        startDate: now,
+        startTime: now,
+        endDate: now,
+        endTime: now,
         location: '', 
         type: 'sabbath', 
         maxAttendees: '' 
@@ -200,39 +214,36 @@ export default function EventsScreen() {
       return;
     }
     
-    if (!form.date.trim()) {
-      Alert.alert('Error', 'Please enter a start date and time');
-      return;
-    }
-
     try {
-      // Parse and validate the date
-      const startDate = new Date(form.date);
-      if (isNaN(startDate.getTime())) {
-        Alert.alert('Error', 'Invalid date format. Please use format like: 2025-01-15T10:00');
-        return;
-      }
+      // Combine date and time for start
+      const startDateTime = new Date(
+        form.startDate.getFullYear(),
+        form.startDate.getMonth(),
+        form.startDate.getDate(),
+        form.startTime.getHours(),
+        form.startTime.getMinutes()
+      );
 
-      // Validate end date if provided
-      let endDateISO: string | undefined;
-      if (form.endDate && form.endDate.trim()) {
-        const endDate = new Date(form.endDate);
-        if (isNaN(endDate.getTime())) {
-          Alert.alert('Error', 'Invalid end date format. Please use format like: 2025-01-15T12:00');
-          return;
-        }
-        if (endDate <= startDate) {
-          Alert.alert('Error', 'End date must be after start date');
-          return;
-        }
-        endDateISO = endDate.toISOString();
+      // Combine date and time for end
+      const endDateTime = new Date(
+        form.endDate.getFullYear(),
+        form.endDate.getMonth(),
+        form.endDate.getDate(),
+        form.endTime.getHours(),
+        form.endTime.getMinutes()
+      );
+
+      // Validate dates
+      if (endDateTime <= startDateTime) {
+        Alert.alert('Error', 'End date and time must be after start date and time');
+        return;
       }
 
       const payload = {
         title: form.title.trim(),
         description: form.description.trim(),
-        date: startDate.toISOString(),
-        endDate: endDateISO,
+        date: startDateTime.toISOString(),
+        endDate: endDateTime.toISOString(),
         location: form.location.trim(),
         type: form.type,
         maxAttendees: form.maxAttendees ? Number(form.maxAttendees) : undefined,
@@ -245,6 +256,36 @@ export default function EventsScreen() {
       console.error('[Events] Error in handleCreate:', error);
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     }
+  };
+
+  const handleDateTimeChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker({ field: null, mode: 'date' });
+    }
+    
+    if (selectedDate && showDatePicker.field) {
+      setForm(prev => ({
+        ...prev,
+        [showDatePicker.field!]: selectedDate
+      }));
+    }
+  };
+
+  const formatDateDisplay = (date: Date) => {
+    return date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  const formatTimeDisplay = (date: Date) => {
+    return date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
   };
 
   const filters: { key: EventType | 'all'; label: string }[] = [
@@ -456,37 +497,59 @@ export default function EventsScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Start Date & Time</Text>
-              <TextInput
-                testID="event-date-input"
-                style={styles.textInput}
-                placeholder="2025-01-15T10:00"
-                value={form.date}
-                onChangeText={(text) => {
-                  console.log('[Events] Date input changed:', text);
-                  setForm(prev => ({ ...prev, date: text }));
-                }}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <Text style={styles.inputHelp}>Format: YYYY-MM-DDTHH:MM (e.g., 2025-01-15T10:00)</Text>
+              <Text style={styles.inputLabel}>Start Date</Text>
+              <TouchableOpacity
+                testID="event-start-date-picker"
+                style={styles.dateTimeButton}
+                onPress={() => setShowDatePicker({ field: 'startDate', mode: 'date' })}
+              >
+                <Calendar size={20} color="#64748b" />
+                <Text style={styles.dateTimeButtonText}>
+                  {formatDateDisplay(form.startDate)}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>End Date & Time (Optional)</Text>
-              <TextInput
-                testID="event-endDate-input"
-                style={styles.textInput}
-                placeholder="2025-01-15T12:00"
-                value={form.endDate}
-                onChangeText={(text) => {
-                  console.log('[Events] End date input changed:', text);
-                  setForm(prev => ({ ...prev, endDate: text }));
-                }}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <Text style={styles.inputHelp}>Format: YYYY-MM-DDTHH:MM (e.g., 2025-01-15T12:00)</Text>
+              <Text style={styles.inputLabel}>Start Time</Text>
+              <TouchableOpacity
+                testID="event-start-time-picker"
+                style={styles.dateTimeButton}
+                onPress={() => setShowDatePicker({ field: 'startTime', mode: 'time' })}
+              >
+                <Clock size={20} color="#64748b" />
+                <Text style={styles.dateTimeButtonText}>
+                  {formatTimeDisplay(form.startTime)}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>End Date</Text>
+              <TouchableOpacity
+                testID="event-end-date-picker"
+                style={styles.dateTimeButton}
+                onPress={() => setShowDatePicker({ field: 'endDate', mode: 'date' })}
+              >
+                <Calendar size={20} color="#64748b" />
+                <Text style={styles.dateTimeButtonText}>
+                  {formatDateDisplay(form.endDate)}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>End Time</Text>
+              <TouchableOpacity
+                testID="event-end-time-picker"
+                style={styles.dateTimeButton}
+                onPress={() => setShowDatePicker({ field: 'endTime', mode: 'time' })}
+              >
+                <Clock size={20} color="#64748b" />
+                <Text style={styles.dateTimeButtonText}>
+                  {formatTimeDisplay(form.endTime)}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.inputGroup}>
@@ -531,6 +594,17 @@ export default function EventsScreen() {
               />
             </View>
           </ScrollView>
+
+          {showDatePicker.field && (
+            <DateTimePicker
+              testID="dateTimePicker"
+              value={form[showDatePicker.field]}
+              mode={showDatePicker.mode}
+              is24Hour={false}
+              onChange={handleDateTimeChange}
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            />
+          )}
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
@@ -783,6 +857,22 @@ const styles = StyleSheet.create({
     color: '#64748b',
     marginTop: 4,
     fontStyle: 'italic',
+  },
+  dateTimeButton: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  dateTimeButtonText: {
+    fontSize: 16,
+    color: '#1e293b',
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,
