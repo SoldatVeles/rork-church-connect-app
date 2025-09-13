@@ -39,7 +39,9 @@ const eventTypeLabels: Record<EventType, string> = {
 };
 
 export default function EventsScreen() {
-  const { user } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
+  
+  console.log('[Events] Auth state:', { user: user?.id, isAuthenticated, isLoading });
   const [selectedFilter, setSelectedFilter] = useState<EventType | 'all'>('all');
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [form, setForm] = useState<{
@@ -193,24 +195,34 @@ export default function EventsScreen() {
     console.log('[Events] handleCreate called');
     console.log('[Events] Current form state:', form);
     console.log('[Events] Current user:', user);
+    console.log('[Events] Mutation status:', { isPending: createMutation.isPending, error: createMutation.error });
     
     if (!user) {
+      console.log('[Events] No user found');
       Alert.alert('Error', 'You must be logged in to create an event');
       return;
     }
 
     if (!form.title.trim()) {
+      console.log('[Events] Title validation failed');
       Alert.alert('Error', 'Please enter an event title');
       return;
     }
     
     if (!form.description.trim()) {
+      console.log('[Events] Description validation failed');
       Alert.alert('Error', 'Please enter an event description');
       return;
     }
     
     if (!form.location.trim()) {
+      console.log('[Events] Location validation failed');
       Alert.alert('Error', 'Please enter an event location');
+      return;
+    }
+    
+    if (createMutation.isPending) {
+      console.log('[Events] Mutation already in progress, skipping');
       return;
     }
     
@@ -233,8 +245,11 @@ export default function EventsScreen() {
         form.endTime.getMinutes()
       );
 
+      console.log('[Events] Calculated dates:', { startDateTime, endDateTime });
+
       // Validate dates
       if (endDateTime <= startDateTime) {
+        console.log('[Events] Date validation failed');
         Alert.alert('Error', 'End date and time must be after start date and time');
         return;
       }
@@ -251,10 +266,13 @@ export default function EventsScreen() {
       };
 
       console.log('[Events] Creating event with payload:', JSON.stringify(payload, null, 2));
-      createMutation.mutate(payload);
+      console.log('[Events] About to call mutation...');
+      
+      await createMutation.mutateAsync(payload);
+      console.log('[Events] Mutation completed successfully');
     } catch (error) {
       console.error('[Events] Error in handleCreate:', error);
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      Alert.alert('Error', `Failed to create event: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
