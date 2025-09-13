@@ -29,6 +29,22 @@ export default function HomeScreen() {
     refetchInterval: 30000, // Refetch every 30 seconds
   });
 
+  // Test tRPC connection
+  const testQuery = trpc.example.hi.useQuery({ name: 'Test' }, { 
+    suspense: false,
+    retry: 1
+  });
+  
+  // Log test results
+  React.useEffect(() => {
+    if (testQuery.error) {
+      console.error('[Home] tRPC test error:', testQuery.error);
+    }
+    if (testQuery.data) {
+      console.log('[Home] tRPC test success:', testQuery.data);
+    }
+  }, [testQuery.data, testQuery.error]);
+
   const eventsThisWeekCount = useMemo(() => {
     const events = eventsQuery.data ?? [];
     const now = new Date();

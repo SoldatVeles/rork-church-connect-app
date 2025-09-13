@@ -1,5 +1,5 @@
 import { createTRPCReact } from "@trpc/react-query";
-import { httpLink } from "@trpc/client";
+import { httpLink, loggerLink } from "@trpc/client";
 import type { AppRouter } from "@/backend/trpc/app-router";
 import superjson from "superjson";
 import Constants from "expo-constants";
@@ -36,19 +36,29 @@ const getBaseUrl = (): string => {
   throw new Error("No base url found, please set EXPO_PUBLIC_RORK_API_BASE_URL");
 };
 
+const baseUrl = getBaseUrl();
+const trpcUrl = `${baseUrl}/api/trpc`;
+
+console.log('[trpc] Initializing client with URL:', trpcUrl);
+
 export const trpcClient = trpc.createClient({
   links: [
+    loggerLink({
+      enabled: () => true, // Always enable for debugging
+    }),
     httpLink({
-      url: `${getBaseUrl()}/api/trpc`,
+      url: trpcUrl,
       transformer: superjson,
       headers() {
-        console.log('[trpc] Making request to backend');
         return {
           'Content-Type': 'application/json',
         };
       },
       fetch(url, options) {
-        console.log('[trpc] Fetching:', url, options);
+        console.log('[trpc] Fetching:', url);
+        console.log('[trpc] Method:', options?.method);
+        console.log('[trpc] Headers:', options?.headers);
+        
         return fetch(url, {
           ...options,
           headers: {
@@ -56,12 +66,16 @@ export const trpcClient = trpc.createClient({
             'Accept': 'application/json',
             'Content-Type': 'application/json',
           },
-        }).then(response => {
+        }).then(async (response) => {
           console.log('[trpc] Response status:', response.status);
-          console.log('[trpc] Response headers:', Object.fromEntries(response.headers.entries()));
+          console.log('[trpc] Response ok:', response.ok);
+          
           if (!response.ok) {
-            console.error('[trpc] Response not ok:', response.status, response.statusText);
+            const text = await response.text();
+            console.error('[trpc] Error response body:', text);
+            throw new Error(`HTTP ${response.status}: ${response.statusText}\n${text}`);
           }
+          
           return response;
         }).catch(error => {
           console.error('[trpc] Fetch error:', error);

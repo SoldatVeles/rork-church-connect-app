@@ -8,30 +8,28 @@ import { createContext } from "./trpc/create-context";
 const app = new Hono();
 
 // Enable CORS for all routes
-app.use("*", cors());
+app.use("*", cors({
+  origin: '*',
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization'],
+}));
 
 // Add logging middleware
 app.use("*", async (c, next) => {
   console.log(`[Hono] ${c.req.method} ${c.req.url}`);
-  console.log(`[Hono] Headers:`, c.req.header());
+  console.log(`[Hono] Headers:`, Object.fromEntries(c.req.raw.headers.entries()));
   const start = Date.now();
-  await next();
-  const end = Date.now();
-  console.log(`[Hono] ${c.req.method} ${c.req.url} - ${end - start}ms`);
+  
+  try {
+    await next();
+    const end = Date.now();
+    console.log(`[Hono] ${c.req.method} ${c.req.url} - ${end - start}ms - Status: ${c.res.status}`);
+  } catch (error) {
+    const end = Date.now();
+    console.error(`[Hono] ${c.req.method} ${c.req.url} - ${end - start}ms - ERROR:`, error);
+    throw error;
+  }
 });
-
-// Mount tRPC router at /trpc
-app.use(
-  "/trpc/*",
-  trpcServer({
-    endpoint: "/api/trpc",
-    router: appRouter,
-    createContext,
-    onError: ({ error, path }) => {
-      console.error(`[tRPC Error] ${path}:`, error);
-    },
-  })
-);
 
 // Simple health check endpoint
 app.get("/", (c) => {
@@ -55,10 +53,27 @@ app.get("/trpc-health", (c) => {
   });
 });
 
+// Mount tRPC router at /trpc
+app.use(
+  "/trpc/*",
+  trpcServer({
+    router: appRouter,
+    createContext,
+    onError: ({ error, path, type, input }) => {
+      console.error(`[tRPC Error] ${type} ${path}:`, {
+        error: error.message,
+        code: error.code,
+        input,
+        stack: error.stack
+      });
+    },
+  })
+);
+
 // Catch-all route for debugging
 app.all("*", (c) => {
   console.log(`[Hono] Unhandled route: ${c.req.method} ${c.req.url}`);
-  return c.json({ error: "Route not found" }, 404);
+  return c.json({ error: "Route not found", url: c.req.url, method: c.req.method }, 404);
 });
 
 export default app;
