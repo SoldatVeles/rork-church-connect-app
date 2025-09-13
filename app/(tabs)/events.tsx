@@ -99,24 +99,36 @@ export default function EventsScreen() {
       maxAttendees?: number;
       createdBy: string;
     }) => {
+      console.log('[Events] mutationFn called with:', eventData);
+      
+      const insertData = {
+        title: eventData.title,
+        description: eventData.description,
+        start_at: eventData.date,
+        end_at: eventData.endDate || null,
+        location: eventData.location,
+        created_by: eventData.createdBy,
+        is_published: true,
+      };
+      
+      console.log('[Events] Inserting into Supabase:', insertData);
+      
       const { data, error } = await supabase
         .from('events')
-        .insert({
-          title: eventData.title,
-          description: eventData.description,
-          start_at: eventData.date,
-          end_at: eventData.endDate || null,
-          location: eventData.location,
-          created_by: eventData.createdBy,
-          is_published: true,
-        })
+        .insert(insertData)
         .select()
         .single();
       
-      if (error) throw new Error(error.message);
+      if (error) {
+        console.error('[Events] Supabase error:', error);
+        throw new Error(error.message);
+      }
+      
+      console.log('[Events] Successfully created event:', data);
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('[Events] Mutation success, invalidating queries');
       queryClient.invalidateQueries({ queryKey: ['events'] });
       setForm({ 
         title: '', 
@@ -131,7 +143,7 @@ export default function EventsScreen() {
       Alert.alert('Success', 'Event has been created successfully!');
     },
     onError: (error) => {
-      console.error('[Events] Error creating event:', error);
+      console.error('[Events] Mutation error:', error);
       Alert.alert('Error', error.message ?? 'Failed to create event. Please try again.');
     },
   });
@@ -164,40 +176,74 @@ export default function EventsScreen() {
   };
 
   const handleCreate = async () => {
+    console.log('[Events] handleCreate called');
+    console.log('[Events] Current form state:', form);
+    console.log('[Events] Current user:', user);
+    
     if (!user) {
       Alert.alert('Error', 'You must be logged in to create an event');
       return;
     }
 
-    if (!form.title.trim() || !form.description.trim() || !form.location.trim() || !form.date.trim()) {
-      Alert.alert('Error', 'Please fill in all required fields');
+    if (!form.title.trim()) {
+      Alert.alert('Error', 'Please enter an event title');
+      return;
+    }
+    
+    if (!form.description.trim()) {
+      Alert.alert('Error', 'Please enter an event description');
+      return;
+    }
+    
+    if (!form.location.trim()) {
+      Alert.alert('Error', 'Please enter an event location');
+      return;
+    }
+    
+    if (!form.date.trim()) {
+      Alert.alert('Error', 'Please enter a start date and time');
       return;
     }
 
     try {
-      // Validate date format
+      // Parse and validate the date
       const startDate = new Date(form.date);
       if (isNaN(startDate.getTime())) {
-        Alert.alert('Error', 'Please enter a valid date and time (e.g., 2025-01-15T10:00:00)');
+        Alert.alert('Error', 'Invalid date format. Please use format like: 2025-01-15T10:00');
         return;
+      }
+
+      // Validate end date if provided
+      let endDateISO: string | undefined;
+      if (form.endDate && form.endDate.trim()) {
+        const endDate = new Date(form.endDate);
+        if (isNaN(endDate.getTime())) {
+          Alert.alert('Error', 'Invalid end date format. Please use format like: 2025-01-15T12:00');
+          return;
+        }
+        if (endDate <= startDate) {
+          Alert.alert('Error', 'End date must be after start date');
+          return;
+        }
+        endDateISO = endDate.toISOString();
       }
 
       const payload = {
         title: form.title.trim(),
         description: form.description.trim(),
         date: startDate.toISOString(),
-        endDate: form.endDate ? new Date(form.endDate).toISOString() : undefined,
+        endDate: endDateISO,
         location: form.location.trim(),
         type: form.type,
         maxAttendees: form.maxAttendees ? Number(form.maxAttendees) : undefined,
         createdBy: user.id,
       };
 
-      console.log('[Events] Creating event with payload:', payload);
+      console.log('[Events] Creating event with payload:', JSON.stringify(payload, null, 2));
       createMutation.mutate(payload);
     } catch (error) {
       console.error('[Events] Error in handleCreate:', error);
-      Alert.alert('Error', 'Please check your input and try again.');
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     }
   };
 
@@ -414,10 +460,16 @@ export default function EventsScreen() {
               <TextInput
                 testID="event-date-input"
                 style={styles.textInput}
-                placeholder="2025-01-15T10:00:00"
+                placeholder="2025-01-15T10:00"
                 value={form.date}
-                onChangeText={(text) => setForm(prev => ({ ...prev, date: text }))}
+                onChangeText={(text) => {
+                  console.log('[Events] Date input changed:', text);
+                  setForm(prev => ({ ...prev, date: text }));
+                }}
+                autoCapitalize="none"
+                autoCorrect={false}
               />
+              <Text style={styles.inputHelp}>Format: YYYY-MM-DDTHH:MM (e.g., 2025-01-15T10:00)</Text>
             </View>
 
             <View style={styles.inputGroup}>
@@ -425,10 +477,16 @@ export default function EventsScreen() {
               <TextInput
                 testID="event-endDate-input"
                 style={styles.textInput}
-                placeholder="2025-01-15T12:00:00"
+                placeholder="2025-01-15T12:00"
                 value={form.endDate}
-                onChangeText={(text) => setForm(prev => ({ ...prev, endDate: text }))}
+                onChangeText={(text) => {
+                  console.log('[Events] End date input changed:', text);
+                  setForm(prev => ({ ...prev, endDate: text }));
+                }}
+                autoCapitalize="none"
+                autoCorrect={false}
               />
+              <Text style={styles.inputHelp}>Format: YYYY-MM-DDTHH:MM (e.g., 2025-01-15T12:00)</Text>
             </View>
 
             <View style={styles.inputGroup}>
@@ -719,6 +777,12 @@ const styles = StyleSheet.create({
   },
   typeChipTextActive: {
     color: 'white',
+  },
+  inputHelp: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   loadingContainer: {
     flex: 1,
