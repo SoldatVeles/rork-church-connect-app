@@ -2,8 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { SafeAreaView, View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Users, Shield, Plus, Check, UserPlus, Church } from 'lucide-react-native';
-import { trpc } from '@/lib/trpc';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 type Role = 'admin' | 'pastor' | 'member' | 'visitor';
 
@@ -16,42 +17,104 @@ interface Group {
 
 export default function AdminScreen() {
   const { user } = useAuth();
-  const utils = trpc.useUtils();
-  const usersQuery = trpc.users.list.useQuery(undefined, { suspense: false });
+  const queryClient = useQueryClient();
+  
+  const usersQuery = useQuery({
+    queryKey: ['users'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw new Error(error.message);
+      
+      return data.map(profile => ({
+        id: profile.id,
+        firstName: profile.display_name?.split(' ')[0] || '',
+        lastName: profile.display_name?.split(' ').slice(1).join(' ') || '',
+        email: profile.email,
+        role: profile.role,
+        permissions: [],
+        joinedAt: new Date(profile.created_at),
+        createdAt: profile.created_at,
+      }));
+    },
+  });
+  
   const [newUser, setNewUser] = useState({ firstName: '', lastName: '', email: '', phone: '', password: '', role: 'member' as Role });
   const [groupName, setGroupName] = useState('');
   const [selectedGroup, setSelectedGroup] = useState<string>('');
   const [selectedUserToAdd, setSelectedUserToAdd] = useState<string>('');
 
-  const createUserMutation = trpc.users.create.useMutation({
+  const createUserMutation = useMutation({
+    mutationFn: async (userData: {
+      email: string;
+      password: string;
+      firstName: string;
+      lastName: string;
+      phone?: string;
+      role: Role;
+      permissions: string[];
+    }) => {
+      // This would need to be implemented with Supabase Auth
+      console.log('Create user not implemented yet:', userData);
+      throw new Error('User creation not implemented yet');
+    },
     onSuccess: () => {
-      utils.users.list.invalidate();
+      queryClient.invalidateQueries({ queryKey: ['users'] });
       setNewUser({ firstName: '', lastName: '', email: '', phone: '', password: '', role: 'member' });
       Alert.alert('Success', 'User created');
     },
-    onError: (e) => Alert.alert('Error', e.message ?? 'Failed to create user'),
+    onError: (e: Error) => Alert.alert('Error', e.message ?? 'Failed to create user'),
   });
-  const updateRoleMutation = trpc.users.updateRole.useMutation({
+  
+  const updateRoleMutation = useMutation({
+    mutationFn: async (data: { userId: string; role: Role; permissions: string[] }) => {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: data.role })
+        .eq('id', data.userId);
+      
+      if (error) throw new Error(error.message);
+    },
     onSuccess: () => {
-      utils.users.list.invalidate();
+      queryClient.invalidateQueries({ queryKey: ['users'] });
       Alert.alert('Updated', 'User role updated');
     },
-    onError: (e) => Alert.alert('Error', e.message ?? 'Failed to update role'),
+    onError: (e: Error) => Alert.alert('Error', e.message ?? 'Failed to update role'),
   });
-  const createGroupMutation = trpc.groups.create.useMutation({
+  
+  const createGroupMutation = useMutation({
+    mutationFn: async (data: { name: string }) => {
+      const { error } = await supabase
+        .from('groups')
+        .insert({
+          name: data.name,
+          created_by: user?.id || '',
+        });
+      
+      if (error) throw new Error(error.message);
+    },
     onSuccess: () => {
       Alert.alert('Success', 'Group created');
       setGroupName('');
     },
-    onError: (e) => Alert.alert('Error', e.message ?? 'Failed to create group'),
+    onError: (e: Error) => Alert.alert('Error', e.message ?? 'Failed to create group'),
   });
-  const addMemberToGroupMutation = trpc.groups.addMember.useMutation({
+  
+  const addMemberToGroupMutation = useMutation({
+    mutationFn: async (data: { groupId: string; userId: string }) => {
+      // This would need to be implemented with a group_members table
+      console.log('Add member to group not implemented yet:', data);
+      throw new Error('Add member to group not implemented yet');
+    },
     onSuccess: () => {
       Alert.alert('Success', 'Member added to group');
       setSelectedGroup('');
       setSelectedUserToAdd('');
     },
-    onError: (e) => Alert.alert('Error', e.message ?? 'Failed to add member'),
+    onError: (e: Error) => Alert.alert('Error', e.message ?? 'Failed to add member'),
   });
 
   const roles: Role[] = ['visitor', 'member', 'pastor', 'admin'];

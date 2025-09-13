@@ -12,7 +12,8 @@ import {
 } from 'react-native';
 import { Bell, Calendar, Heart, MessageCircle, X, CheckCheck } from 'lucide-react-native';
 import { router } from 'expo-router';
-import { trpc } from '@/lib/trpc';
+import { supabase } from '@/lib/supabase';
+import { useQuery, useMutation } from '@tanstack/react-query';
 
 interface NotificationDropdownProps {
   visible: boolean;
@@ -25,15 +26,43 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   onClose,
   anchorPosition,
 }) => {
-  const notificationsQuery = trpc.notifications.list.useQuery(undefined, {
+  const notificationsQuery = useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw new Error(error.message);
+      
+      return data.map(notification => ({
+        id: notification.id,
+        type: notification.type,
+        title: notification.title,
+        message: notification.body || '',
+        isRead: false, // Not in current DB schema
+        createdAt: new Date(notification.created_at),
+      }));
+    },
     refetchInterval: 30000, // Refetch every 30 seconds
   });
-  const markReadMutation = trpc.notifications.markRead.useMutation({
+  
+  const markReadMutation = useMutation({
+    mutationFn: async (data: { id: string }) => {
+      // This would need to be implemented in the database
+      console.log('Mark read not implemented yet:', data.id);
+    },
     onSuccess: () => {
       notificationsQuery.refetch();
     },
   });
-  const markAllReadMutation = trpc.notifications.markAllRead.useMutation({
+  
+  const markAllReadMutation = useMutation({
+    mutationFn: async () => {
+      // This would need to be implemented in the database
+      console.log('Mark all read not implemented yet');
+    },
     onSuccess: () => {
       notificationsQuery.refetch();
     },
@@ -58,7 +87,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   const handleNotificationPress = async (notification: any) => {
     // Mark as read
     if (!notification.isRead) {
-      await markReadMutation.mutateAsync({ id: notification.id });
+      markReadMutation.mutate({ id: notification.id });
     }
 
     // Navigate based on type
@@ -78,7 +107,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   };
 
   const handleMarkAllRead = async () => {
-    await markAllReadMutation.mutateAsync();
+    markAllReadMutation.mutate();
   };
 
   const formatTime = (date: Date | string) => {

@@ -16,7 +16,8 @@ import {
 } from 'react-native';
 import { useAuth } from '@/providers/auth-provider';
 import type { PrayerRequest, PrayerStatus } from '@/types/prayer';
-import { trpc } from '@/lib/trpc';
+import { supabase } from '@/lib/supabase';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export default function PrayersScreen() {
   const { user } = useAuth();
@@ -29,14 +30,61 @@ export default function PrayersScreen() {
     isUrgent: false,
   });
 
+  const queryClient = useQueryClient();
+  
   // Single query for all prayers, then filter on client side for better performance
-  const allPrayersQuery = trpc.prayers.list.useQuery({ status: 'all' });
+  const allPrayersQuery = useQuery({
+    queryKey: ['prayers'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('prayers')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw new Error(error.message);
+      
+      return data.map(prayer => ({
+        id: prayer.id,
+        title: prayer.title,
+        description: prayer.details || '',
+        requestedBy: prayer.requester_id,
+        requestedByName: 'Anonymous', // We'll need to join with profiles to get real names
+        status: prayer.is_answered ? 'answered' as PrayerStatus : 'active' as PrayerStatus,
+        isAnonymous: prayer.visibility === 'private',
+        isUrgent: false, // Not in current DB schema
+        prayedBy: [], // Not in current DB schema
+        createdAt: new Date(prayer.created_at),
+        answeredAt: prayer.answered_at ? new Date(prayer.answered_at) : undefined,
+      }));
+    },
+  });
   
-  const utils = trpc.useUtils();
-  
-  const createPrayerMutation = trpc.prayers.create.useMutation({
+  const createPrayerMutation = useMutation({
+    mutationFn: async (prayerData: {
+      title: string;
+      description: string;
+      isAnonymous: boolean;
+      isUrgent: boolean;
+      requestedBy: string;
+      requestedByName: string;
+    }) => {
+      const { data, error } = await supabase
+        .from('prayers')
+        .insert({
+          title: prayerData.title,
+          details: prayerData.description,
+          requester_id: prayerData.requestedBy,
+          visibility: prayerData.isAnonymous ? 'private' : 'public',
+          is_answered: false,
+        })
+        .select()
+        .single();
+      
+      if (error) throw new Error(error.message);
+      return data;
+    },
     onSuccess: () => {
-      utils.prayers.list.invalidate();
+      queryClient.invalidateQueries({ queryKey: ['prayers'] });
       setNewPrayer({
         title: '',
         description: '',
@@ -46,27 +94,34 @@ export default function PrayersScreen() {
       setShowAddModal(false);
       Alert.alert('Success', 'Your prayer request has been submitted');
     },
-    onError: (error) => {
+    onError: (error: Error) => {
+      console.error('[Prayers] Error creating prayer:', error);
       Alert.alert('Error', error.message || 'Failed to create prayer request');
     },
   });
 
-  const prayMutation = trpc.prayers.pray.useMutation({
-    onSuccess: () => {
-      utils.prayers.list.invalidate();
+  const updateStatusMutation = useMutation({
+    mutationFn: async (data: {
+      prayerId: string;
+      status: PrayerStatus;
+      userId: string;
+      userRole: string;
+    }) => {
+      const { error } = await supabase
+        .from('prayers')
+        .update({
+          is_answered: data.status === 'answered',
+          answered_at: data.status === 'answered' ? new Date().toISOString() : null,
+        })
+        .eq('id', data.prayerId);
+      
+      if (error) throw new Error(error.message);
     },
-    onError: (error) => {
-      console.error('Error toggling pray:', error);
-      Alert.alert('Error', error.message || 'Failed to update prayer status');
-    },
-  });
-
-  const updateStatusMutation = trpc.prayers.updateStatus.useMutation({
     onSuccess: () => {
-      utils.prayers.list.invalidate();
+      queryClient.invalidateQueries({ queryKey: ['prayers'] });
       Alert.alert('Success', 'Prayer status updated');
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       console.error('Error updating prayer status:', error);
       Alert.alert('Error', error.message || 'Failed to update prayer status');
     },
@@ -77,7 +132,7 @@ export default function PrayersScreen() {
   // Filter prayers based on selected filter
   const prayers = selectedFilter === 'all' 
     ? allPrayers 
-    : allPrayers.filter(prayer => prayer.status === selectedFilter);
+    : allPrayers.filter((prayer: PrayerRequest) => prayer.status === selectedFilter);
 
   const formatDate = (date: Date) => {
     const now = new Date();
@@ -119,6 +174,12 @@ export default function PrayersScreen() {
         {
           text: 'Confirm',
           onPress: () => {
+            console.log('[Prayers] Updating prayer status:', {
+              prayerId: prayer.id,
+              status: newStatus,
+              userId: user.id,
+              userRole: user.role,
+            });
             updateStatusMutation.mutate({
               prayerId: prayer.id,
               status: newStatus,
@@ -142,6 +203,15 @@ export default function PrayersScreen() {
       return;
     }
 
+    console.log('[Prayers] Creating prayer with data:', {
+      title: newPrayer.title.trim(),
+      description: newPrayer.description.trim(),
+      isAnonymous: newPrayer.isAnonymous,
+      isUrgent: newPrayer.isUrgent,
+      requestedBy: user.id,
+      requestedByName: `${user.firstName} ${user.lastName}`,
+    });
+    
     createPrayerMutation.mutate({
       title: newPrayer.title.trim(),
       description: newPrayer.description.trim(),
@@ -153,8 +223,8 @@ export default function PrayersScreen() {
   };
 
   // Calculate counts for filter buttons
-  const activePrayers = allPrayers.filter(p => p.status === 'active');
-  const answeredPrayers = allPrayers.filter(p => p.status === 'answered');
+  const activePrayers = allPrayers.filter((p: PrayerRequest) => p.status === 'active');
+  const answeredPrayers = allPrayers.filter((p: PrayerRequest) => p.status === 'answered');
 
   const filters: { key: PrayerStatus | 'all'; label: string; count: number }[] = [
     { key: 'all', label: 'All', count: allPrayers.length },
@@ -221,7 +291,7 @@ export default function PrayersScreen() {
             <Text style={styles.emptySubtext}>Be the first to share a prayer request</Text>
           </View>
         ) : (
-          prayers.map((prayer) => (
+          prayers.map((prayer: PrayerRequest) => (
           <View key={prayer.id} style={styles.prayerCard}>
             <View style={styles.prayerHeader}>
               <View style={styles.prayerBadges}>
@@ -313,14 +383,14 @@ export default function PrayersScreen() {
                     Alert.alert('Not allowed', 'Only members and priests can use this action.');
                     return;
                   }
-                  console.log('[Prayers] Toggling pray for', { prayerId: prayer.id, userId: user.id });
-                  prayMutation.mutate({ prayerId: prayer.id, userId: user.id });
+                  console.log('[Prayers] Prayer feature will be available soon');
+                  Alert.alert('Info', 'Prayer tracking will be available soon!');
                 }}
-                disabled={prayMutation.isPending}
+                disabled={false}
                 style={[
                   styles.prayButton,
                   hasUserPrayed(prayer) && styles.prayedButton,
-                  prayMutation.isPending ? { opacity: 0.6 } as const : null,
+                  null,
                 ]}
               >
                 <Text style={[

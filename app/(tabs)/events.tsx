@@ -15,7 +15,8 @@ import {
 } from 'react-native';
 import { useAuth } from '@/providers/auth-provider';
 import type { Event, EventType } from '@/types/event';
-import { trpc } from '@/lib/trpc';
+import { supabase } from '@/lib/supabase';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const eventTypeColors: Record<EventType, string> = {
   sabbath: '#3b82f6',
@@ -57,31 +58,66 @@ export default function EventsScreen() {
     maxAttendees: '',
   });
 
-  const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
 
-  const listQuery = trpc.events.list.useQuery({}, { suspense: false });
-
-  const registerMutation = trpc.events.register.useMutation({
-    onSuccess: () => {
-      utils.events.list.invalidate();
-    },
-    onError: (error) => {
-      Alert.alert('Error', error.message ?? 'Failed to register');
+  const listQuery = useQuery({
+    queryKey: ['events'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('events')
+        .select('*')
+        .order('start_at', { ascending: true });
+      
+      if (error) throw new Error(error.message);
+      
+      return data.map(event => ({
+        id: event.id,
+        title: event.title,
+        description: event.description || '',
+        date: new Date(event.start_at),
+        endDate: event.end_at ? new Date(event.end_at) : undefined,
+        location: event.location || '',
+        type: 'sabbath' as EventType, // Default type since we don't have this in DB
+        maxAttendees: undefined, // Not in current DB schema
+        currentAttendees: 0, // Not in current DB schema
+        registeredUsers: [], // Not in current DB schema
+        isRegistrationOpen: true,
+        createdBy: event.created_by,
+        createdAt: new Date(event.created_at),
+      }));
     },
   });
 
-  const unregisterMutation = trpc.events.unregister.useMutation({
-    onSuccess: () => {
-      utils.events.list.invalidate();
+  const createMutation = useMutation({
+    mutationFn: async (eventData: {
+      title: string;
+      description: string;
+      date: string;
+      endDate?: string;
+      location: string;
+      type: EventType;
+      maxAttendees?: number;
+      createdBy: string;
+    }) => {
+      const { data, error } = await supabase
+        .from('events')
+        .insert({
+          title: eventData.title,
+          description: eventData.description,
+          start_at: eventData.date,
+          end_at: eventData.endDate || null,
+          location: eventData.location,
+          created_by: eventData.createdBy,
+          is_published: true,
+        })
+        .select()
+        .single();
+      
+      if (error) throw new Error(error.message);
+      return data;
     },
-    onError: (error) => {
-      Alert.alert('Error', error.message ?? 'Failed to cancel registration');
-    },
-  });
-
-  const createMutation = trpc.events.create.useMutation({
     onSuccess: () => {
-      utils.events.list.invalidate();
+      queryClient.invalidateQueries({ queryKey: ['events'] });
       setForm({ 
         title: '', 
         description: '', 
@@ -95,6 +131,7 @@ export default function EventsScreen() {
       Alert.alert('Success', 'Event has been created successfully!');
     },
     onError: (error) => {
+      console.error('[Events] Error creating event:', error);
       Alert.alert('Error', error.message ?? 'Failed to create event. Please try again.');
     },
   });
@@ -137,18 +174,31 @@ export default function EventsScreen() {
       return;
     }
 
-    const payload = {
-      title: form.title.trim(),
-      description: form.description.trim(),
-      date: form.date,
-      endDate: form.endDate || undefined,
-      location: form.location.trim(),
-      type: form.type,
-      maxAttendees: form.maxAttendees ? Number(form.maxAttendees) : undefined,
-      createdBy: user.id,
-    };
+    try {
+      // Validate date format
+      const startDate = new Date(form.date);
+      if (isNaN(startDate.getTime())) {
+        Alert.alert('Error', 'Please enter a valid date and time (e.g., 2025-01-15T10:00:00)');
+        return;
+      }
 
-    createMutation.mutate(payload);
+      const payload = {
+        title: form.title.trim(),
+        description: form.description.trim(),
+        date: startDate.toISOString(),
+        endDate: form.endDate ? new Date(form.endDate).toISOString() : undefined,
+        location: form.location.trim(),
+        type: form.type,
+        maxAttendees: form.maxAttendees ? Number(form.maxAttendees) : undefined,
+        createdBy: user.id,
+      };
+
+      console.log('[Events] Creating event with payload:', payload);
+      createMutation.mutate(payload);
+    } catch (error) {
+      console.error('[Events] Error in handleCreate:', error);
+      Alert.alert('Error', 'Please check your input and try again.');
+    }
   };
 
   const filters: { key: EventType | 'all'; label: string }[] = [
@@ -279,17 +329,12 @@ export default function EventsScreen() {
                     styles.registerButton,
                     isUserRegistered(event) && styles.registeredButton,
                   ]}
-                  disabled={registerMutation.isPending || unregisterMutation.isPending}
                   onPress={() => {
                     if (!user?.id) {
                       Alert.alert('Login required', 'Please log in to register for events.');
                       return;
                     }
-                    if (isUserRegistered(event)) {
-                      unregisterMutation.mutate({ eventId: event.id, userId: user.id });
-                    } else {
-                      registerMutation.mutate({ eventId: event.id, userId: user.id });
-                    }
+                    Alert.alert('Info', 'Event registration will be available soon!');
                   }}
                 >
                   <Text
@@ -298,9 +343,7 @@ export default function EventsScreen() {
                       isUserRegistered(event) && styles.registeredButtonText,
                     ]}
                   >
-                    {(registerMutation.isPending || unregisterMutation.isPending)
-                      ? 'Please wait...'
-                      : (isUserRegistered(event) ? 'Registered • Tap to cancel' : 'Register')}
+                    {isUserRegistered(event) ? 'Registered' : 'Register'}
                   </Text>
                 </TouchableOpacity>
               )}
