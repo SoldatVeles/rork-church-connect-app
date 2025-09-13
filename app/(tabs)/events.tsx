@@ -191,11 +191,10 @@ export default function EventsScreen() {
     return event.registeredUsers.includes(user?.id || '');
   };
 
-  const handleCreate = async () => {
+  const handleCreate = () => {
     console.log('[Events] handleCreate called');
     console.log('[Events] Current form state:', form);
     console.log('[Events] Current user:', user);
-    console.log('[Events] Mutation status:', { isPending: createMutation.isPending, error: createMutation.error });
     
     if (!user) {
       console.log('[Events] No user found');
@@ -226,54 +225,47 @@ export default function EventsScreen() {
       return;
     }
     
-    try {
-      // Combine date and time for start
-      const startDateTime = new Date(
-        form.startDate.getFullYear(),
-        form.startDate.getMonth(),
-        form.startDate.getDate(),
-        form.startTime.getHours(),
-        form.startTime.getMinutes()
-      );
+    // Combine date and time for start
+    const startDateTime = new Date(
+      form.startDate.getFullYear(),
+      form.startDate.getMonth(),
+      form.startDate.getDate(),
+      form.startTime.getHours(),
+      form.startTime.getMinutes()
+    );
 
-      // Combine date and time for end
-      const endDateTime = new Date(
-        form.endDate.getFullYear(),
-        form.endDate.getMonth(),
-        form.endDate.getDate(),
-        form.endTime.getHours(),
-        form.endTime.getMinutes()
-      );
+    // Combine date and time for end
+    const endDateTime = new Date(
+      form.endDate.getFullYear(),
+      form.endDate.getMonth(),
+      form.endDate.getDate(),
+      form.endTime.getHours(),
+      form.endTime.getMinutes()
+    );
 
-      console.log('[Events] Calculated dates:', { startDateTime, endDateTime });
+    console.log('[Events] Calculated dates:', { startDateTime, endDateTime });
 
-      // Validate dates
-      if (endDateTime <= startDateTime) {
-        console.log('[Events] Date validation failed');
-        Alert.alert('Error', 'End date and time must be after start date and time');
-        return;
-      }
-
-      const payload = {
-        title: form.title.trim(),
-        description: form.description.trim(),
-        date: startDateTime.toISOString(),
-        endDate: endDateTime.toISOString(),
-        location: form.location.trim(),
-        type: form.type,
-        maxAttendees: form.maxAttendees ? Number(form.maxAttendees) : undefined,
-        createdBy: user.id,
-      };
-
-      console.log('[Events] Creating event with payload:', JSON.stringify(payload, null, 2));
-      console.log('[Events] About to call mutation...');
-      
-      await createMutation.mutateAsync(payload);
-      console.log('[Events] Mutation completed successfully');
-    } catch (error) {
-      console.error('[Events] Error in handleCreate:', error);
-      Alert.alert('Error', `Failed to create event: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    // Validate dates
+    if (endDateTime <= startDateTime) {
+      console.log('[Events] Date validation failed');
+      Alert.alert('Error', 'End date and time must be after start date and time');
+      return;
     }
+
+    const payload = {
+      title: form.title.trim(),
+      description: form.description.trim(),
+      date: startDateTime.toISOString(),
+      endDate: endDateTime.toISOString(),
+      location: form.location.trim(),
+      type: form.type,
+      maxAttendees: form.maxAttendees ? Number(form.maxAttendees) : undefined,
+      createdBy: user.id,
+    };
+
+    console.log('[Events] Creating event with payload:', JSON.stringify(payload, null, 2));
+    
+    createMutation.mutate(payload);
   };
 
   const handleDateTimeChange = (event: any, selectedDate?: Date) => {
