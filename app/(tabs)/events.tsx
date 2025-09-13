@@ -259,16 +259,26 @@ export default function EventsScreen() {
   };
 
   const handleDateTimeChange = (event: any, selectedDate?: Date) => {
+    console.log('[Events] DateTimePicker change:', { event, selectedDate, field: showDatePicker.field });
+    
+    // On Android, the picker automatically closes after selection
     if (Platform.OS === 'android') {
       setShowDatePicker({ field: null, mode: 'date' });
     }
     
+    // Update the form if a date was selected and we have a field
     if (selectedDate && showDatePicker.field) {
+      console.log('[Events] Updating field:', showDatePicker.field, 'with date:', selectedDate);
       setForm(prev => ({
         ...prev,
         [showDatePicker.field!]: selectedDate
       }));
     }
+  };
+
+  const closeDatePicker = () => {
+    console.log('[Events] Closing date picker');
+    setShowDatePicker({ field: null, mode: 'date' });
   };
 
   const formatDateDisplay = (date: Date) => {
@@ -596,14 +606,92 @@ export default function EventsScreen() {
           </ScrollView>
 
           {showDatePicker.field && (
-            <DateTimePicker
-              testID="dateTimePicker"
-              value={form[showDatePicker.field]}
-              mode={showDatePicker.mode}
-              is24Hour={false}
-              onChange={handleDateTimeChange}
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            />
+            <>
+              {Platform.OS === 'web' ? (
+                <View style={styles.datePickerOverlay}>
+                  <View style={styles.datePickerContainer}>
+                    <View style={styles.datePickerHeader}>
+                      <TouchableOpacity onPress={closeDatePicker}>
+                        <Text style={styles.datePickerCancel}>Cancel</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.datePickerTitle}>
+                        Select {showDatePicker.mode === 'date' ? 'Date' : 'Time'}
+                      </Text>
+                      <TouchableOpacity onPress={closeDatePicker}>
+                        <Text style={styles.datePickerDone}>Done</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.webDatePickerContainer}>
+                      <input
+                        type={showDatePicker.mode === 'date' ? 'date' : 'time'}
+                        value={showDatePicker.mode === 'date' 
+                          ? (showDatePicker.field ? form[showDatePicker.field].toISOString().split('T')[0] : '')
+                          : (showDatePicker.field ? form[showDatePicker.field].toTimeString().slice(0, 5) : '')
+                        }
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          let newDate: Date;
+                          
+                          if (showDatePicker.field) {
+                            if (showDatePicker.mode === 'date') {
+                              const [year, month, day] = value.split('-').map(Number);
+                              newDate = new Date(form[showDatePicker.field]);
+                              newDate.setFullYear(year, month - 1, day);
+                            } else {
+                              const [hours, minutes] = value.split(':').map(Number);
+                              newDate = new Date(form[showDatePicker.field]);
+                              newDate.setHours(hours, minutes);
+                            }
+                          } else {
+                            return;
+                          }
+                          
+                          setForm(prev => ({
+                            ...prev,
+                            [showDatePicker.field!]: newDate
+                          }));
+                        }}
+                        style={styles.webDateInput}
+                      />
+                    </View>
+                  </View>
+                </View>
+              ) : Platform.OS === 'ios' ? (
+                <View style={styles.datePickerOverlay}>
+                  <View style={styles.datePickerContainer}>
+                    <View style={styles.datePickerHeader}>
+                      <TouchableOpacity onPress={closeDatePicker}>
+                        <Text style={styles.datePickerCancel}>Cancel</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.datePickerTitle}>
+                        Select {showDatePicker.mode === 'date' ? 'Date' : 'Time'}
+                      </Text>
+                      <TouchableOpacity onPress={closeDatePicker}>
+                        <Text style={styles.datePickerDone}>Done</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <DateTimePicker
+                      testID="dateTimePicker"
+                      value={showDatePicker.field ? form[showDatePicker.field] : new Date()}
+                      mode={showDatePicker.mode}
+                      is24Hour={false}
+                      onChange={handleDateTimeChange}
+                      display="spinner"
+                      style={styles.datePicker}
+                    />
+                  </View>
+                </View>
+              ) : (
+                <DateTimePicker
+                  testID="dateTimePicker"
+                  value={showDatePicker.field ? form[showDatePicker.field] : new Date()}
+                  mode={showDatePicker.mode}
+                  is24Hour={false}
+                  onChange={handleDateTimeChange}
+                  display="default"
+                />
+              )}
+            </>
           )}
         </SafeAreaView>
       </Modal>
@@ -901,5 +989,57 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#64748b',
     textAlign: 'center',
+  },
+  datePickerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  datePickerContainer: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingBottom: 34,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  datePickerCancel: {
+    fontSize: 16,
+    color: '#64748b',
+  },
+  datePickerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e293b',
+  },
+  datePickerDone: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e3a8a',
+  },
+  datePicker: {
+    height: 200,
+  },
+  webDatePickerContainer: {
+    padding: 20,
+  },
+  webDateInput: {
+    width: '100%',
+    padding: 12,
+    fontSize: 16,
+    borderRadius: 8,
+    border: '1px solid #e2e8f0',
+    backgroundColor: '#f8fafc',
   },
 });
