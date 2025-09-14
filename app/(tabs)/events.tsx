@@ -76,58 +76,24 @@ export default function EventsScreen() {
   const listQuery = useQuery({
     queryKey: ['events'],
     queryFn: async () => {
-      console.log('[Events] listQuery fetching events (attempt 1: split date/time schema)');
-      const attemptSplit = await supabase
-        .from('events')
-        .select('*')
-        .order('start_date', { ascending: true });
-
-      if (!attemptSplit.error) {
-        const data = attemptSplit.data as any[];
-        return data.map((event: any) => {
-          const startDateTime = new Date(`${event.start_date}T${event.start_time ?? '00:00:00'}`);
-          const endDateTime = event.end_date && event.end_time
-            ? new Date(`${event.end_date}T${event.end_time}`)
-            : undefined;
-
-          return {
-            id: event.id,
-            title: event.title,
-            description: event.description ?? '',
-            date: startDateTime,
-            endDate: endDateTime,
-            location: event.location ?? '',
-            type: (event.category ?? event.event_type ?? 'sabbath') as EventType,
-            maxAttendees: event.max_attendees ?? undefined,
-            currentAttendees: event.current_attendees ?? 0,
-            registeredUsers: (event.registered_users ?? []) as string[],
-            isRegistrationOpen: event.is_registration_open ?? true,
-            createdBy: event.created_by,
-            imageUrl: event.image_url ?? undefined,
-            createdAt: new Date(event.created_at ?? new Date().toISOString()),
-          } as Event;
-        });
-      }
-
-      const err1 = attemptSplit.error as any;
-      console.warn('[Events] listQuery attempt 1 failed:', err1?.code, err1?.message);
-      console.log('[Events] listQuery fetching events (attempt 2: unified start_at/end_at schema)');
-
-      const attemptUnified = await supabase
+      console.log('[Events] Fetching events from database');
+      
+      const { data, error } = await supabase
         .from('events')
         .select('*')
         .order('start_at', { ascending: true });
 
-      if (attemptUnified.error) {
-        const err2 = attemptUnified.error as any;
-        console.error('[Events] listQuery failed for both schemas:', { err1, err2 });
-        throw new Error(err2.message ?? 'Failed to load events');
+      if (error) {
+        console.error('[Events] Failed to fetch events:', error);
+        throw new Error(error.message ?? 'Failed to load events');
       }
 
-      const data = attemptUnified.data as any[];
-      return data.map((event: any) => {
-        const start = new Date(event.start_at);
+      console.log('[Events] Fetched events:', data);
+      
+      return (data as any[]).map((event: any) => {
+        const start = event.start_at ? new Date(event.start_at) : new Date();
         const end = event.end_at ? new Date(event.end_at) : undefined;
+        
         return {
           id: event.id,
           title: event.title,
@@ -135,7 +101,7 @@ export default function EventsScreen() {
           date: start,
           endDate: end,
           location: event.location ?? '',
-          type: (event.event_type ?? 'sabbath') as EventType,
+          type: (event.type ?? 'sabbath') as EventType, // Using 'type' column
           maxAttendees: event.max_attendees ?? undefined,
           currentAttendees: event.current_attendees ?? 0,
           registeredUsers: (event.registered_users ?? []) as string[],
@@ -163,23 +129,7 @@ export default function EventsScreen() {
     }) => {
       console.log('[Events] mutationFn called with:', eventData);
 
-      const pad2 = (n: number) => String(n).padStart(2, '0');
-      const formatDate = (date: Date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
-      const formatTime = (date: Date) => `${pad2(date.getHours())}:${pad2(date.getMinutes())}:00`;
-
-      const splitInsert = {
-        title: eventData.title,
-        description: eventData.description,
-        start_date: formatDate(eventData.startDate),
-        start_time: formatTime(eventData.startTime),
-        end_date: formatDate(eventData.endDate),
-        end_time: formatTime(eventData.endTime),
-        location: eventData.location,
-        category: eventData.type,
-        max_attendees: eventData.maxAttendees ?? null,
-        created_by: eventData.createdBy,
-      } as const;
-
+      // Combine date and time into single timestamp
       const startAt = new Date(
         eventData.startDate.getFullYear(),
         eventData.startDate.getMonth(),
@@ -194,47 +144,35 @@ export default function EventsScreen() {
         eventData.endTime.getHours(),
         eventData.endTime.getMinutes(),
       );
-      const unifiedInsert = {
+
+      // Use the correct column names from your database
+      const insertData = {
         title: eventData.title,
         description: eventData.description,
         start_at: startAt.toISOString(),
         end_at: endAt.toISOString(),
         location: eventData.location,
-        event_type: eventData.type,
+        type: eventData.type, // Using 'type' column that exists in your DB
         max_attendees: eventData.maxAttendees ?? null,
         created_by: eventData.createdBy,
         is_registration_open: true,
       } as const;
 
-      console.log('[Events] Trying insert (attempt 1: split date/time schema):', splitInsert);
-      const attempt1 = await supabase
+      console.log('[Events] Inserting event with data:', insertData);
+      
+      const { data, error } = await supabase
         .from('events')
-        .insert(splitInsert)
+        .insert(insertData)
         .select()
         .single();
 
-      if (!attempt1.error) {
-        console.log('[Events] Insert attempt 1 succeeded');
-        return attempt1.data;
+      if (error) {
+        console.error('[Events] Insert failed:', error);
+        throw new Error(error.message ?? 'Failed to create event');
       }
 
-      const e1: any = attempt1.error;
-      console.warn('[Events] Insert attempt 1 failed:', e1?.code, e1?.message);
-      console.log('[Events] Trying insert (attempt 2: unified start_at/end_at schema):', unifiedInsert);
-
-      const attempt2 = await supabase
-        .from('events')
-        .insert(unifiedInsert)
-        .select()
-        .single();
-
-      if (attempt2.error) {
-        const e2: any = attempt2.error;
-        console.error('[Events] Both insert attempts failed:', { e1, e2 });
-        throw new Error(e2?.message ?? 'Failed to create event');
-      }
-
-      return attempt2.data;
+      console.log('[Events] Insert succeeded:', data);
+      return data;
     },
     onSuccess: (data) => {
       console.log('[Events] Mutation success, invalidating queries');
