@@ -94,6 +94,10 @@ export default function EventsScreen() {
         const start = event.start_at ? new Date(event.start_at) : new Date();
         const end = event.end_at ? new Date(event.end_at) : undefined;
         
+        const registeredUsersSafe: string[] = Array.isArray(event?.registered_users)
+          ? (event.registered_users as string[])
+          : [];
+
         return {
           id: event.id,
           title: event.title,
@@ -101,10 +105,10 @@ export default function EventsScreen() {
           date: start,
           endDate: end,
           location: event.location ?? '',
-          type: (event.type ?? 'sabbath') as EventType, // Using 'type' column
+          type: (event.type ?? 'sabbath') as EventType,
           maxAttendees: event.max_attendees ?? undefined,
           currentAttendees: event.current_attendees ?? 0,
-          registeredUsers: (event.registered_users ?? []) as string[],
+          registeredUsers: registeredUsersSafe,
           isRegistrationOpen: event.is_registration_open ?? true,
           createdBy: event.created_by,
           imageUrl: event.image_url ?? undefined,
@@ -284,7 +288,9 @@ export default function EventsScreen() {
   };
 
   const isUserRegistered = (event: Event) => {
-    return event.registeredUsers.includes(user?.id || '');
+    const list = Array.isArray(event?.registeredUsers) ? event.registeredUsers : [] as string[];
+    const uid = user?.id ?? '';
+    return !!uid && list.includes(uid);
   };
 
   const handleCreate = () => {
