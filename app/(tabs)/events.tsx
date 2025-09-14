@@ -79,26 +79,32 @@ export default function EventsScreen() {
       const { data, error } = await supabase
         .from('events')
         .select('*')
-        .order('start_at', { ascending: true });
+        .order('start_date', { ascending: true });
       
       if (error) throw new Error(error.message);
       
-      return data.map(event => ({
-        id: event.id,
-        title: event.title,
-        description: event.description || '',
-        date: new Date(event.start_at),
-        endDate: event.end_at ? new Date(event.end_at) : undefined,
-        location: event.location || '',
-        type: (event.event_type || 'sabbath') as EventType,
-        maxAttendees: event.max_attendees || undefined,
-        currentAttendees: event.current_attendees || 0,
-        registeredUsers: event.registered_users || [],
-        isRegistrationOpen: event.is_registration_open ?? true,
-        createdBy: event.created_by,
-        imageUrl: event.image_url || undefined,
-        createdAt: new Date(event.created_at),
-      }));
+      return data.map(event => {
+        // Combine date and time fields to create Date objects
+        const startDateTime = new Date(`${event.start_date}T${event.start_time}`);
+        const endDateTime = new Date(`${event.end_date}T${event.end_time}`);
+        
+        return {
+          id: event.id,
+          title: event.title,
+          description: event.description || '',
+          date: startDateTime,
+          endDate: endDateTime,
+          location: event.location || '',
+          type: (event.category || 'sabbath') as EventType,
+          maxAttendees: event.max_attendees || undefined,
+          currentAttendees: 0,
+          registeredUsers: [],
+          isRegistrationOpen: true,
+          createdBy: event.created_by,
+          imageUrl: undefined,
+          createdAt: new Date(event.created_at),
+        };
+      });
     },
   });
 
@@ -106,8 +112,10 @@ export default function EventsScreen() {
     mutationFn: async (eventData: {
       title: string;
       description: string;
-      startDateTime: string;
-      endDateTime: string;
+      startDate: Date;
+      startTime: Date;
+      endDate: Date;
+      endTime: Date;
       location: string;
       type: EventType;
       maxAttendees?: number;
@@ -115,19 +123,32 @@ export default function EventsScreen() {
     }) => {
       console.log('[Events] mutationFn called with:', eventData);
       
+      // Format date as YYYY-MM-DD
+      const formatDate = (date: Date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+      
+      // Format time as HH:MM:SS
+      const formatTime = (date: Date) => {
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        return `${hours}:${minutes}:00`;
+      };
+      
       const insertData = {
         title: eventData.title,
         description: eventData.description,
-        start_at: eventData.startDateTime,
-        end_at: eventData.endDateTime,
+        start_date: formatDate(eventData.startDate),
+        start_time: formatTime(eventData.startTime),
+        end_date: formatDate(eventData.endDate),
+        end_time: formatTime(eventData.endTime),
         location: eventData.location,
-        event_type: eventData.type,
+        category: eventData.type,
         max_attendees: eventData.maxAttendees || null,
-        current_attendees: 0,
-        registered_users: [],
-        is_registration_open: true,
         created_by: eventData.createdBy,
-        is_published: true,
       };
       
       console.log('[Events] Inserting into Supabase:', insertData);
@@ -269,8 +290,10 @@ export default function EventsScreen() {
     const payload = {
       title: form.title.trim(),
       description: form.description.trim(),
-      startDateTime: startDateTime.toISOString(),
-      endDateTime: endDateTime.toISOString(),
+      startDate: form.startDate,
+      startTime: form.startTime,
+      endDate: form.endDate,
+      endTime: form.endTime,
       location: form.location.trim(),
       type: form.type,
       maxAttendees: form.maxAttendees ? Number(form.maxAttendees) : undefined,
