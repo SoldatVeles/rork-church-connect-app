@@ -134,7 +134,7 @@ export default function EventsScreen() {
       
       if (error) {
         console.error('[Events] Supabase error:', error);
-        throw new Error(error.message);
+        throw new Error(`Database error: ${error.message}`);
       }
       
       console.log('[Events] Successfully created event:', data);
@@ -193,12 +193,20 @@ export default function EventsScreen() {
 
   const handleCreate = () => {
     console.log('[Events] handleCreate called');
-    console.log('[Events] Current form state:', form);
-    console.log('[Events] Current user:', user);
+    console.log('[Events] Current form state:', JSON.stringify(form, null, 2));
+    console.log('[Events] Current user:', JSON.stringify(user, null, 2));
+    console.log('[Events] Auth state:', { isAuthenticated, isLoading });
+    console.log('[Events] Mutation state:', { isPending: createMutation.isPending, error: createMutation.error });
     
     if (!user) {
       console.log('[Events] No user found');
       Alert.alert('Error', 'You must be logged in to create an event');
+      return;
+    }
+
+    if (!user.id) {
+      console.log('[Events] User has no ID');
+      Alert.alert('Error', 'Invalid user session. Please log out and log in again.');
       return;
     }
 
@@ -264,8 +272,15 @@ export default function EventsScreen() {
     };
 
     console.log('[Events] Creating event with payload:', JSON.stringify(payload, null, 2));
+    console.log('[Events] About to call createMutation.mutate');
     
-    createMutation.mutate(payload);
+    try {
+      createMutation.mutate(payload);
+      console.log('[Events] createMutation.mutate called successfully');
+    } catch (error) {
+      console.error('[Events] Error calling createMutation.mutate:', error);
+      Alert.alert('Error', 'Failed to start event creation');
+    }
   };
 
   const handleDateTimeChange = (event: any, selectedDate?: Date) => {
@@ -479,7 +494,10 @@ export default function EventsScreen() {
             </TouchableOpacity>
             <Text style={styles.modalTitle}>New Event</Text>
             <TouchableOpacity 
-              onPress={handleCreate} 
+              onPress={() => {
+                console.log('[Events] Create button pressed!');
+                handleCreate();
+              }} 
               disabled={createMutation.isPending}
               testID="submit-event-button"
             >
