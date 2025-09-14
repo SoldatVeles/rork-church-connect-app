@@ -76,34 +76,74 @@ export default function EventsScreen() {
   const listQuery = useQuery({
     queryKey: ['events'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      console.log('[Events] listQuery fetching events (attempt 1: split date/time schema)');
+      const attemptSplit = await supabase
         .from('events')
         .select('*')
         .order('start_date', { ascending: true });
-      
-      if (error) throw new Error(error.message);
-      
-      return data.map(event => {
-        // Combine date and time fields to create Date objects
-        const startDateTime = new Date(`${event.start_date}T${event.start_time}`);
-        const endDateTime = new Date(`${event.end_date}T${event.end_time}`);
-        
+
+      if (!attemptSplit.error) {
+        const data = attemptSplit.data as any[];
+        return data.map((event: any) => {
+          const startDateTime = new Date(`${event.start_date}T${event.start_time ?? '00:00:00'}`);
+          const endDateTime = event.end_date && event.end_time
+            ? new Date(`${event.end_date}T${event.end_time}`)
+            : undefined;
+
+          return {
+            id: event.id,
+            title: event.title,
+            description: event.description ?? '',
+            date: startDateTime,
+            endDate: endDateTime,
+            location: event.location ?? '',
+            type: (event.category ?? event.event_type ?? 'sabbath') as EventType,
+            maxAttendees: event.max_attendees ?? undefined,
+            currentAttendees: event.current_attendees ?? 0,
+            registeredUsers: (event.registered_users ?? []) as string[],
+            isRegistrationOpen: event.is_registration_open ?? true,
+            createdBy: event.created_by,
+            imageUrl: event.image_url ?? undefined,
+            createdAt: new Date(event.created_at ?? new Date().toISOString()),
+          } as Event;
+        });
+      }
+
+      const err1 = attemptSplit.error as any;
+      console.warn('[Events] listQuery attempt 1 failed:', err1?.code, err1?.message);
+      console.log('[Events] listQuery fetching events (attempt 2: unified start_at/end_at schema)');
+
+      const attemptUnified = await supabase
+        .from('events')
+        .select('*')
+        .order('start_at', { ascending: true });
+
+      if (attemptUnified.error) {
+        const err2 = attemptUnified.error as any;
+        console.error('[Events] listQuery failed for both schemas:', { err1, err2 });
+        throw new Error(err2.message ?? 'Failed to load events');
+      }
+
+      const data = attemptUnified.data as any[];
+      return data.map((event: any) => {
+        const start = new Date(event.start_at);
+        const end = event.end_at ? new Date(event.end_at) : undefined;
         return {
           id: event.id,
           title: event.title,
-          description: event.description || '',
-          date: startDateTime,
-          endDate: endDateTime,
-          location: event.location || '',
-          type: (event.category || 'sabbath') as EventType,
-          maxAttendees: event.max_attendees || undefined,
-          currentAttendees: 0,
-          registeredUsers: [],
-          isRegistrationOpen: true,
+          description: event.description ?? '',
+          date: start,
+          endDate: end,
+          location: event.location ?? '',
+          type: (event.event_type ?? 'sabbath') as EventType,
+          maxAttendees: event.max_attendees ?? undefined,
+          currentAttendees: event.current_attendees ?? 0,
+          registeredUsers: (event.registered_users ?? []) as string[],
+          isRegistrationOpen: event.is_registration_open ?? true,
           createdBy: event.created_by,
-          imageUrl: undefined,
-          createdAt: new Date(event.created_at),
-        };
+          imageUrl: event.image_url ?? undefined,
+          createdAt: new Date(event.created_at ?? new Date().toISOString()),
+        } as Event;
       });
     },
   });
@@ -122,23 +162,12 @@ export default function EventsScreen() {
       createdBy: string;
     }) => {
       console.log('[Events] mutationFn called with:', eventData);
-      
-      // Format date as YYYY-MM-DD
-      const formatDate = (date: Date) => {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-      };
-      
-      // Format time as HH:MM:SS
-      const formatTime = (date: Date) => {
-        const hours = String(date.getHours()).padStart(2, '0');
-        const minutes = String(date.getMinutes()).padStart(2, '0');
-        return `${hours}:${minutes}:00`;
-      };
-      
-      const insertData = {
+
+      const pad2 = (n: number) => String(n).padStart(2, '0');
+      const formatDate = (date: Date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+      const formatTime = (date: Date) => `${pad2(date.getHours())}:${pad2(date.getMinutes())}:00`;
+
+      const splitInsert = {
         title: eventData.title,
         description: eventData.description,
         start_date: formatDate(eventData.startDate),
@@ -147,47 +176,87 @@ export default function EventsScreen() {
         end_time: formatTime(eventData.endTime),
         location: eventData.location,
         category: eventData.type,
-        max_attendees: eventData.maxAttendees || null,
+        max_attendees: eventData.maxAttendees ?? null,
         created_by: eventData.createdBy,
-      };
-      
-      console.log('[Events] Inserting into Supabase:', insertData);
-      
-      const { data, error } = await supabase
+      } as const;
+
+      const startAt = new Date(
+        eventData.startDate.getFullYear(),
+        eventData.startDate.getMonth(),
+        eventData.startDate.getDate(),
+        eventData.startTime.getHours(),
+        eventData.startTime.getMinutes(),
+      );
+      const endAt = new Date(
+        eventData.endDate.getFullYear(),
+        eventData.endDate.getMonth(),
+        eventData.endDate.getDate(),
+        eventData.endTime.getHours(),
+        eventData.endTime.getMinutes(),
+      );
+      const unifiedInsert = {
+        title: eventData.title,
+        description: eventData.description,
+        start_at: startAt.toISOString(),
+        end_at: endAt.toISOString(),
+        location: eventData.location,
+        event_type: eventData.type,
+        max_attendees: eventData.maxAttendees ?? null,
+        created_by: eventData.createdBy,
+        is_registration_open: true,
+      } as const;
+
+      console.log('[Events] Trying insert (attempt 1: split date/time schema):', splitInsert);
+      const attempt1 = await supabase
         .from('events')
-        .insert(insertData)
+        .insert(splitInsert)
         .select()
         .single();
-      
-      if (error) {
-        console.error('[Events] Supabase error:', error);
-        throw new Error(`Database error: ${error.message}`);
+
+      if (!attempt1.error) {
+        console.log('[Events] Insert attempt 1 succeeded');
+        return attempt1.data;
       }
-      
-      console.log('[Events] Successfully created event:', data);
-      return data;
+
+      const e1: any = attempt1.error;
+      console.warn('[Events] Insert attempt 1 failed:', e1?.code, e1?.message);
+      console.log('[Events] Trying insert (attempt 2: unified start_at/end_at schema):', unifiedInsert);
+
+      const attempt2 = await supabase
+        .from('events')
+        .insert(unifiedInsert)
+        .select()
+        .single();
+
+      if (attempt2.error) {
+        const e2: any = attempt2.error;
+        console.error('[Events] Both insert attempts failed:', { e1, e2 });
+        throw new Error(e2?.message ?? 'Failed to create event');
+      }
+
+      return attempt2.data;
     },
     onSuccess: (data) => {
       console.log('[Events] Mutation success, invalidating queries');
       queryClient.invalidateQueries({ queryKey: ['events'] });
       const now = new Date();
-      setForm({ 
-        title: '', 
-        description: '', 
+      setForm({
+        title: '',
+        description: '',
         startDate: now,
         startTime: now,
         endDate: now,
         endTime: now,
-        location: '', 
-        type: 'sabbath', 
-        maxAttendees: '' 
+        location: '',
+        type: 'sabbath',
+        maxAttendees: ''
       });
       setShowAddModal(false);
       Alert.alert('Success', 'Event has been created successfully!');
     },
     onError: (error) => {
       console.error('[Events] Mutation error:', error);
-      Alert.alert('Error', error.message ?? 'Failed to create event. Please try again.');
+      Alert.alert('Error', (error as Error).message ?? 'Failed to create event. Please try again.');
     },
   });
 
