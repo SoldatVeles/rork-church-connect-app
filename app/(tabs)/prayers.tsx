@@ -46,15 +46,15 @@ export default function PrayersScreen() {
       return data.map(prayer => ({
         id: prayer.id,
         title: prayer.title,
-        description: prayer.details || '',
-        requestedBy: prayer.requester_id,
+        description: prayer.description || '',
+        requestedBy: prayer.created_by,
         requestedByName: 'Anonymous', // We'll need to join with profiles to get real names
         status: prayer.is_answered ? 'answered' as PrayerStatus : 'active' as PrayerStatus,
-        isAnonymous: prayer.visibility === 'private',
+        isAnonymous: prayer.is_anonymous,
         isUrgent: false, // Not in current DB schema
         prayedBy: [], // Not in current DB schema
         createdAt: new Date(prayer.created_at),
-        answeredAt: prayer.answered_at ? new Date(prayer.answered_at) : undefined,
+        answeredAt: prayer.updated_at && prayer.is_answered ? new Date(prayer.updated_at) : undefined,
       }));
     },
   });
@@ -72,10 +72,11 @@ export default function PrayersScreen() {
         .from('prayers')
         .insert({
           title: prayerData.title,
-          details: prayerData.description,
-          requester_id: prayerData.requestedBy,
-          visibility: prayerData.isAnonymous ? 'private' : 'public',
+          description: prayerData.description,
+          created_by: prayerData.requestedBy,
+          is_anonymous: prayerData.isAnonymous,
           is_answered: false,
+          category: 'personal',
         })
         .select()
         .single();
@@ -111,7 +112,7 @@ export default function PrayersScreen() {
         .from('prayers')
         .update({
           is_answered: data.status === 'answered',
-          answered_at: data.status === 'answered' ? new Date().toISOString() : null,
+          updated_at: new Date().toISOString(),
         })
         .eq('id', data.prayerId);
       
