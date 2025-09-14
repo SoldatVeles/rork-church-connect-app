@@ -187,18 +187,32 @@ export default function PrayersScreen() {
     mutationFn: async (payload: { prayerId: string; willPray: boolean; userId: string }) => {
       // Try using a join table: prayer_prayers(prayer_id uuid, user_id uuid)
       if (payload.willPray) {
-        const { error } = await supabase.from('prayer_prayers').insert({
+        const { error } = await supabase.from('prayer_prayers').upsert({
           prayer_id: payload.prayerId,
           user_id: payload.userId,
+        }, {
+          onConflict: 'prayer_id,user_id',
+          ignoreDuplicates: true
         });
-        if (error) throw new Error(error.message);
+        if (error) {
+          // Check if it's a table not found error
+          if (error.message.includes('relation') && error.message.includes('does not exist')) {
+            throw new Error('Prayer tracking table not configured. Please run the database setup SQL.');
+          }
+          throw new Error(error.message);
+        }
       } else {
         const { error } = await supabase
           .from('prayer_prayers')
           .delete()
           .eq('prayer_id', payload.prayerId)
           .eq('user_id', payload.userId);
-        if (error) throw new Error(error.message);
+        if (error) {
+          // Ignore error if table doesn't exist when trying to delete
+          if (!error.message.includes('relation') || !error.message.includes('does not exist')) {
+            throw new Error(error.message);
+          }
+        }
       }
     },
     onMutate: async ({ prayerId, willPray, userId }) => {
@@ -230,7 +244,17 @@ export default function PrayersScreen() {
       console.error('[Prayers] Toggle pray failed:', err);
       if (ctx?.prevPrayers) queryClient.setQueryData(['prayers'], ctx.prevPrayers);
       if (ctx?.prevLinks) queryClient.setQueryData(['prayer_prayers'], ctx.prevLinks);
-      Alert.alert('Error', err.message ?? 'Failed to update prayer status. If this persists, please contact support.');
+      
+      // Provide helpful error message
+      if (err.message.includes('Prayer tracking table not configured')) {
+        Alert.alert(
+          'Database Setup Required', 
+          'The prayer tracking feature requires a database update. Please ask your administrator to run the prayer_prayers table setup SQL.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Error', err.message ?? 'Failed to update prayer status. Please try again.');
+      }
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['prayers'] });
