@@ -90,12 +90,13 @@ export default function EventsScreen() {
         date: new Date(event.start_at),
         endDate: event.end_at ? new Date(event.end_at) : undefined,
         location: event.location || '',
-        type: 'sabbath' as EventType, // Default type since we don't have this in DB
-        maxAttendees: undefined, // Not in current DB schema
-        currentAttendees: 0, // Not in current DB schema
-        registeredUsers: [], // Not in current DB schema
-        isRegistrationOpen: true,
+        type: (event.event_type || 'sabbath') as EventType,
+        maxAttendees: event.max_attendees || undefined,
+        currentAttendees: event.current_attendees || 0,
+        registeredUsers: event.registered_users || [],
+        isRegistrationOpen: event.is_registration_open ?? true,
         createdBy: event.created_by,
+        imageUrl: event.image_url || undefined,
         createdAt: new Date(event.created_at),
       }));
     },
@@ -120,6 +121,11 @@ export default function EventsScreen() {
         start_at: eventData.date,
         end_at: eventData.endDate || null,
         location: eventData.location,
+        event_type: eventData.type,
+        max_attendees: eventData.maxAttendees || null,
+        current_attendees: 0,
+        registered_users: [],
+        is_registration_open: true,
         created_by: eventData.createdBy,
         is_published: true,
       };

@@ -74,6 +74,12 @@ export type Database = {
           start_at: string;
           end_at: string | null;
           location: string | null;
+          event_type: 'sabbath' | 'prayer_meeting' | 'bible_study' | 'youth' | 'special' | 'conference';
+          max_attendees: number | null;
+          current_attendees: number;
+          registered_users: string[];
+          is_registration_open: boolean;
+          image_url: string | null;
           group_id: string | null;
           created_by: string;
           is_published: boolean;
@@ -87,6 +93,12 @@ export type Database = {
           start_at: string;
           end_at?: string | null;
           location?: string | null;
+          event_type?: 'sabbath' | 'prayer_meeting' | 'bible_study' | 'youth' | 'special' | 'conference';
+          max_attendees?: number | null;
+          current_attendees?: number;
+          registered_users?: string[];
+          is_registration_open?: boolean;
+          image_url?: string | null;
           group_id?: string | null;
           created_by: string;
           is_published?: boolean;
@@ -100,6 +112,12 @@ export type Database = {
           start_at?: string;
           end_at?: string | null;
           location?: string | null;
+          event_type?: 'sabbath' | 'prayer_meeting' | 'bible_study' | 'youth' | 'special' | 'conference';
+          max_attendees?: number | null;
+          current_attendees?: number;
+          registered_users?: string[];
+          is_registration_open?: boolean;
+          image_url?: string | null;
           group_id?: string | null;
           created_by?: string;
           is_published?: boolean;
