@@ -205,6 +205,68 @@ export default function EventsScreen() {
     return allEvents.filter(e => e.type === selectedFilter);
   }, [allEvents, selectedFilter]);
 
+  const registerMutation = useMutation({
+    mutationFn: async ({ eventId }: { eventId: string }) => {
+      console.log('[Events] Register mutation called for', eventId);
+      if (!user?.id) {
+        throw new Error('You must be logged in.');
+      }
+
+      const { data: current, error: fetchError } = await supabase
+        .from('events')
+        .select('id, registered_users, current_attendees, max_attendees, is_registration_open')
+        .eq('id', eventId)
+        .single();
+
+      if (fetchError) {
+        console.error('[Events] Failed to fetch event before register:', fetchError);
+        throw new Error(fetchError.message ?? 'Failed to load event');
+      }
+
+      const regUsers: string[] = (current as any).registered_users ?? [];
+      const already = regUsers.includes(user.id);
+      const capacity: number | null = (current as any).max_attendees ?? null;
+      const open: boolean = Boolean((current as any).is_registration_open);
+      const currentCount: number = Number((current as any).current_attendees ?? 0);
+
+      if (!open) {
+        throw new Error('Registration is closed for this event.');
+      }
+
+      if (!already) {
+        if (capacity !== null && currentCount >= capacity) {
+          throw new Error('This event is at full capacity.');
+        }
+      }
+
+      const nextUsers = already ? regUsers.filter((id: string) => id !== user.id) : [...regUsers, user.id];
+      const nextCount = already ? Math.max(0, currentCount - 1) : currentCount + 1;
+
+      const { data: updated, error: updateError } = await supabase
+        .from('events')
+        .update({ registered_users: nextUsers, current_attendees: nextCount })
+        .eq('id', eventId)
+        .select()
+        .single();
+
+      if (updateError) {
+        console.error('[Events] Registration update failed:', updateError);
+        throw new Error(updateError.message ?? 'Failed to update registration');
+      }
+
+      return updated;
+    },
+    onSuccess: () => {
+      console.log('[Events] Register mutation success - invalidating events');
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      Alert.alert('Success', 'Your registration status was updated.');
+    },
+    onError: (error) => {
+      console.error('[Events] Register mutation error:', error);
+      Alert.alert('Error', (error as Error).message ?? 'Could not update registration.');
+    },
+  });
+
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('en-US', {
       weekday: 'short',
@@ -492,8 +554,9 @@ export default function EventsScreen() {
                       Alert.alert('Login required', 'Please log in to register for events.');
                       return;
                     }
-                    Alert.alert('Info', 'Event registration will be available soon!');
+                    registerMutation.mutate({ eventId: event.id });
                   }}
+                  disabled={registerMutation.isPending}
                 >
                   <Text
                     style={[
@@ -501,7 +564,11 @@ export default function EventsScreen() {
                       isUserRegistered(event) && styles.registeredButtonText,
                     ]}
                   >
-                    {isUserRegistered(event) ? 'Registered' : 'Register'}
+                    {registerMutation.isPending
+                      ? 'Please wait...'
+                      : isUserRegistered(event)
+                      ? 'Unregister'
+                      : 'Register'}
                   </Text>
                 </TouchableOpacity>
               )}
