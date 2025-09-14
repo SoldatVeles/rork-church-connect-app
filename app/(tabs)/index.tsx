@@ -70,13 +70,14 @@ export default function HomeScreen() {
     refetchInterval: 30000, // Refetch every 30 seconds
   });
 
-  const eventsThisWeekCount = useMemo(() => {
+  const totalEventsCount = eventsQuery.data?.length ?? 0;
+  
+  const upcomingEventsCount = useMemo(() => {
     const events = eventsQuery.data ?? [];
     const now = new Date();
-    const in7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     return events.filter((e) => {
       const d = new Date(e.start_at);
-      return d >= now && d <= in7;
+      return d >= now;
     }).length;
   }, [eventsQuery.data]);
 
@@ -88,7 +89,7 @@ export default function HomeScreen() {
     {
       icon: Calendar,
       title: 'Upcoming Events',
-      subtitle: `${eventsThisWeekCount} ${eventsThisWeekCount === 1 ? 'event' : 'events'} this week`,
+      subtitle: `${totalEventsCount} total ${totalEventsCount === 1 ? 'event' : 'events'}`,
       color: '#3b82f6',
       onPress: () => router.push('/(tabs)/events'),
     },
@@ -113,7 +114,7 @@ export default function HomeScreen() {
       color: '#f59e0b',
       onPress: () => {},
     },
-  ], [eventsThisWeekCount, activeRequestsCount, membersCount]);
+  ], [totalEventsCount, activeRequestsCount, membersCount]);
 
   const announcements = [
     {
