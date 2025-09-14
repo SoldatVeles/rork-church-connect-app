@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { Heart, Plus, Clock, User, AlertCircle, CheckCircle } from 'lucide-react-native';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -48,16 +48,43 @@ export default function PrayersScreen() {
         title: prayer.title,
         description: prayer.description || '',
         requestedBy: prayer.created_by,
-        requestedByName: 'Anonymous', // We'll need to join with profiles to get real names
+        requestedByName: 'Anonymous',
         status: prayer.is_answered ? 'answered' as PrayerStatus : 'active' as PrayerStatus,
         isAnonymous: prayer.is_anonymous,
-        isUrgent: false, // Not in current DB schema
-        prayedBy: [], // Not in current DB schema
+        isUrgent: false,
+        prayedBy: [],
         createdAt: new Date(prayer.created_at),
         answeredAt: prayer.updated_at && prayer.is_answered ? new Date(prayer.updated_at) : undefined,
       }));
     },
   });
+
+  // Fetch who is praying per prayer (via join table). If the table doesn't exist, we fail soft.
+  const prayingQuery = useQuery({
+    queryKey: ['prayer_prayers'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('prayer_prayers')
+        .select('prayer_id, user_id');
+      if (error) {
+        console.warn('[Prayers] prayer_prayers table not available or query failed:', error.message);
+        return [] as { prayer_id: string; user_id: string }[];
+      }
+      return data as { prayer_id: string; user_id: string }[];
+    },
+  });
+
+  const mergedPrayers: PrayerRequest[] = useMemo(() => {
+    const base = allPrayersQuery.data ?? [];
+    const praying = prayingQuery.data ?? [];
+    const map = new Map<string, string[]>();
+    for (const row of praying) {
+      const list = map.get(row.prayer_id) ?? [];
+      list.push(row.user_id);
+      map.set(row.prayer_id, list);
+    }
+    return base.map(p => ({ ...p, prayedBy: map.get(p.id) ?? [] }));
+  }, [allPrayersQuery.data, prayingQuery.data]);
   
   const createPrayerMutation = useMutation({
     mutationFn: async (prayerData: {
@@ -128,7 +155,7 @@ export default function PrayersScreen() {
     },
   });
 
-  const allPrayers = allPrayersQuery.data || [];
+  const allPrayers = mergedPrayers || [];
   
   // Filter prayers based on selected filter
   const prayers = selectedFilter === 'all' 
@@ -146,7 +173,7 @@ export default function PrayersScreen() {
   };
 
   const hasUserPrayed = (prayer: PrayerRequest) => {
-    return prayer.prayedBy.includes(user?.id || '');
+    return (prayer.prayedBy ?? []).includes(user?.id || '');
   };
 
   const canUpdateStatus = (prayer: PrayerRequest) => {
@@ -155,6 +182,61 @@ export default function PrayersScreen() {
     const isAdmin = user.role === 'admin' || user.role === 'pastor';
     return isRequester || isAdmin;
   };
+
+  const togglePrayMutation = useMutation({
+    mutationFn: async (payload: { prayerId: string; willPray: boolean; userId: string }) => {
+      // Try using a join table: prayer_prayers(prayer_id uuid, user_id uuid)
+      if (payload.willPray) {
+        const { error } = await supabase.from('prayer_prayers').insert({
+          prayer_id: payload.prayerId,
+          user_id: payload.userId,
+        });
+        if (error) throw new Error(error.message);
+      } else {
+        const { error } = await supabase
+          .from('prayer_prayers')
+          .delete()
+          .eq('prayer_id', payload.prayerId)
+          .eq('user_id', payload.userId);
+        if (error) throw new Error(error.message);
+      }
+    },
+    onMutate: async ({ prayerId, willPray, userId }) => {
+      await queryClient.cancelQueries({ queryKey: ['prayers'] });
+      await queryClient.cancelQueries({ queryKey: ['prayer_prayers'] });
+
+      const prevPrayers = queryClient.getQueryData<PrayerRequest[]>(['prayers']);
+      const prevLinks = queryClient.getQueryData<{ prayer_id: string; user_id: string }[]>(['prayer_prayers']);
+
+      if (prevPrayers) {
+        const next = prevPrayers.map(p =>
+          p.id === prayerId
+            ? { ...p, prayedBy: willPray ? [...(p.prayedBy ?? []), userId] : (p.prayedBy ?? []).filter(id => id !== userId) }
+            : p,
+        );
+        queryClient.setQueryData(['prayers'], next);
+      }
+
+      if (prevLinks) {
+        const nextLinks = willPray
+          ? [...prevLinks, { prayer_id: prayerId, user_id: userId }]
+          : prevLinks.filter(l => !(l.prayer_id === prayerId && l.user_id === userId));
+        queryClient.setQueryData(['prayer_prayers'], nextLinks);
+      }
+
+      return { prevPrayers, prevLinks };
+    },
+    onError: (err: Error, _vars, ctx) => {
+      console.error('[Prayers] Toggle pray failed:', err);
+      if (ctx?.prevPrayers) queryClient.setQueryData(['prayers'], ctx.prevPrayers);
+      if (ctx?.prevLinks) queryClient.setQueryData(['prayer_prayers'], ctx.prevLinks);
+      Alert.alert('Error', err.message ?? 'Failed to update prayer status. If this persists, please contact support.');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['prayers'] });
+      queryClient.invalidateQueries({ queryKey: ['prayer_prayers'] });
+    },
+  });
 
   const handleToggleAnswered = (prayer: PrayerRequest) => {
     if (!user) {
@@ -384,14 +466,15 @@ export default function PrayersScreen() {
                     Alert.alert('Not allowed', 'Only members and priests can use this action.');
                     return;
                   }
-                  console.log('[Prayers] Prayer feature will be available soon');
-                  Alert.alert('Info', 'Prayer tracking will be available soon!');
+                  const willPray = !hasUserPrayed(prayer);
+                  console.log('[Prayers] Toggling pray', { prayerId: prayer.id, willPray, userId: user.id });
+                  togglePrayMutation.mutate({ prayerId: prayer.id, willPray, userId: user.id });
                 }}
-                disabled={false}
+                disabled={togglePrayMutation.isPending}
                 style={[
                   styles.prayButton,
                   hasUserPrayed(prayer) && styles.prayedButton,
-                  null,
+                  togglePrayMutation.isPending ? { opacity: 0.6 } as const : null,
                 ]}
               >
                 <Text style={[
