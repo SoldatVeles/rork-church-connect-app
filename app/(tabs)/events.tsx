@@ -106,8 +106,8 @@ export default function EventsScreen() {
     mutationFn: async (eventData: {
       title: string;
       description: string;
-      date: string;
-      endDate?: string;
+      startDateTime: string;
+      endDateTime: string;
       location: string;
       type: EventType;
       maxAttendees?: number;
@@ -118,8 +118,8 @@ export default function EventsScreen() {
       const insertData = {
         title: eventData.title,
         description: eventData.description,
-        start_at: eventData.date,
-        end_at: eventData.endDate || null,
+        start_at: eventData.startDateTime,
+        end_at: eventData.endDateTime,
         location: eventData.location,
         event_type: eventData.type,
         max_attendees: eventData.maxAttendees || null,
@@ -269,8 +269,8 @@ export default function EventsScreen() {
     const payload = {
       title: form.title.trim(),
       description: form.description.trim(),
-      date: startDateTime.toISOString(),
-      endDate: endDateTime.toISOString(),
+      startDateTime: startDateTime.toISOString(),
+      endDateTime: endDateTime.toISOString(),
       location: form.location.trim(),
       type: form.type,
       maxAttendees: form.maxAttendees ? Number(form.maxAttendees) : undefined,
