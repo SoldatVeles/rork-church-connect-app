@@ -2,7 +2,7 @@ import createContextHook from '@nkzw/create-context-hook';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { Platform } from 'react-native';
+
 import type { AuthState } from '@/types/user';
 import { supabase } from '@/lib/supabase';
 import type { User, Session } from '@supabase/supabase-js';
@@ -52,10 +52,17 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
+      console.log('Starting logout...');
       const { error } = await supabase.auth.signOut();
-      if (error) throw new Error(error.message);
+      if (error) {
+        console.error('Logout error:', error);
+        throw new Error(error.message);
+      }
+      console.log('Logout successful');
+      return true;
     },
     onSuccess: () => {
+      console.log('Logout mutation success, clearing state...');
       setSession(null);
       setAuthState({
         user: null,
@@ -63,6 +70,21 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         isAuthenticated: false,
       });
       queryClient.clear();
+      queryClient.setQueryData(['auth_session'], null);
+      console.log('Navigating to login...');
+      router.replace('/(auth)/login');
+    },
+    onError: (error) => {
+      console.error('Logout mutation error:', error);
+      // Even if there's an error, try to clear local state
+      setSession(null);
+      setAuthState({
+        user: null,
+        isLoading: false,
+        isAuthenticated: false,
+      });
+      queryClient.clear();
+      queryClient.setQueryData(['auth_session'], null);
       router.replace('/(auth)/login');
     },
   });
@@ -162,6 +184,11 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   };
 
   useEffect(() => {
+    // Skip if we're in the middle of a logout
+    if (logoutMutation.isPending) {
+      return;
+    }
+    
     if (userQuery.data) {
       setSession(userQuery.data);
       if (userQuery.data.user) {
@@ -171,7 +198,10 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
             isLoading: false,
             isAuthenticated: true,
           });
-          router.replace('/(tabs)');
+          // Only navigate if we're not already authenticated
+          if (!authState.isAuthenticated) {
+            router.replace('/(tabs)');
+          }
         }).catch(() => {
           setAuthState({
             user: null,
@@ -186,7 +216,10 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           isLoading: false,
           isAuthenticated: false,
         });
-        router.replace('/(auth)/login');
+        // Only navigate if we're currently authenticated
+        if (authState.isAuthenticated) {
+          router.replace('/(auth)/login');
+        }
       }
     } else if (!userQuery.isLoading) {
       setAuthState({
@@ -194,15 +227,33 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         isLoading: false,
         isAuthenticated: false,
       });
-      router.replace('/(auth)/login');
+      // Only navigate if we're currently authenticated
+      if (authState.isAuthenticated) {
+        router.replace('/(auth)/login');
+      }
     }
-  }, [userQuery.data, userQuery.isLoading]);
+  }, [userQuery.data, userQuery.isLoading, logoutMutation.isPending]);
 
   // Listen to auth state changes
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event, session?.user?.email);
+        
+        // Handle sign out event specifically
+        if (event === 'SIGNED_OUT') {
+          console.log('User signed out via auth state change');
+          setSession(null);
+          setAuthState({
+            user: null,
+            isLoading: false,
+            isAuthenticated: false,
+          });
+          queryClient.clear();
+          queryClient.setQueryData(['auth_session'], null);
+          return;
+        }
+        
         setSession(session);
         
         if (session?.user) {
@@ -232,7 +283,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     );
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [queryClient]);
 
   const hasPermission = useCallback((permission: string): boolean => {
     return authState.user?.permissions.includes(permission as any) || false;
