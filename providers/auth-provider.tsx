@@ -53,39 +53,34 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const logoutMutation = useMutation({
     mutationFn: async () => {
       console.log('Starting logout...');
+      // Clear local state first
+      setSession(null);
+      setAuthState({
+        user: null,
+        isLoading: false,
+        isAuthenticated: false,
+      });
+      queryClient.clear();
+      queryClient.setQueryData(['auth_session'], null);
+      
+      // Then sign out from Supabase
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error('Logout error:', error);
-        throw new Error(error.message);
+        // Don't throw error, continue with logout
       }
-      console.log('Logout successful');
+      console.log('Logout completed');
       return true;
     },
     onSuccess: () => {
-      console.log('Logout mutation success, clearing state...');
-      setSession(null);
-      setAuthState({
-        user: null,
-        isLoading: false,
-        isAuthenticated: false,
-      });
-      queryClient.clear();
-      queryClient.setQueryData(['auth_session'], null);
       console.log('Navigating to login...');
-      router.replace('/(auth)/login');
+      // Use push instead of replace to ensure navigation happens
+      router.push('/(auth)/login');
     },
     onError: (error) => {
       console.error('Logout mutation error:', error);
-      // Even if there's an error, try to clear local state
-      setSession(null);
-      setAuthState({
-        user: null,
-        isLoading: false,
-        isAuthenticated: false,
-      });
-      queryClient.clear();
-      queryClient.setQueryData(['auth_session'], null);
-      router.replace('/(auth)/login');
+      // Still navigate to login even on error
+      router.push('/(auth)/login');
     },
   });
 
@@ -184,8 +179,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   };
 
   useEffect(() => {
-    // Skip if we're in the middle of a logout
-    if (logoutMutation.isPending) {
+    // Skip if we're in the middle of a logout or if auth state is being cleared
+    if (logoutMutation.isPending || logoutMutation.isSuccess) {
       return;
     }
     
@@ -232,13 +227,19 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         router.replace('/(auth)/login');
       }
     }
-  }, [userQuery.data, userQuery.isLoading, logoutMutation.isPending]);
+  }, [userQuery.data, userQuery.isLoading, logoutMutation.isPending, logoutMutation.isSuccess]);
 
   // Listen to auth state changes
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event, session?.user?.email);
+        
+        // Skip if we're in the middle of a logout mutation
+        if (logoutMutation.isPending || logoutMutation.isSuccess) {
+          console.log('Skipping auth state change during logout');
+          return;
+        }
         
         // Handle sign out event specifically
         if (event === 'SIGNED_OUT') {
@@ -251,6 +252,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           });
           queryClient.clear();
           queryClient.setQueryData(['auth_session'], null);
+          // Navigate to login
+          router.push('/(auth)/login');
           return;
         }
         
@@ -283,7 +286,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     );
 
     return () => subscription.unsubscribe();
-  }, [queryClient]);
+  }, [queryClient, logoutMutation.isPending, logoutMutation.isSuccess]);
 
   const hasPermission = useCallback((permission: string): boolean => {
     return authState.user?.permissions.includes(permission as any) || false;
