@@ -21,9 +21,20 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const userQuery = useQuery({
     queryKey: ['auth_session'],
     queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      return session;
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error('Error getting session:', error);
+          return null;
+        }
+        return session;
+      } catch (error) {
+        console.error('Failed to get session:', error);
+        return null;
+      }
     },
+    retry: 1,
+    retryDelay: 1000,
   });
 
   const loginMutation = useMutation({
@@ -194,7 +205,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
             isAuthenticated: true,
           });
           router.replace('/(tabs)');
-        }).catch(() => {
+        }).catch((error) => {
+          console.error('Error getting profile:', error);
           setAuthState({
             user: null,
             isLoading: false,
@@ -210,8 +222,9 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         });
         router.replace('/(auth)/login');
       }
-    } else if (!userQuery.isLoading) {
-      // No session and query finished loading - navigate to login
+    } else if (userQuery.isError || (!userQuery.isLoading && !userQuery.data)) {
+      // Query failed or no session and query finished loading - navigate to login
+      console.log('No session found or query error, navigating to login');
       setAuthState({
         user: null,
         isLoading: false,
@@ -219,7 +232,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       });
       router.replace('/(auth)/login');
     }
-  }, [userQuery.data, userQuery.isLoading, logoutMutation.isPending, logoutMutation.isSuccess]);
+  }, [userQuery.data, userQuery.isLoading, userQuery.isError, logoutMutation.isPending, logoutMutation.isSuccess]);
 
   // Listen to auth state changes
   useEffect(() => {
