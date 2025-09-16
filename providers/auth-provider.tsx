@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState, useCallback } from 'react';
 
-import type { AuthState, User as AppUser } from '@/types/user';
+import type { AuthState, User as AppUser, UserRole } from '@/types/user';
 import { supabase } from '@/lib/supabase';
 import type { User as SupaUser, Session } from '@supabase/supabase-js';
 import * as Linking from 'expo-linking';
@@ -47,7 +47,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         firstName: (user.user_metadata?.first_name as string | undefined) ?? '',
         lastName: (user.user_metadata?.last_name as string | undefined) ?? '',
         displayName: newProfile.display_name as string | null,
-        role: newProfile.role as string,
+        role: newProfile.role as UserRole,
         permissions: [],
         joinedAt: new Date(newProfile.created_at as string),
         createdAt: newProfile.created_at as string,
@@ -62,7 +62,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       firstName: (user.user_metadata?.first_name as string | undefined) ?? '',
       lastName: (user.user_metadata?.last_name as string | undefined) ?? '',
       displayName: (profile as any).display_name as string | null,
-      role: (profile as any).role as string,
+      role: (profile as any).role as UserRole,
       permissions: [],
       joinedAt: new Date((profile as any).created_at as string),
       createdAt: (profile as any).created_at as string,
