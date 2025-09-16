@@ -17,7 +17,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const [session, setSession] = useState<Session | null>(null);
   const queryClient = useQueryClient();
 
-  const getOrCreateProfile = async (user: SupaUser) => {
+  const getOrCreateProfile = async (user: SupaUser): Promise<AppUser> => {
     const { data: profile, error } = await supabase
       .from('profiles')
       .select('*')
@@ -47,7 +47,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         firstName: (user.user_metadata?.first_name as string | undefined) ?? '',
         lastName: (user.user_metadata?.last_name as string | undefined) ?? '',
         displayName: newProfile.display_name as string | null,
-        role: (newProfile.role as UserRole) || 'member',
+        role: 'member' as UserRole,
         permissions: [],
         joinedAt: new Date(newProfile.created_at as string),
         createdAt: newProfile.created_at as string,
@@ -62,7 +62,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       firstName: (user.user_metadata?.first_name as string | undefined) ?? '',
       lastName: (user.user_metadata?.last_name as string | undefined) ?? '',
       displayName: (profile as any).display_name as string | null,
-      role: ((profile as any).role as UserRole) || 'member',
+      role: 'member' as UserRole,
       permissions: [],
       joinedAt: new Date((profile as any).created_at as string),
       createdAt: (profile as any).created_at as string,
@@ -71,20 +71,27 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   useEffect(() => {
     const bootstrap = async () => {
-      const { data, error } = await supabase.auth.getSession();
-      if (error) {
-        setAuthState({ user: null, isLoading: false, isAuthenticated: false });
-        return;
-      }
-      setSession(data.session);
-      if (data.session?.user) {
-        try {
-          const profile = await getOrCreateProfile(data.session.user);
-          setAuthState({ user: profile, isLoading: false, isAuthenticated: true });
-        } catch (e) {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error('Error getting session:', error);
+          setAuthState({ user: null, isLoading: false, isAuthenticated: false });
+          return;
+        }
+        setSession(data.session);
+        if (data.session?.user) {
+          try {
+            const profile = await getOrCreateProfile(data.session.user);
+            setAuthState({ user: profile, isLoading: false, isAuthenticated: true });
+          } catch (profileError) {
+            console.error('Error getting profile:', profileError);
+            setAuthState({ user: null, isLoading: false, isAuthenticated: false });
+          }
+        } else {
           setAuthState({ user: null, isLoading: false, isAuthenticated: false });
         }
-      } else {
+      } catch (error) {
+        console.error('Bootstrap error:', error);
         setAuthState({ user: null, isLoading: false, isAuthenticated: false });
       }
     };
@@ -93,6 +100,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   useEffect(() => {
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, s) => {
+      console.log('Auth state change:', event);
       setSession(s);
       if (event === 'SIGNED_OUT') {
         queryClient.clear();
@@ -100,15 +108,14 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         router.replace('/(auth)/login');
         return;
       }
-      if (s?.user) {
+      if (event === 'SIGNED_IN' && s?.user) {
         try {
           const profile = await getOrCreateProfile(s.user);
           setAuthState({ user: profile, isLoading: false, isAuthenticated: true });
         } catch (e) {
+          console.error('Error in auth state change:', e);
           setAuthState({ user: null, isLoading: false, isAuthenticated: false });
         }
-      } else {
-        setAuthState({ user: null, isLoading: false, isAuthenticated: false });
       }
     });
     return () => listener.subscription.unsubscribe();
