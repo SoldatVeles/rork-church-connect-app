@@ -152,28 +152,32 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     },
   });
 
-  const logoutMutation = useMutation({
-    mutationFn: async () => {
-      console.log('Starting logout process...');
+  // Simple logout function without mutation wrapper
+  const logout = async () => {
+    console.log('Starting logout process...');
+    try {
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error('Logout error:', error);
         throw new Error(error.message);
       }
-      console.log('Logout successful');
-      return true;
-    },
-    onSuccess: () => {
-      console.log('Logout onSuccess called');
+      console.log('Logout successful from Supabase');
+      
+      // Clear all state
       queryClient.clear();
       setSession(null);
       setAuthState({ user: null, isLoading: false, isAuthenticated: false });
+      
+      // Navigate to login
+      console.log('Navigating to login screen...');
       router.replace('/(auth)/login');
-    },
-    onError: (error) => {
-      console.error('Logout mutation error:', error);
-    },
-  });
+      
+      return true;
+    } catch (error) {
+      console.error('Logout error:', error);
+      throw error;
+    }
+  };
 
   const registerMutation = useMutation({
     mutationFn: async (userData: {
@@ -221,10 +225,10 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     ...authState,
     session,
     login: loginMutation.mutate,
-    logout: logoutMutation.mutate,
+    logout,
     register: registerMutation.mutate,
     isLoginLoading: loginMutation.isPending,
-    isLogoutLoading: logoutMutation.isPending,
+    isLogoutLoading: false, // Simplified - no longer using mutation
     isRegisterLoading: registerMutation.isPending,
     loginError: (loginMutation.error as any)?.message as string | undefined,
     registerError: (registerMutation.error as any)?.message as string | undefined,

@@ -24,7 +24,8 @@ import { useAuth } from '@/providers/auth-provider';
 import { router } from 'expo-router';
 
 export default function ProfileScreen() {
-  const { user, logout, isLogoutLoading } = useAuth();
+  const { user, logout } = useAuth();
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
   const handleLogout = () => {
     console.log('handleLogout called');
@@ -36,13 +37,15 @@ export default function ProfileScreen() {
         { 
           text: 'Sign Out', 
           style: 'destructive', 
-          onPress: () => {
+          onPress: async () => {
             console.log('User confirmed logout, calling logout function');
+            setIsLoggingOut(true);
             try {
-              logout();
-              console.log('Logout function called successfully');
+              await logout();
+              console.log('Logout completed successfully');
             } catch (error) {
-              console.error('Error calling logout:', error);
+              console.error('Error during logout:', error);
+              setIsLoggingOut(false);
               Alert.alert('Error', 'Failed to sign out. Please try again.');
             }
           }
@@ -187,13 +190,13 @@ export default function ProfileScreen() {
 
         <View style={styles.logoutContainer}>
           <TouchableOpacity 
-            style={styles.logoutButton} 
+            style={[styles.logoutButton, isLoggingOut && styles.logoutButtonDisabled]} 
             onPress={handleLogout}
-            disabled={isLogoutLoading}
+            disabled={isLoggingOut}
           >
-            <LogOut size={20} color="#ef4444" />
-            <Text style={styles.logoutText}>
-              {isLogoutLoading ? 'Signing out...' : 'Sign Out'}
+            <LogOut size={20} color={isLoggingOut ? "#94a3b8" : "#ef4444"} />
+            <Text style={[styles.logoutText, isLoggingOut && styles.logoutTextDisabled]}>
+              {isLoggingOut ? 'Signing out...' : 'Sign Out'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -401,6 +404,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#ef4444',
+  },
+  logoutButtonDisabled: {
+    opacity: 0.6,
+  },
+  logoutTextDisabled: {
+    color: '#94a3b8',
   },
   spacer: {
     height: 40,
