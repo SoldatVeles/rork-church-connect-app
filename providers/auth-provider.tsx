@@ -154,15 +154,24 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
+      console.log('Starting logout process...');
       const { error } = await supabase.auth.signOut();
-      if (error) throw new Error(error.message);
+      if (error) {
+        console.error('Logout error:', error);
+        throw new Error(error.message);
+      }
+      console.log('Logout successful');
       return true;
     },
     onSuccess: () => {
+      console.log('Logout onSuccess called');
       queryClient.clear();
       setSession(null);
       setAuthState({ user: null, isLoading: false, isAuthenticated: false });
       router.replace('/(auth)/login');
+    },
+    onError: (error) => {
+      console.error('Logout mutation error:', error);
     },
   });
 

@@ -27,6 +27,7 @@ export default function ProfileScreen() {
   const { user, logout, isLogoutLoading } = useAuth();
 
   const handleLogout = () => {
+    console.log('handleLogout called');
     Alert.alert(
       'Sign Out',
       'Are you sure you want to sign out?',
@@ -35,7 +36,16 @@ export default function ProfileScreen() {
         { 
           text: 'Sign Out', 
           style: 'destructive', 
-          onPress: () => logout()
+          onPress: () => {
+            console.log('User confirmed logout, calling logout function');
+            try {
+              logout();
+              console.log('Logout function called successfully');
+            } catch (error) {
+              console.error('Error calling logout:', error);
+              Alert.alert('Error', 'Failed to sign out. Please try again.');
+            }
+          }
         },
       ]
     );
