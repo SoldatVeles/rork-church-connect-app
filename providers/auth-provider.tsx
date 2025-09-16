@@ -47,7 +47,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         firstName: (user.user_metadata?.first_name as string | undefined) ?? '',
         lastName: (user.user_metadata?.last_name as string | undefined) ?? '',
         displayName: newProfile.display_name as string | null,
-        role: 'member' as UserRole,
+        role: (newProfile.role as UserRole) || 'member',
         permissions: [],
         joinedAt: new Date(newProfile.created_at as string),
         createdAt: newProfile.created_at as string,
@@ -62,7 +62,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       firstName: (user.user_metadata?.first_name as string | undefined) ?? '',
       lastName: (user.user_metadata?.last_name as string | undefined) ?? '',
       displayName: (profile as any).display_name as string | null,
-      role: 'member' as UserRole,
+      role: ((profile as any).role as UserRole) || 'member',
       permissions: [],
       joinedAt: new Date((profile as any).created_at as string),
       createdAt: (profile as any).created_at as string,
@@ -132,6 +132,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       if (data.session) {
         const profile = await getOrCreateProfile(data.session.user);
         setAuthState({ user: profile, isLoading: false, isAuthenticated: true });
+        router.replace('/(tabs)');
       }
     },
   });
