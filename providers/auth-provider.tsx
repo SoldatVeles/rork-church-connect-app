@@ -1,7 +1,7 @@
 import createContextHook from '@nkzw/create-context-hook';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 
 import type { AuthState } from '@/types/user';
 import { supabase } from '@/lib/supabase';
@@ -15,6 +15,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     isAuthenticated: false,
   });
   const [session, setSession] = useState<Session | null>(null);
+  const hasNavigatedRef = useRef(false);
+  const currentRouteRef = useRef<string | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -85,12 +87,16 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     },
     onSuccess: () => {
       console.log('Navigating to login...');
-      // Use push instead of replace to ensure navigation happens
+      // Reset navigation state and navigate to login
+      hasNavigatedRef.current = false;
+      currentRouteRef.current = '/(auth)/login';
       router.push('/(auth)/login');
     },
     onError: (error) => {
       console.error('Logout mutation error:', error);
       // Still navigate to login even on error
+      hasNavigatedRef.current = false;
+      currentRouteRef.current = '/(auth)/login';
       router.push('/(auth)/login');
     },
   });
@@ -204,7 +210,12 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
             isLoading: false,
             isAuthenticated: true,
           });
-          router.replace('/(tabs)');
+          // Navigate to tabs if not already there and haven't navigated yet
+          if (currentRouteRef.current !== '/(tabs)' && !hasNavigatedRef.current) {
+            hasNavigatedRef.current = true;
+            currentRouteRef.current = '/(tabs)';
+            router.replace('/(tabs)');
+          }
         }).catch((error) => {
           console.error('Error getting profile:', error);
           setAuthState({
@@ -212,7 +223,12 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
             isLoading: false,
             isAuthenticated: false,
           });
-          router.replace('/(auth)/login');
+          // Navigate to login if not already there
+          if (currentRouteRef.current !== '/(auth)/login') {
+            hasNavigatedRef.current = true;
+            currentRouteRef.current = '/(auth)/login';
+            router.replace('/(auth)/login');
+          }
         });
       } else {
         setAuthState({
@@ -220,7 +236,12 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           isLoading: false,
           isAuthenticated: false,
         });
-        router.replace('/(auth)/login');
+        // Navigate to login if not already there
+        if (currentRouteRef.current !== '/(auth)/login') {
+          hasNavigatedRef.current = true;
+          currentRouteRef.current = '/(auth)/login';
+          router.replace('/(auth)/login');
+        }
       }
     } else if (userQuery.isError || (!userQuery.isLoading && !userQuery.data)) {
       // Query failed or no session and query finished loading - navigate to login
@@ -230,7 +251,12 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         isLoading: false,
         isAuthenticated: false,
       });
-      router.replace('/(auth)/login');
+      // Navigate to login if not already there
+      if (currentRouteRef.current !== '/(auth)/login') {
+        hasNavigatedRef.current = true;
+        currentRouteRef.current = '/(auth)/login';
+        router.replace('/(auth)/login');
+      }
     }
   }, [userQuery.data, userQuery.isLoading, userQuery.isError, logoutMutation.isPending, logoutMutation.isSuccess]);
 
@@ -257,7 +283,9 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           });
           queryClient.clear();
           queryClient.setQueryData(['auth_session'], null);
-          // Navigate to login
+          // Reset navigation state and navigate to login
+          hasNavigatedRef.current = false;
+          currentRouteRef.current = '/(auth)/login';
           router.push('/(auth)/login');
           return;
         }
