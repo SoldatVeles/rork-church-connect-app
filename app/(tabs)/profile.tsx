@@ -26,7 +26,7 @@ import { router } from 'expo-router';
 export default function ProfileScreen() {
   const { user, logout, isLogoutLoading } = useAuth();
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     Alert.alert(
       'Sign Out',
       'Are you sure you want to sign out?',
@@ -35,16 +35,7 @@ export default function ProfileScreen() {
         { 
           text: 'Sign Out', 
           style: 'destructive', 
-          onPress: async () => {
-            console.log('Logout button pressed');
-            try {
-              logout();
-            } catch (error) {
-              console.error('Logout error in profile:', error);
-              // Force navigation to login even if logout fails
-              router.push('/(auth)/login');
-            }
-          }
+          onPress: () => logout()
         },
       ]
     );

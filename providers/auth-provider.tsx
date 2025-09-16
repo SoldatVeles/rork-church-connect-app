@@ -1,7 +1,7 @@
 import createContextHook from '@nkzw/create-context-hook';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import type { AuthState, User as AppUser, UserRole } from '@/types/user';
 import { supabase } from '@/lib/supabase';
@@ -17,7 +17,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const [session, setSession] = useState<Session | null>(null);
   const queryClient = useQueryClient();
 
-  const getOrCreateProfile = useCallback(async (user: SupaUser) => {
+  const getOrCreateProfile = async (user: SupaUser) => {
     const { data: profile, error } = await supabase
       .from('profiles')
       .select('*')
@@ -36,7 +36,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
               ' ' +
               ((user.user_metadata?.last_name as string | undefined) ?? '') ||
             null,
-          role: 'member' as const,
+          role: 'member',
         })
         .select()
         .single();
@@ -47,7 +47,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         firstName: (user.user_metadata?.first_name as string | undefined) ?? '',
         lastName: (user.user_metadata?.last_name as string | undefined) ?? '',
         displayName: newProfile.display_name as string | null,
-        role: newProfile.role as UserRole,
+        role: (newProfile.role as UserRole) || 'member',
         permissions: [],
         joinedAt: new Date(newProfile.created_at as string),
         createdAt: newProfile.created_at as string,
@@ -62,20 +62,17 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       firstName: (user.user_metadata?.first_name as string | undefined) ?? '',
       lastName: (user.user_metadata?.last_name as string | undefined) ?? '',
       displayName: (profile as any).display_name as string | null,
-      role: (profile as any).role as UserRole,
+      role: ((profile as any).role as UserRole) || 'member',
       permissions: [],
       joinedAt: new Date((profile as any).created_at as string),
       createdAt: (profile as any).created_at as string,
     };
-  }, []);
+  };
 
-  const bootstrap = useCallback(async () => {
-    console.log('[Auth] Bootstrapping session');
-    try {
+  useEffect(() => {
+    const bootstrap = async () => {
       const { data, error } = await supabase.auth.getSession();
       if (error) {
-        console.error('[Auth] getSession error', error);
-        setSession(null);
         setAuthState({ user: null, isLoading: false, isAuthenticated: false });
         return;
       }
@@ -85,26 +82,17 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           const profile = await getOrCreateProfile(data.session.user);
           setAuthState({ user: profile, isLoading: false, isAuthenticated: true });
         } catch (e) {
-          console.error('[Auth] profile load error', e);
           setAuthState({ user: null, isLoading: false, isAuthenticated: false });
         }
       } else {
         setAuthState({ user: null, isLoading: false, isAuthenticated: false });
       }
-    } catch (e) {
-      console.error('[Auth] bootstrap exception', e);
-      setSession(null);
-      setAuthState({ user: null, isLoading: false, isAuthenticated: false });
-    }
-  }, [getOrCreateProfile]);
-
-  useEffect(() => {
+    };
     bootstrap();
-  }, [bootstrap]);
+  }, []);
 
   useEffect(() => {
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, s) => {
-      console.log('[Auth] onAuthStateChange', event);
       setSession(s);
       if (event === 'SIGNED_OUT') {
         queryClient.clear();
@@ -117,7 +105,6 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           const profile = await getOrCreateProfile(s.user);
           setAuthState({ user: profile, isLoading: false, isAuthenticated: true });
         } catch (e) {
-          console.error('[Auth] profile sync error', e);
           setAuthState({ user: null, isLoading: false, isAuthenticated: false });
         }
       } else {
@@ -125,7 +112,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       }
     });
     return () => listener.subscription.unsubscribe();
-  }, [getOrCreateProfile, queryClient]);
+  }, [queryClient]);
 
   const loginMutation = useMutation({
     mutationFn: async ({ email, password }: { email: string; password: string }) => {
@@ -144,18 +131,14 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      console.log('[Auth] Logging out');
-      try {
-        await supabase.auth.signOut();
-      } catch (e) {
-        console.error('[Auth] signOut error', e);
-      }
+      const { error } = await supabase.auth.signOut();
+      if (error) throw new Error(error.message);
+      return true;
+    },
+    onSuccess: () => {
       queryClient.clear();
       setSession(null);
       setAuthState({ user: null, isLoading: false, isAuthenticated: false });
-      return true;
-    },
-    onSettled: () => {
       router.replace('/(auth)/login');
     },
   });
@@ -197,45 +180,25 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     },
   });
 
-  const hasPermission = useCallback(
-    (permission: string): boolean => authState.user?.permissions.includes(permission as any) || false,
-    [authState.user?.permissions]
-  );
-  const isRole = useCallback((role: string): boolean => authState.user?.role === role, [authState.user?.role]);
-  const isAdmin = useCallback((): boolean => authState.user?.role === 'admin', [authState.user?.role]);
-  const isPastor = useCallback((): boolean => authState.user?.role === 'pastor' || authState.user?.role === 'admin', [authState.user?.role]);
+  const hasPermission = (permission: string): boolean => authState.user?.permissions.includes(permission as any) || false;
+  const isRole = (role: string): boolean => authState.user?.role === role;
+  const isAdmin = (): boolean => authState.user?.role === 'admin';
+  const isPastor = (): boolean => authState.user?.role === 'pastor' || authState.user?.role === 'admin';
 
-  return useMemo(
-    () => ({
-      ...authState,
-      session,
-      login: loginMutation.mutate,
-      logout: logoutMutation.mutate,
-      register: registerMutation.mutate,
-      isLoginLoading: loginMutation.isPending,
-      isLogoutLoading: logoutMutation.isPending,
-      isRegisterLoading: registerMutation.isPending,
-      loginError: (loginMutation.error as any)?.message as string | undefined,
-      registerError: (registerMutation.error as any)?.message as string | undefined,
-      hasPermission,
-      isRole,
-      isAdmin,
-      isPastor,
-    }), [
-      authState,
-      session,
-      loginMutation.mutate,
-      logoutMutation.mutate,
-      registerMutation.mutate,
-      loginMutation.isPending,
-      logoutMutation.isPending,
-      registerMutation.isPending,
-      loginMutation.error,
-      registerMutation.error,
-      hasPermission,
-      isRole,
-      isAdmin,
-      isPastor,
-    ]
-  );
+  return {
+    ...authState,
+    session,
+    login: loginMutation.mutate,
+    logout: logoutMutation.mutate,
+    register: registerMutation.mutate,
+    isLoginLoading: loginMutation.isPending,
+    isLogoutLoading: logoutMutation.isPending,
+    isRegisterLoading: registerMutation.isPending,
+    loginError: (loginMutation.error as any)?.message as string | undefined,
+    registerError: (registerMutation.error as any)?.message as string | undefined,
+    hasPermission,
+    isRole,
+    isAdmin,
+    isPastor,
+  };
 });
