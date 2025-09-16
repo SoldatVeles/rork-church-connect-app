@@ -193,10 +193,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
             isLoading: false,
             isAuthenticated: true,
           });
-          // Only navigate if we're not already authenticated
-          if (!authState.isAuthenticated) {
-            router.replace('/(tabs)');
-          }
+          router.replace('/(tabs)');
         }).catch(() => {
           setAuthState({
             user: null,
@@ -211,21 +208,16 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           isLoading: false,
           isAuthenticated: false,
         });
-        // Only navigate if we're currently authenticated
-        if (authState.isAuthenticated) {
-          router.replace('/(auth)/login');
-        }
+        router.replace('/(auth)/login');
       }
     } else if (!userQuery.isLoading) {
+      // No session and query finished loading - navigate to login
       setAuthState({
         user: null,
         isLoading: false,
         isAuthenticated: false,
       });
-      // Only navigate if we're currently authenticated
-      if (authState.isAuthenticated) {
-        router.replace('/(auth)/login');
-      }
+      router.replace('/(auth)/login');
     }
   }, [userQuery.data, userQuery.isLoading, logoutMutation.isPending, logoutMutation.isSuccess]);
 
