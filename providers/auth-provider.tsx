@@ -123,17 +123,32 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const loginMutation = useMutation({
     mutationFn: async ({ email, password }: { email: string; password: string }) => {
+      console.log('Attempting login with email:', email);
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw new Error(error.message);
+      if (error) {
+        console.error('Login error:', error);
+        throw new Error(error.message);
+      }
+      console.log('Login successful, session:', data.session);
       return data;
     },
     onSuccess: async (data) => {
+      console.log('Login onSuccess, data:', data);
       setSession(data.session);
       if (data.session) {
-        const profile = await getOrCreateProfile(data.session.user);
-        setAuthState({ user: profile, isLoading: false, isAuthenticated: true });
-        router.replace('/(tabs)');
+        try {
+          const profile = await getOrCreateProfile(data.session.user);
+          console.log('Profile created/fetched:', profile);
+          setAuthState({ user: profile, isLoading: false, isAuthenticated: true });
+          router.replace('/(tabs)');
+        } catch (error) {
+          console.error('Error getting profile after login:', error);
+          setAuthState({ user: null, isLoading: false, isAuthenticated: false });
+        }
       }
+    },
+    onError: (error) => {
+      console.error('Login mutation error:', error);
     },
   });
 
