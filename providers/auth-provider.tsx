@@ -25,17 +25,16 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       .single();
 
     if (error && (error as any).code === 'PGRST116') {
+      const firstName = (user.user_metadata?.first_name as string | undefined) ?? '';
+      const lastName = (user.user_metadata?.last_name as string | undefined) ?? '';
+      const fullName = `${firstName} ${lastName}`.trim() || user.email?.split('@')[0] || 'User';
+      
       const { data: newProfile, error: insertError } = await supabase
         .from('profiles')
         .insert({
           id: user.id,
           email: user.email!,
-          display_name:
-            (user.user_metadata?.display_name as string | undefined) ||
-            ((user.user_metadata?.first_name as string | undefined) ?? '') +
-              ' ' +
-              ((user.user_metadata?.last_name as string | undefined) ?? '') ||
-            null,
+          full_name: fullName,
           role: 'member',
         })
         .select()
@@ -44,9 +43,9 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       return {
         id: newProfile.id,
         email: newProfile.email,
-        firstName: (user.user_metadata?.first_name as string | undefined) ?? '',
-        lastName: (user.user_metadata?.last_name as string | undefined) ?? '',
-        displayName: newProfile.display_name as string | null,
+        firstName: firstName,
+        lastName: lastName,
+        displayName: newProfile.full_name as string | null,
         role: (newProfile.role as UserRole) || 'member',
         permissions: [],
         joinedAt: new Date(newProfile.created_at as string),
@@ -56,12 +55,15 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
     if (error) throw new Error((error as any).message ?? 'Failed to load profile');
 
+    const firstName = (user.user_metadata?.first_name as string | undefined) ?? '';
+    const lastName = (user.user_metadata?.last_name as string | undefined) ?? '';
+
     return {
       id: (profile as any).id as string,
       email: (profile as any).email as string,
-      firstName: (user.user_metadata?.first_name as string | undefined) ?? '',
-      lastName: (user.user_metadata?.last_name as string | undefined) ?? '',
-      displayName: (profile as any).display_name as string | null,
+      firstName: firstName,
+      lastName: lastName,
+      displayName: (profile as any).full_name as string | null,
       role: ((profile as any).role as UserRole) || 'member',
       permissions: [],
       joinedAt: new Date((profile as any).created_at as string),
@@ -188,13 +190,14 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       phone?: string;
     }) => {
       const redirectTo = Linking.createURL('/auth-callback');
+      const fullName = `${userData.firstName} ${userData.lastName}`.trim();
       const { data, error } = await supabase.auth.signUp({
         email: userData.email,
         password: userData.password,
         options: {
           emailRedirectTo: redirectTo,
           data: {
-            display_name: `${userData.firstName} ${userData.lastName}`,
+            full_name: fullName,
             first_name: userData.firstName,
             last_name: userData.lastName,
             phone: userData.phone,

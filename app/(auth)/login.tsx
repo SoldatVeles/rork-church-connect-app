@@ -12,6 +12,9 @@ import {
   SafeAreaView,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import { useAuth } from '@/providers/auth-provider';
 
@@ -45,22 +48,33 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
-      <LinearGradient
-        colors={['#1e3a8a', '#3b82f6']}
-        style={styles.gradient}
+      <KeyboardAvoidingView 
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
       >
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
+        <LinearGradient
+          colors={['#1e3a8a', '#3b82f6']}
+          style={styles.gradient}
+        >
+          <ScrollView 
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
           >
-            <ArrowLeft size={24} color="white" />
-          </TouchableOpacity>
-          <Text style={styles.title}>Welcome Back</Text>
-          <Text style={styles.subtitle}>Sign in to continue</Text>
-        </View>
+            <View style={styles.header}>
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => router.back()}
+              >
+                <ArrowLeft size={24} color="white" />
+              </TouchableOpacity>
+              <Text style={styles.title}>Welcome Back</Text>
+              <Text style={styles.subtitle}>Sign in to continue</Text>
+            </View>
 
-        <View style={styles.form}>
+            <View style={styles.form}>
           {showRegisterNotice && (
             <View style={styles.noticeBox} testID="register-success-notice">
               <Text style={styles.noticeTitle}>Account created</Text>
@@ -134,8 +148,10 @@ export default function LoginScreen() {
               Don&apos;t have an account? <Text style={styles.registerTextBold}>Join us</Text>
             </Text>
           </TouchableOpacity>
-        </View>
-      </LinearGradient>
+            </View>
+          </ScrollView>
+        </LinearGradient>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -143,6 +159,12 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   gradient: {
     flex: 1,
@@ -165,12 +187,12 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.8)',
   },
   form: {
-    flex: 1,
     backgroundColor: 'white',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
     marginTop: 40,
+    minHeight: 500,
   },
   inputContainer: {
     flexDirection: 'row',

@@ -43,14 +43,14 @@ export default function PrayersScreen() {
       
       if (error) throw new Error(error.message);
       
-      return data.map(prayer => ({
+      return (data || []).map(prayer => ({
         id: prayer.id,
         title: prayer.title,
         description: prayer.description || '',
-        requestedBy: prayer.created_by,
+        requestedBy: prayer.created_by || '',
         requestedByName: 'Anonymous',
         status: prayer.is_answered ? 'answered' as PrayerStatus : 'active' as PrayerStatus,
-        isAnonymous: prayer.is_anonymous,
+        isAnonymous: prayer.is_anonymous || false,
         isUrgent: false,
         prayedBy: [],
         createdAt: new Date(prayer.created_at),

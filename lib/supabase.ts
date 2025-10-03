@@ -8,11 +8,11 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 // Create Supabase client with proper storage configuration
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    // Use AsyncStorage for React Native, localStorage for web
     storage: Platform.OS === 'web' ? undefined : AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
+    detectSessionInUrl: Platform.OS === 'web',
+    flowType: 'pkce',
   },
 });
 
@@ -24,24 +24,27 @@ export type Database = {
         Row: {
           id: string;
           email: string;
-          display_name: string | null;
-          role: 'member' | 'pastor' | 'admin';
+          full_name: string | null;
+          avatar_url: string | null;
+          role: 'member' | 'admin';
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id: string;
           email: string;
-          display_name?: string | null;
-          role?: 'member' | 'pastor' | 'admin';
+          full_name?: string | null;
+          avatar_url?: string | null;
+          role?: 'member' | 'admin';
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
           email?: string;
-          display_name?: string | null;
-          role?: 'member' | 'pastor' | 'admin';
+          full_name?: string | null;
+          avatar_url?: string | null;
+          role?: 'member' | 'admin';
           created_at?: string;
           updated_at?: string;
         };
@@ -128,37 +131,34 @@ export type Database = {
       prayers: {
         Row: {
           id: string;
-          requester_id: string;
+          created_by: string | null;
           title: string;
-          details: string | null;
-          visibility: 'public' | 'group' | 'private';
-          group_id: string | null;
+          description: string;
+          category: string;
+          is_anonymous: boolean;
           is_answered: boolean;
-          answered_at: string | null;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
-          requester_id: string;
+          created_by?: string | null;
           title: string;
-          details?: string | null;
-          visibility?: 'public' | 'group' | 'private';
-          group_id?: string | null;
+          description: string;
+          category?: string;
+          is_anonymous?: boolean;
           is_answered?: boolean;
-          answered_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
-          requester_id?: string;
+          created_by?: string | null;
           title?: string;
-          details?: string | null;
-          visibility?: 'public' | 'group' | 'private';
-          group_id?: string | null;
+          description?: string;
+          category?: string;
+          is_anonymous?: boolean;
           is_answered?: boolean;
-          answered_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
