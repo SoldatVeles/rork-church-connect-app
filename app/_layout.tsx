@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { StyleSheet } from "react-native";
@@ -12,7 +12,25 @@ SplashScreen.preventAutoHideAsync();
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
-  const { isLoading } = useAuth();
+  const { isLoading, isAuthenticated } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
+  
+  useEffect(() => {
+    if (isLoading) return;
+
+    const inAuthGroup = segments[0] === '(auth)';
+
+    console.log('Navigation check:', { isAuthenticated, inAuthGroup, segments });
+
+    if (!isAuthenticated && !inAuthGroup) {
+      console.log('Redirecting to login - user not authenticated');
+      router.replace('/(auth)/login');
+    } else if (isAuthenticated && inAuthGroup) {
+      console.log('Redirecting to tabs - user is authenticated');
+      router.replace('/(tabs)');
+    }
+  }, [isAuthenticated, segments, isLoading, router]);
   
   if (isLoading) {
     return <LoadingScreen />;
