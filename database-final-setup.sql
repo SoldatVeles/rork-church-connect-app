@@ -82,6 +82,12 @@ CREATE INDEX IF NOT EXISTS idx_events_start_at ON events(start_at);
 ALTER TABLE prayers 
 ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES profiles(id) ON DELETE SET NULL;
 
+-- Drop policies that depend on requester_id BEFORE dropping the column
+DROP POLICY IF EXISTS prayers_read_by_visibility ON prayers;
+DROP POLICY IF EXISTS prayers_insert_self_or_admin ON prayers;
+DROP POLICY IF EXISTS prayers_update_self_or_admin ON prayers;
+DROP POLICY IF EXISTS prayers_delete_self_or_admin ON prayers;
+
 -- Rename requester_id to created_by if needed (and requester_id exists)
 DO $$
 BEGIN
@@ -91,8 +97,8 @@ BEGIN
     SET created_by = requester_id 
     WHERE created_by IS NULL AND requester_id IS NOT NULL;
     
-    -- Drop the old column
-    ALTER TABLE prayers DROP COLUMN IF EXISTS requester_id;
+    -- Drop the old column (now that policies are gone)
+    ALTER TABLE prayers DROP COLUMN requester_id;
   END IF;
 END $$;
 
@@ -109,6 +115,47 @@ DROP CONSTRAINT IF EXISTS prayers_visibility_check;
 ALTER TABLE prayers 
 ADD CONSTRAINT prayers_visibility_check 
 CHECK (visibility IN ('public', 'group', 'private'));
+
+-- Recreate RLS policies using created_by instead of requester_id
+CREATE POLICY prayers_read_by_visibility ON prayers
+  FOR SELECT
+  USING (
+    visibility = 'public'
+    OR (visibility = 'private' AND created_by = auth.uid())
+    OR (visibility = 'group' AND group_id IN (
+      SELECT id FROM groups WHERE created_by = auth.uid()
+    ))
+  );
+
+CREATE POLICY prayers_insert_self_or_admin ON prayers
+  FOR INSERT
+  WITH CHECK (
+    created_by = auth.uid()
+    OR EXISTS (
+      SELECT 1 FROM profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'pastor')
+    )
+  );
+
+CREATE POLICY prayers_update_self_or_admin ON prayers
+  FOR UPDATE
+  USING (
+    created_by = auth.uid()
+    OR EXISTS (
+      SELECT 1 FROM profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'pastor')
+    )
+  );
+
+CREATE POLICY prayers_delete_self_or_admin ON prayers
+  FOR DELETE
+  USING (
+    created_by = auth.uid()
+    OR EXISTS (
+      SELECT 1 FROM profiles
+      WHERE id = auth.uid() AND role IN ('admin', 'pastor')
+    )
+  );
 
 -- ======================================
 -- 4. CREATE GROUPS TABLE
