@@ -225,7 +225,15 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                       {formatTime(notification.createdAt)}
                     </Text>
                   </View>
-                  <TouchableOpacity onPress={() => deleteOneMutation.mutate(notification.id)} style={styles.itemDeleteButton} accessibilityRole="button" testID={`delete-notification-${notification.id}`}>
+                  <TouchableOpacity 
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      deleteOneMutation.mutate(notification.id);
+                    }} 
+                    style={styles.itemDeleteButton} 
+                    accessibilityRole="button" 
+                    testID={`delete-notification-${notification.id}`}
+                  >
                     <Trash2 size={18} color="#9ca3af" />
                   </TouchableOpacity>
                 </TouchableOpacity>
@@ -308,7 +316,15 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                       {formatTime(notification.createdAt)}
                     </Text>
                   </View>
-                  <TouchableOpacity onPress={() => deleteOneMutation.mutate(notification.id)} style={styles.itemDeleteButton} accessibilityRole="button" testID={`delete-notification-${notification.id}`}>
+                  <TouchableOpacity 
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      deleteOneMutation.mutate(notification.id);
+                    }} 
+                    style={styles.itemDeleteButton} 
+                    accessibilityRole="button" 
+                    testID={`delete-notification-${notification.id}`}
+                  >
                     <Trash2 size={18} color="#9ca3af" />
                   </TouchableOpacity>
                 </TouchableOpacity>
