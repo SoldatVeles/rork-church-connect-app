@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   Dimensions,
   ActivityIndicator,
 } from 'react-native';
-import { Bell, Calendar, Heart, MessageCircle, X, CheckCheck } from 'lucide-react-native';
+import { Bell, Calendar, Heart, MessageCircle, X, CheckCheck, Trash2 } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -20,6 +20,15 @@ interface NotificationDropdownProps {
   onClose: () => void;
   anchorPosition?: { x: number; y: number };
 }
+
+type AppNotification = {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdAt: Date;
+};
 
 const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   visible,
@@ -127,6 +136,29 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
     }
   };
 
+  const deleteOneMutation = useMutation({
+    mutationFn: async (id: string) => {
+      console.log('Deleting notification', id);
+      const { error } = await supabase.from('notifications').delete().eq('id', id);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => notificationsQuery.refetch(),
+  });
+
+  const clearAllMutation = useMutation({
+    mutationFn: async () => {
+      console.log('Clearing all notifications');
+      const { error } = await supabase.from('notifications').delete().neq('id', '');
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => notificationsQuery.refetch(),
+  });
+
+  const handleViewAll = () => {
+    router.push('/notifications');
+    onClose();
+  };
+
   if (Platform.OS === 'web') {
     // Web implementation with absolute positioning
     if (!visible) return null;
@@ -149,9 +181,9 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
         >
           <View style={styles.dropdownHeader}>
             <Text style={styles.dropdownTitle}>Notifications</Text>
-            {unreadCount > 0 && (
-              <TouchableOpacity onPress={handleMarkAllRead}>
-                <CheckCheck size={20} color="#3b82f6" />
+            {notifications.length > 0 && (
+              <TouchableOpacity onPress={() => clearAllMutation.mutate()} accessibilityRole="button" testID="clear-all-notifications">
+                <Trash2 size={20} color="#ef4444" />
               </TouchableOpacity>
             )}
           </View>
@@ -193,10 +225,13 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                       {formatTime(notification.createdAt)}
                     </Text>
                   </View>
+                  <TouchableOpacity onPress={() => deleteOneMutation.mutate(notification.id)} style={styles.itemDeleteButton} accessibilityRole="button" testID={`delete-notification-${notification.id}`}>
+                    <Trash2 size={18} color="#9ca3af" />
+                  </TouchableOpacity>
                 </TouchableOpacity>
               ))}
               {notifications.length > 5 && (
-                <TouchableOpacity style={styles.viewAllButton} onPress={onClose}>
+                <TouchableOpacity style={styles.viewAllButton} onPress={handleViewAll} testID="view-all-notifications">
                   <Text style={styles.viewAllText}>View all notifications</Text>
                 </TouchableOpacity>
               )}
@@ -225,9 +260,9 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Notifications</Text>
             <View style={styles.modalHeaderActions}>
-              {unreadCount > 0 && (
-                <TouchableOpacity onPress={handleMarkAllRead} style={styles.markAllButton}>
-                  <CheckCheck size={20} color="#3b82f6" />
+              {notifications.length > 0 && (
+                <TouchableOpacity onPress={() => clearAllMutation.mutate()} style={styles.markAllButton}>
+                  <Trash2 size={20} color="#ef4444" />
                 </TouchableOpacity>
               )}
               <TouchableOpacity onPress={onClose}>
@@ -273,6 +308,9 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                       {formatTime(notification.createdAt)}
                     </Text>
                   </View>
+                  <TouchableOpacity onPress={() => deleteOneMutation.mutate(notification.id)} style={styles.itemDeleteButton} accessibilityRole="button" testID={`delete-notification-${notification.id}`}>
+                    <Trash2 size={18} color="#9ca3af" />
+                  </TouchableOpacity>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -361,6 +399,10 @@ const styles = StyleSheet.create({
   notificationTime: {
     fontSize: 12,
     color: '#94a3b8',
+  },
+  itemDeleteButton: {
+    padding: 6,
+    alignSelf: 'center',
   },
   viewAllButton: {
     padding: 16,
