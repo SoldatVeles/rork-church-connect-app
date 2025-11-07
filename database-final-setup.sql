@@ -11,6 +11,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Add missing columns to profiles table
 ALTER TABLE profiles 
+ADD COLUMN IF NOT EXISTS full_name TEXT,
 ADD COLUMN IF NOT EXISTS display_name TEXT,
 ADD COLUMN IF NOT EXISTS phone TEXT;
 
@@ -22,10 +23,15 @@ ALTER TABLE profiles
 ADD CONSTRAINT profiles_role_check 
 CHECK (role IN ('member', 'pastor', 'admin'));
 
--- Copy full_name to display_name if needed
-UPDATE profiles 
-SET display_name = full_name 
-WHERE display_name IS NULL AND full_name IS NOT NULL;
+-- Copy full_name to display_name if needed (only if full_name column exists and has data)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'profiles' AND column_name = 'full_name') THEN
+    UPDATE profiles 
+    SET display_name = full_name 
+    WHERE display_name IS NULL AND full_name IS NOT NULL;
+  END IF;
+END $$;
 
 -- ======================================
 -- 2. FIX EVENTS TABLE
@@ -72,17 +78,23 @@ CREATE INDEX IF NOT EXISTS idx_events_start_at ON events(start_at);
 -- 3. FIX PRAYERS TABLE
 -- ======================================
 
--- Rename created_by to match expected schema if needed
+-- Ensure created_by column exists first
+ALTER TABLE prayers 
+ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES profiles(id) ON DELETE SET NULL;
+
+-- Rename requester_id to created_by if needed (and requester_id exists)
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'prayers' AND column_name = 'requester_id') THEN
-    ALTER TABLE prayers RENAME COLUMN requester_id TO created_by;
+    -- Copy data from requester_id to created_by if created_by is empty
+    UPDATE prayers 
+    SET created_by = requester_id 
+    WHERE created_by IS NULL AND requester_id IS NOT NULL;
+    
+    -- Drop the old column
+    ALTER TABLE prayers DROP COLUMN IF EXISTS requester_id;
   END IF;
 END $$;
-
--- Ensure created_by column exists
-ALTER TABLE prayers 
-ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES profiles(id) ON DELETE SET NULL;
 
 -- Add missing columns
 ALTER TABLE prayers 
@@ -117,6 +129,7 @@ ALTER TABLE groups ENABLE ROW LEVEL SECURITY;
 -- Drop existing policies if they exist
 DROP POLICY IF EXISTS "Groups are viewable by everyone" ON groups;
 DROP POLICY IF EXISTS "Authenticated users can create groups" ON groups;
+DROP POLICY IF EXISTS "Users can update own groups" ON groups;
 
 -- Add RLS policies for groups
 CREATE POLICY "Groups are viewable by everyone" 
