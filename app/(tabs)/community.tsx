@@ -1,6 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { Users, Search, Mail, Phone } from 'lucide-react-native';
-import React, { useState } from 'react';
+import { StatusBar } from 'expo-status-bar';
+import { Users, MessageCircle, Calendar, Heart, Trophy, Sparkles } from 'lucide-react-native';
+import React from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,17 +9,36 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  TextInput,
+  Image,
 } from 'react-native';
+import { router, Stack } from 'expo-router';
+import { useAuth } from '@/providers/auth-provider';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 
-export default function CommunityScreen() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedRole, setSelectedRole] = useState<string>('all');
+interface CommunityMember {
+  id: string;
+  name: string;
+  role: string;
+  avatar: string;
+  points: number;
+}
 
-  const usersQuery = useQuery({
-    queryKey: ['users'],
+interface CommunityActivity {
+  id: string;
+  type: 'prayer' | 'event' | 'milestone';
+  user: string;
+  action: string;
+  time: string;
+  icon: any;
+  iconColor: string;
+}
+
+export default function CommunityScreen() {
+  const { user } = useAuth();
+
+  const membersQuery = useQuery({
+    queryKey: ['community-members'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
@@ -30,151 +50,177 @@ export default function CommunityScreen() {
     },
   });
 
-  const getRoleBadgeColor = (role: string) => {
-    switch (role) {
-      case 'admin':
-        return { bg: '#fef2f2', text: '#dc2626', border: '#fecaca' };
-      case 'pastor':
-        return { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe' };
-      default:
-        return { bg: '#f0fdf4', text: '#16a34a', border: '#bbf7d0' };
-    }
-  };
+  const totalMembers = membersQuery.data?.length ?? 0;
 
-  const filteredUsers = usersQuery.data?.filter((user) => {
-    const matchesSearch = searchQuery === '' || 
-      user.display_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email?.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesRole = selectedRole === 'all' || user.role === selectedRole;
-    
-    return matchesSearch && matchesRole;
-  }) || [];
+  const topMembers: CommunityMember[] = [
+    { id: '1', name: 'Sarah Johnson', role: 'Prayer Warrior', avatar: '🙏', points: 450 },
+    { id: '2', name: 'Michael Chen', role: 'Event Organizer', avatar: '🎯', points: 380 },
+    { id: '3', name: 'Emily Davis', role: 'Community Helper', avatar: '💝', points: 320 },
+    { id: '4', name: 'David Brown', role: 'Bible Study Leader', avatar: '📖', points: 290 },
+  ];
 
-  const roleFilters = [
-    { id: 'all', label: 'All Members' },
-    { id: 'admin', label: 'Admins' },
-    { id: 'pastor', label: 'Pastors' },
-    { id: 'member', label: 'Members' },
+  const recentActivities: CommunityActivity[] = [
+    { 
+      id: '1', 
+      type: 'prayer', 
+      user: 'Sarah Johnson', 
+      action: 'prayed for 5 requests today',
+      time: '30 minutes ago',
+      icon: Heart,
+      iconColor: '#ef4444',
+    },
+    { 
+      id: '2', 
+      type: 'event', 
+      user: 'Michael Chen', 
+      action: 'attended Youth Bible Study',
+      time: '2 hours ago',
+      icon: Calendar,
+      iconColor: '#3b82f6',
+    },
+    { 
+      id: '3', 
+      type: 'milestone', 
+      user: 'Emily Davis', 
+      action: 'reached 100 prayer points!',
+      time: '5 hours ago',
+      icon: Trophy,
+      iconColor: '#f59e0b',
+    },
+    { 
+      id: '4', 
+      type: 'prayer', 
+      user: 'David Brown', 
+      action: 'shared a testimony',
+      time: '1 day ago',
+      icon: Sparkles,
+      iconColor: '#10b981',
+    },
   ];
 
   return (
     <SafeAreaView style={styles.container}>
-      <LinearGradient
-        colors={['#f59e0b', '#d97706']}
-        style={styles.header}
-      >
-        <View style={styles.headerContent}>
-          <Users size={32} color="white" />
-          <Text style={styles.headerTitle}>Community</Text>
-        </View>
-        <Text style={styles.headerSubtitle}>
-          {filteredUsers.length} {filteredUsers.length === 1 ? 'member' : 'members'}
-        </Text>
-      </LinearGradient>
-
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBox}>
-          <Search size={20} color="#64748b" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search members..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholderTextColor="#94a3b8"
-          />
-        </View>
-      </View>
-
-      <View style={styles.filterContainer}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScroll}
-        >
-          {roleFilters.map((filter) => (
-            <TouchableOpacity
-              key={filter.id}
-              style={[
-                styles.filterButton,
-                selectedRole === filter.id && styles.filterButtonActive,
-              ]}
-              onPress={() => setSelectedRole(filter.id)}
-            >
-              <Text
-                style={[
-                  styles.filterButtonText,
-                  selectedRole === filter.id && styles.filterButtonTextActive,
-                ]}
-              >
-                {filter.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+      <Stack.Screen 
+        options={{ 
+          title: 'Community',
+          headerStyle: {
+            backgroundColor: '#1e3a8a',
+          },
+          headerTintColor: 'white',
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+        }} 
+      />
+      <StatusBar style="light" />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {usersQuery.isLoading ? (
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Loading members...</Text>
+        <LinearGradient
+          colors={['#1e3a8a', '#3b82f6']}
+          style={styles.headerCard}
+        >
+          <View style={styles.statsContainer}>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{totalMembers}</Text>
+              <Text style={styles.statLabel}>Members</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>156</Text>
+              <Text style={styles.statLabel}>Active Today</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>42</Text>
+              <Text style={styles.statLabel}>Groups</Text>
+            </View>
           </View>
-        ) : filteredUsers.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Users size={48} color="#cbd5e1" />
-            <Text style={styles.emptyText}>No members found</Text>
-            <Text style={styles.emptySubtext}>
-              {searchQuery ? 'Try adjusting your search' : 'Check back later'}
-            </Text>
+        </LinearGradient>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Top Contributors</Text>
+            <TouchableOpacity>
+              <Text style={styles.seeAllText}>See All</Text>
+            </TouchableOpacity>
           </View>
-        ) : (
-          filteredUsers.map((user) => {
-            const colors = getRoleBadgeColor(user.role);
-            return (
-              <View key={user.id} style={styles.memberCard}>
-                <View style={styles.memberHeader}>
-                  <View style={styles.avatarContainer}>
-                    <Text style={styles.avatarText}>
-                      {user.display_name?.[0]?.toUpperCase() || user.email[0].toUpperCase()}
-                    </Text>
-                  </View>
-                  <View style={styles.memberInfo}>
-                    <Text style={styles.memberName}>
-                      {user.display_name || 'No name set'}
-                    </Text>
-                    <View
-                      style={[
-                        styles.roleBadge,
-                        { backgroundColor: colors.bg, borderColor: colors.border },
-                      ]}
-                    >
-                      <Text style={[styles.roleBadgeText, { color: colors.text }]}>
-                        {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-                      </Text>
-                    </View>
-                  </View>
+
+          {topMembers.map((member, index) => (
+            <TouchableOpacity key={member.id} style={styles.memberCard}>
+              <View style={styles.memberLeft}>
+                <View style={styles.rankBadge}>
+                  <Text style={styles.rankText}>#{index + 1}</Text>
                 </View>
-
-                {user.email && (
-                  <View style={styles.contactRow}>
-                    <Mail size={16} color="#64748b" />
-                    <Text style={styles.contactText}>{user.email}</Text>
-                  </View>
-                )}
-
-                <View style={styles.memberFooter}>
-                  <Text style={styles.memberDate}>
-                    Joined {new Date(user.created_at).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })}
-                  </Text>
+                <View style={styles.memberAvatar}>
+                  <Text style={styles.avatarEmoji}>{member.avatar}</Text>
+                </View>
+                <View style={styles.memberInfo}>
+                  <Text style={styles.memberName}>{member.name}</Text>
+                  <Text style={styles.memberRole}>{member.role}</Text>
                 </View>
               </View>
-            );
-          })
-        )}
+              <View style={styles.pointsBadge}>
+                <Trophy size={14} color="#f59e0b" />
+                <Text style={styles.pointsText}>{member.points}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recent Activity</Text>
+          </View>
+
+          {recentActivities.map((activity) => (
+            <View key={activity.id} style={styles.activityCard}>
+              <View style={[styles.activityIcon, { backgroundColor: activity.iconColor + '20' }]}>
+                <activity.icon size={20} color={activity.iconColor} />
+              </View>
+              <View style={styles.activityContent}>
+                <Text style={styles.activityText}>
+                  <Text style={styles.activityUser}>{activity.user}</Text>
+                  {' '}{activity.action}
+                </Text>
+                <Text style={styles.activityTime}>{activity.time}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Community Groups</Text>
+          
+          <TouchableOpacity style={styles.groupCard}>
+            <View style={styles.groupIcon}>
+              <Users size={24} color="#1e3a8a" />
+            </View>
+            <View style={styles.groupContent}>
+              <Text style={styles.groupTitle}>Youth Ministry</Text>
+              <Text style={styles.groupMembers}>24 members</Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.groupCard}>
+            <View style={styles.groupIcon}>
+              <MessageCircle size={24} color="#1e3a8a" />
+            </View>
+            <View style={styles.groupContent}>
+              <Text style={styles.groupTitle}>Prayer Warriors</Text>
+              <Text style={styles.groupMembers}>67 members</Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.groupCard}>
+            <View style={styles.groupIcon}>
+              <Heart size={24} color="#1e3a8a" />
+            </View>
+            <View style={styles.groupContent}>
+              <Text style={styles.groupTitle}>Women's Fellowship</Text>
+              <Text style={styles.groupMembers}>38 members</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.spacer} />
       </ScrollView>
@@ -187,174 +233,209 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
-  header: {
-    paddingTop: 60,
-    paddingBottom: 24,
-    paddingHorizontal: 24,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 8,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  headerSubtitle: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.9)',
-  },
-  searchContainer: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-  },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#1e293b',
-  },
-  filterContainer: {
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-  },
-  filterScroll: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  filterButtonActive: {
-    backgroundColor: '#f59e0b',
-    borderColor: '#f59e0b',
-  },
-  filterButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#64748b',
-  },
-  filterButtonTextActive: {
-    color: 'white',
-  },
   content: {
     flex: 1,
+  },
+  headerCard: {
+    marginHorizontal: 24,
+    marginTop: 24,
+    marginBottom: 24,
+    borderRadius: 16,
     padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
   },
-  loadingContainer: {
-    padding: 40,
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
     alignItems: 'center',
   },
-  loadingText: {
-    fontSize: 16,
-    color: '#64748b',
-  },
-  emptyContainer: {
-    padding: 40,
+  statItem: {
     alignItems: 'center',
+    flex: 1,
   },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#475569',
-    marginTop: 16,
+  statNumber: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 4,
   },
-  emptySubtext: {
+  statLabel: {
     fontSize: 14,
-    color: '#94a3b8',
-    marginTop: 4,
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  statDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  section: {
+    paddingHorizontal: 24,
+    marginBottom: 32,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1e293b',
+  },
+  seeAllText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3b82f6',
   },
   memberCard: {
     backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 12,
+    padding: 16,
     marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
   },
-  memberHeader: {
+  memberLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    gap: 12,
+    flex: 1,
   },
-  avatarContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#f59e0b',
+  rankBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#eff6ff',
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 12,
   },
-  avatarText: {
-    fontSize: 24,
+  rankText: {
+    fontSize: 14,
     fontWeight: 'bold',
-    color: 'white',
+    color: '#1e3a8a',
+  },
+  memberAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  avatarEmoji: {
+    fontSize: 24,
   },
   memberInfo: {
     flex: 1,
-    gap: 6,
   },
   memberName: {
-    fontSize: 18,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 2,
+  },
+  memberRole: {
+    fontSize: 13,
+    color: '#64748b',
+  },
+  pointsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  pointsText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#92400e',
+  },
+  activityCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  activityIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityText: {
+    fontSize: 15,
+    color: '#475569',
+    marginBottom: 4,
+    lineHeight: 20,
+  },
+  activityUser: {
     fontWeight: '600',
     color: '#1e293b',
   },
-  roleBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  roleBadgeText: {
+  activityTime: {
     fontSize: 12,
-    fontWeight: '600',
+    color: '#94a3b8',
   },
-  contactRow: {
+  groupCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  contactText: {
-    fontSize: 14,
-    color: '#64748b',
+  groupIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#eff6ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  groupContent: {
     flex: 1,
   },
-  memberFooter: {
-    marginTop: 8,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+  groupTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 4,
   },
-  memberDate: {
-    fontSize: 13,
-    color: '#94a3b8',
+  groupMembers: {
+    fontSize: 14,
+    color: '#64748b',
   },
   spacer: {
     height: 40,
