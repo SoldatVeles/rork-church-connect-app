@@ -7,6 +7,7 @@ import deleteSermonProcedure from "./routes/sermons/delete/route";
 import getAllUsersProcedure from "./routes/users/get-all/route";
 import deleteUserProcedure from "./routes/users/delete/route";
 import blockUserProcedure from "./routes/users/block/route";
+import updateUserRoleProcedure from "./routes/users/update-role/route";
 
 export const appRouter = createTRPCRouter({
   example: createTRPCRouter({
@@ -22,6 +23,7 @@ export const appRouter = createTRPCRouter({
     getAll: getAllUsersProcedure,
     delete: deleteUserProcedure,
     block: blockUserProcedure,
+    updateRole: updateUserRoleProcedure,
   }),
 });
 

@@ -1,17 +1,27 @@
-import { z } from 'zod';
-import { publicProcedure } from '../../../create-context';
-import { updateUserRole } from '../../../storage/users';
+import { publicProcedure } from "@/backend/trpc/create-context";
+import { supabase } from "@/lib/supabase";
+import { z } from "zod";
 
 export const updateUserRoleProcedure = publicProcedure
   .input(z.object({
     userId: z.string(),
     role: z.enum(['admin', 'pastor', 'member', 'visitor']),
-    permissions: z.array(z.string()).default([]),
   }))
   .mutation(async ({ input }) => {
-    const updated = updateUserRole(input.userId, input.role, input.permissions as any);
-    if (!updated) throw new Error('User not found');
-    return updated;
+    console.log('[updateUserRoleProcedure] Updating user role:', input);
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ role: input.role })
+      .eq('id', input.userId);
+
+    if (error) {
+      console.error('[updateUserRoleProcedure] Error updating role:', error);
+      throw new Error(error.message);
+    }
+
+    console.log('[updateUserRoleProcedure] Role updated successfully');
+    return { success: true, userId: input.userId, role: input.role };
   });
 
 export default updateUserRoleProcedure;

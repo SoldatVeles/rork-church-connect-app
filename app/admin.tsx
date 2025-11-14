@@ -67,21 +67,14 @@ export default function AdminScreen() {
     onError: (e: Error) => Alert.alert('Error', e.message ?? 'Failed to create user'),
   });
   
-  const updateRoleMutation = useMutation({
-    mutationFn: async (data: { userId: string; role: Role; permissions: string[] }) => {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: data.role })
-        .eq('id', data.userId);
-      
-      if (error) throw new Error(error.message);
-    },
+  const updateRoleMutation = trpc.users.updateRole.useMutation({
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
+      Alert.alert('Success', 'User role updated successfully');
       usersQuery.refetch();
-      Alert.alert('Updated', 'User role updated');
     },
-    onError: (e: Error) => Alert.alert('Error', e.message ?? 'Failed to update role'),
+    onError: (error) => {
+      Alert.alert('Error', error.message);
+    },
   });
 
   const deleteUserMutation = trpc.users.delete.useMutation({
@@ -293,37 +286,64 @@ export default function AdminScreen() {
             <View style={styles.loadingRow}><ActivityIndicator color="#1e3a8a" /></View>
           ) : usersQuery.data && usersQuery.data.length > 0 ? (
             usersQuery.data.map((u) => (
-              <View key={u.id} style={styles.userRow}>
-                <View style={{ flex: 1 }}>
-                  <View style={styles.userNameRow}>
-                    <Text style={styles.userName}>{u.firstName} {u.lastName}</Text>
-                    {u.isBlocked && (
-                      <View style={styles.blockedBadge}>
-                        <Ban size={10} color="#ef4444" />
-                        <Text style={styles.blockedBadgeText}>BLOCKED</Text>
-                      </View>
-                    )}
+              <View key={u.id} style={styles.userCard}>
+                <View style={styles.userCardHeader}>
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.userNameRow}>
+                      <Text style={styles.userName}>{u.firstName} {u.lastName}</Text>
+                      {u.isBlocked && (
+                        <View style={styles.blockedBadge}>
+                          <Ban size={10} color="#ef4444" />
+                          <Text style={styles.blockedBadgeText}>BLOCKED</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.userEmail}>{u.email}</Text>
                   </View>
-                  <Text style={styles.userEmail}>{u.email}</Text>
-                  <Text style={styles.userRole}>
-                    {u.role.charAt(0).toUpperCase() + u.role.slice(1)}
-                  </Text>
+                  <View style={styles.userActions}>
+                    <TouchableOpacity
+                      style={[styles.iconButtonSmall, u.isBlocked && styles.iconButtonWarning]}
+                      onPress={() => handleBlockUser(u.id, `${u.firstName} ${u.lastName}`, u.isBlocked)}
+                      disabled={blockUserMutation.isPending}
+                    >
+                      <Ban size={16} color={u.isBlocked ? "#f97316" : "#64748b"} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.iconButtonSmall}
+                      onPress={() => handleDeleteUser(u.id, `${u.firstName} ${u.lastName}`)}
+                      disabled={deleteUserMutation.isPending}
+                    >
+                      <Trash2 size={16} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
-                <View style={styles.userActions}>
-                  <TouchableOpacity
-                    style={[styles.iconButtonSmall, u.isBlocked && styles.iconButtonWarning]}
-                    onPress={() => handleBlockUser(u.id, `${u.firstName} ${u.lastName}`, u.isBlocked)}
-                    disabled={blockUserMutation.isPending}
-                  >
-                    <Ban size={16} color={u.isBlocked ? "#f97316" : "#64748b"} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.iconButtonSmall}
-                    onPress={() => handleDeleteUser(u.id, `${u.firstName} ${u.lastName}`)}
-                    disabled={deleteUserMutation.isPending}
-                  >
-                    <Trash2 size={16} color="#ef4444" />
-                  </TouchableOpacity>
+                
+                <View style={styles.roleSelector}>
+                  {roles.map((r) => (
+                    <TouchableOpacity
+                      key={r}
+                      style={[
+                        styles.roleChip,
+                        u.role === r && styles.roleChipActive,
+                      ]}
+                      onPress={() => {
+                        if (u.role !== r) {
+                          updateRoleMutation.mutate({
+                            userId: u.id,
+                            role: r,
+                          });
+                        }
+                      }}
+                      disabled={updateRoleMutation.isPending}
+                    >
+                      <Text style={[
+                        styles.roleChipText,
+                        u.role === r && styles.roleChipTextActive,
+                      ]}>
+                        {r.charAt(0).toUpperCase() + r.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
               </View>
             ))
