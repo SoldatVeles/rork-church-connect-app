@@ -8,7 +8,16 @@ export const deleteUserProcedure = publicProcedure
     })
   )
   .mutation(async ({ input, ctx }) => {
-    const { supabaseAdmin } = ctx;
+    const { supabaseAdmin, hasServiceRoleAccess } = ctx;
+
+    if (!hasServiceRoleAccess) {
+      console.error(
+        "[deleteUserProcedure] Missing Supabase service role key. Set SUPABASE_SERVICE_ROLE_KEY on the server to enable admin user deletion.",
+      );
+      throw new Error(
+        "Supabase service role key is not configured. Please set SUPABASE_SERVICE_ROLE_KEY on the backend to delete users.",
+      );
+    }
 
     const { error: deleteProfileError } = await supabaseAdmin
       .from("profiles")

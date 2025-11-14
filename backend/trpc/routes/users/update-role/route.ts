@@ -9,7 +9,16 @@ export const updateUserRoleProcedure = publicProcedure
     })
   )
   .mutation(async ({ input, ctx }) => {
-    const { supabaseAdmin } = ctx;
+    const { supabaseAdmin, hasServiceRoleAccess } = ctx;
+
+    if (!hasServiceRoleAccess) {
+      console.error(
+        "[updateUserRoleProcedure] Missing Supabase service role key. Set SUPABASE_SERVICE_ROLE_KEY on the server to enable role updates.",
+      );
+      throw new Error(
+        "Supabase service role key is not configured. Please set SUPABASE_SERVICE_ROLE_KEY on the backend to update user roles.",
+      );
+    }
 
     console.log("[updateUserRoleProcedure] Updating user role:", input);
 
