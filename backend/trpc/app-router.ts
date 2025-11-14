@@ -8,6 +8,7 @@ import getAllUsersProcedure from "./routes/users/get-all/route";
 import deleteUserProcedure from "./routes/users/delete/route";
 import blockUserProcedure from "./routes/users/block/route";
 import updateUserRoleProcedure from "./routes/users/update-role/route";
+import createUserProcedure from "./routes/users/create/route";
 
 export const appRouter = createTRPCRouter({
   example: createTRPCRouter({
@@ -21,6 +22,7 @@ export const appRouter = createTRPCRouter({
   }),
   users: createTRPCRouter({
     getAll: getAllUsersProcedure,
+    create: createUserProcedure,
     delete: deleteUserProcedure,
     block: blockUserProcedure,
     updateRole: updateUserRoleProcedure,

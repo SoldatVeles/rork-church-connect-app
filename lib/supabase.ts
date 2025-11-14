@@ -33,8 +33,11 @@ export type Database = {
           id: string;
           email: string;
           full_name: string | null;
+          display_name: string | null;
           avatar_url: string | null;
-          role: 'member' | 'admin';
+          phone: string | null;
+          role: 'member' | 'pastor' | 'admin' | 'visitor';
+          is_blocked: boolean | null;
           created_at: string;
           updated_at: string;
         };
@@ -42,8 +45,11 @@ export type Database = {
           id: string;
           email: string;
           full_name?: string | null;
+          display_name?: string | null;
           avatar_url?: string | null;
-          role?: 'member' | 'admin';
+          phone?: string | null;
+          role?: 'member' | 'pastor' | 'admin' | 'visitor';
+          is_blocked?: boolean | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -51,8 +57,11 @@ export type Database = {
           id?: string;
           email?: string;
           full_name?: string | null;
+          display_name?: string | null;
           avatar_url?: string | null;
-          role?: 'member' | 'admin';
+          phone?: string | null;
+          role?: 'member' | 'pastor' | 'admin' | 'visitor';
+          is_blocked?: boolean | null;
           created_at?: string;
           updated_at?: string;
         };

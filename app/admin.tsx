@@ -66,26 +66,18 @@ export default function AdminScreen() {
     is_featured: false,
   });
 
-  const createUserMutation = useMutation({
-    mutationFn: async (userData: {
-      email: string;
-      password: string;
-      firstName: string;
-      lastName: string;
-      phone?: string;
-      role: Role;
-      permissions: string[];
-    }) => {
-      // This would need to be implemented with Supabase Auth
-      console.log('Create user not implemented yet:', userData);
-      throw new Error('User creation not implemented yet');
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
+  const createUserMutation = trpc.users.create.useMutation({
+    onSuccess: (createdUser) => {
+      console.log('[Admin] User created successfully', createdUser);
+      queryClient.invalidateQueries({ queryKey: trpc.users.getAll.getQueryKey() });
+      usersQuery.refetch();
       setNewUser({ firstName: '', lastName: '', email: '', phone: '', password: '', role: 'member' });
       Alert.alert('Success', 'User created');
     },
-    onError: (e: Error) => Alert.alert('Error', e.message ?? 'Failed to create user'),
+    onError: (error) => {
+      console.error('[Admin] User creation failed', error);
+      Alert.alert('Error', error.message ?? 'Failed to create user');
+    },
   });
   
   const updateRoleMutation = trpc.users.updateRole.useMutation({
