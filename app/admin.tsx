@@ -1,10 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { SafeAreaView, View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, Platform } from 'react-native';
+import { SafeAreaView, View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, Platform, Switch } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { Users, Shield, Plus, Check, UserPlus, Church } from 'lucide-react-native';
+import { Users, Shield, Plus, Check, UserPlus, Church, BookOpen, Settings, Youtube, Edit, Trash2, ArrowLeft } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { trpc } from '@/lib/trpc';
+import type { Sermon } from '@/types/sermon';
+import { router } from 'expo-router';
 
 type Role = 'admin' | 'pastor' | 'member' | 'visitor';
 
@@ -15,9 +18,12 @@ interface Group {
   createdAt: string;
 }
 
+type AdminTab = 'users' | 'sermons' | 'groups';
+
 export default function AdminScreen() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<AdminTab>('users');
   
   const usersQuery = useQuery({
     queryKey: ['users'],
@@ -46,6 +52,19 @@ export default function AdminScreen() {
   const [groupName, setGroupName] = useState('');
   const [selectedGroup, setSelectedGroup] = useState<string>('');
   const [selectedUserToAdd, setSelectedUserToAdd] = useState<string>('');
+  
+  const [editingSermon, setEditingSermon] = useState<Sermon | null>(null);
+  const [sermonForm, setSermonForm] = useState({
+    title: '',
+    speaker: '',
+    date: '',
+    duration: '',
+    description: '',
+    topic: '',
+    youtube_url: '',
+    thumbnail_url: '',
+    is_featured: false,
+  });
 
   const createUserMutation = useMutation({
     mutationFn: async (userData: {
@@ -105,7 +124,6 @@ export default function AdminScreen() {
   
   const addMemberToGroupMutation = useMutation({
     mutationFn: async (data: { groupId: string; userId: string }) => {
-      // This would need to be implemented with a group_members table
       console.log('Add member to group not implemented yet:', data);
       throw new Error('Add member to group not implemented yet');
     },
@@ -116,6 +134,107 @@ export default function AdminScreen() {
     },
     onError: (e: Error) => Alert.alert('Error', e.message ?? 'Failed to add member'),
   });
+
+  const sermonsQuery = trpc.sermons.getAll.useQuery();
+
+  const createSermonMutation = trpc.sermons.create.useMutation({
+    onSuccess: () => {
+      Alert.alert('Success', 'Sermon created successfully');
+      resetSermonForm();
+      sermonsQuery.refetch();
+    },
+    onError: (error) => {
+      Alert.alert('Error', error.message);
+    },
+  });
+
+  const updateSermonMutation = trpc.sermons.update.useMutation({
+    onSuccess: () => {
+      Alert.alert('Success', 'Sermon updated successfully');
+      resetSermonForm();
+      sermonsQuery.refetch();
+    },
+    onError: (error) => {
+      Alert.alert('Error', error.message);
+    },
+  });
+
+  const deleteSermonMutation = trpc.sermons.delete.useMutation({
+    onSuccess: () => {
+      Alert.alert('Success', 'Sermon deleted successfully');
+      sermonsQuery.refetch();
+    },
+    onError: (error) => {
+      Alert.alert('Error', error.message);
+    },
+  });
+
+  const resetSermonForm = () => {
+    setSermonForm({
+      title: '',
+      speaker: '',
+      date: '',
+      duration: '',
+      description: '',
+      topic: '',
+      youtube_url: '',
+      thumbnail_url: '',
+      is_featured: false,
+    });
+    setEditingSermon(null);
+  };
+
+  const handleSermonSubmit = () => {
+    if (!sermonForm.title || !sermonForm.speaker || !sermonForm.date || !sermonForm.duration) {
+      Alert.alert('Error', 'Please fill in all required fields');
+      return;
+    }
+
+    if (editingSermon) {
+      updateSermonMutation.mutate({
+        id: editingSermon.id,
+        ...sermonForm,
+        youtube_url: sermonForm.youtube_url || null,
+        thumbnail_url: sermonForm.thumbnail_url || null,
+      });
+    } else {
+      createSermonMutation.mutate({
+        ...sermonForm,
+        youtube_url: sermonForm.youtube_url || null,
+        thumbnail_url: sermonForm.thumbnail_url || null,
+      });
+    }
+  };
+
+  const handleSermonEdit = (sermon: Sermon) => {
+    setEditingSermon(sermon);
+    setSermonForm({
+      title: sermon.title,
+      speaker: sermon.speaker,
+      date: sermon.date,
+      duration: sermon.duration,
+      description: sermon.description,
+      topic: sermon.topic,
+      youtube_url: sermon.youtube_url || '',
+      thumbnail_url: sermon.thumbnail_url || '',
+      is_featured: sermon.is_featured,
+    });
+  };
+
+  const handleSermonDelete = (sermonId: string) => {
+    Alert.alert(
+      'Delete Sermon',
+      'Are you sure you want to delete this sermon?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => deleteSermonMutation.mutate({ id: sermonId }),
+        },
+      ]
+    );
+  };
 
   const roles: Role[] = ['visitor', 'member', 'pastor', 'admin'];
 
@@ -132,15 +251,8 @@ export default function AdminScreen() {
     );
   }
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Admin Panel</Text>
-          <Text style={styles.subtitle}>Manage users and groups</Text>
-        </View>
-
+  const renderUsersTab = () => (
+    <>
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Users size={18} color="#1e3a8a" />
@@ -269,6 +381,281 @@ export default function AdminScreen() {
         </View>
 
         <View style={styles.spacer} />
+      </>
+  );
+
+  const renderSermonsTab = () => (
+    <>
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <BookOpen size={18} color="#1e3a8a" />
+          <Text style={styles.cardTitle}>
+            {editingSermon ? 'Edit Sermon' : 'Add New Sermon'}
+          </Text>
+        </View>
+
+        <TextInput
+          style={styles.input}
+          placeholder="Title *"
+          value={sermonForm.title}
+          onChangeText={(text) => setSermonForm({ ...sermonForm, title: text })}
+        />
+
+        <TextInput
+          style={styles.input}
+          placeholder="Speaker *"
+          value={sermonForm.speaker}
+          onChangeText={(text) => setSermonForm({ ...sermonForm, speaker: text })}
+        />
+
+        <View style={styles.row}>
+          <TextInput
+            style={[styles.input, { flex: 1 }]}
+            placeholder="Date * (e.g. January 14, 2025)"
+            value={sermonForm.date}
+            onChangeText={(text) => setSermonForm({ ...sermonForm, date: text })}
+          />
+          <TextInput
+            style={[styles.input, { flex: 1 }]}
+            placeholder="Duration * (e.g. 45 min)"
+            value={sermonForm.duration}
+            onChangeText={(text) => setSermonForm({ ...sermonForm, duration: text })}
+          />
+        </View>
+
+        <TextInput
+          style={styles.input}
+          placeholder="Topic *"
+          value={sermonForm.topic}
+          onChangeText={(text) => setSermonForm({ ...sermonForm, topic: text })}
+        />
+
+        <TextInput
+          style={[styles.input, styles.textArea]}
+          placeholder="Description *"
+          value={sermonForm.description}
+          onChangeText={(text) => setSermonForm({ ...sermonForm, description: text })}
+          multiline
+          numberOfLines={4}
+        />
+
+        <View style={styles.youtubeSection}>
+          <View style={styles.youtubeBadge}>
+            <Youtube size={14} color="#ef4444" />
+            <Text style={styles.youtubeBadgeText}>YouTube Integration</Text>
+          </View>
+          
+          <TextInput
+            style={styles.input}
+            placeholder="YouTube URL (optional)"
+            value={sermonForm.youtube_url}
+            onChangeText={(text) => setSermonForm({ ...sermonForm, youtube_url: text })}
+            autoCapitalize="none"
+            keyboardType="url"
+          />
+          
+          <TextInput
+            style={styles.input}
+            placeholder="Thumbnail URL (optional)"
+            value={sermonForm.thumbnail_url}
+            onChangeText={(text) => setSermonForm({ ...sermonForm, thumbnail_url: text })}
+            autoCapitalize="none"
+            keyboardType="url"
+          />
+        </View>
+
+        <View style={styles.switchRow}>
+          <Text style={styles.switchLabel}>Featured Sermon</Text>
+          <Switch
+            value={sermonForm.is_featured}
+            onValueChange={(value) => setSermonForm({ ...sermonForm, is_featured: value })}
+            trackColor={{ false: '#cbd5e1', true: '#3b82f6' }}
+            thumbColor={sermonForm.is_featured ? '#1e3a8a' : '#f1f5f9'}
+          />
+        </View>
+
+        <View style={styles.buttonRow}>
+          {editingSermon && (
+            <TouchableOpacity
+              style={[styles.secondaryButton, { flex: 1 }]}
+              onPress={resetSermonForm}
+            >
+              <Text style={styles.secondaryButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={[
+              styles.primaryButton,
+              { flex: 1 },
+              (createSermonMutation.isPending || updateSermonMutation.isPending) && { opacity: 0.7 },
+            ]}
+            onPress={handleSermonSubmit}
+            disabled={createSermonMutation.isPending || updateSermonMutation.isPending}
+          >
+            {createSermonMutation.isPending || updateSermonMutation.isPending ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <View style={styles.buttonContent}>
+                <Plus size={16} color="#fff" />
+                <Text style={styles.primaryButtonText}>
+                  {editingSermon ? 'Update' : 'Create'}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <BookOpen size={18} color="#1e3a8a" />
+          <Text style={styles.cardTitle}>Existing Sermons</Text>
+        </View>
+
+        {sermonsQuery.isLoading ? (
+          <View style={styles.loadingRow}>
+            <ActivityIndicator color="#1e3a8a" />
+          </View>
+        ) : sermonsQuery.data && sermonsQuery.data.length > 0 ? (
+          sermonsQuery.data.map((sermon) => (
+            <View key={sermon.id} style={styles.sermonRow}>
+              <View style={{ flex: 1 }}>
+                <View style={styles.sermonTitleRow}>
+                  <Text style={styles.sermonTitle}>{sermon.title}</Text>
+                  {sermon.is_featured && (
+                    <View style={styles.featuredBadgeSmall}>
+                      <Text style={styles.featuredBadgeSmallText}>FEATURED</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.sermonMeta}>
+                  {sermon.speaker} • {sermon.date} • {sermon.duration}
+                </Text>
+                {sermon.youtube_url && (
+                  <View style={styles.youtubeIndicator}>
+                    <Youtube size={12} color="#ef4444" />
+                    <Text style={styles.youtubeIndicatorText}>YouTube Video</Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.actionButtons}>
+                <TouchableOpacity
+                  style={styles.iconButton}
+                  onPress={() => handleSermonEdit(sermon)}
+                >
+                  <Edit size={18} color="#3b82f6" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.iconButton}
+                  onPress={() => handleSermonDelete(sermon.id)}
+                  disabled={deleteSermonMutation.isPending}
+                >
+                  <Trash2 size={18} color="#ef4444" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
+        ) : (
+          <Text style={styles.emptyText}>No sermons yet. Create your first one!</Text>
+        )}
+      </View>
+
+      <View style={styles.spacer} />
+    </>
+  );
+
+  const renderGroupsTab = () => (
+    <>
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Church size={18} color="#1e3a8a" />
+          <Text style={styles.cardTitle}>Groups</Text>
+        </View>
+
+        <View style={styles.row}>
+          <TextInput style={styles.input} placeholder="New group name (e.g. Church Bern)" value={groupName} onChangeText={setGroupName} />
+          <TouchableOpacity
+            style={[styles.primaryButton, { paddingHorizontal: 16 }]}
+            onPress={() => {
+              if (!groupName.trim()) return;
+              createGroupMutation.mutate({ name: groupName.trim() });
+            }}
+          >
+            <Text style={styles.primaryButtonText}>Add</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.row}>
+          <TextInput style={[styles.input, { flex: 1 }]} placeholder="Group ID" value={selectedGroup} onChangeText={setSelectedGroup} />
+          <TextInput style={[styles.input, { flex: 1 }]} placeholder="User ID" value={selectedUserToAdd} onChangeText={setSelectedUserToAdd} />
+        </View>
+        <TouchableOpacity
+          testID="add-to-group-button"
+          style={[styles.secondaryButton, addMemberToGroupMutation.isPending && { opacity: 0.7 }]}
+          onPress={() => {
+            if (!selectedGroup || !selectedUserToAdd) {
+              Alert.alert('Select group and user');
+              return;
+            }
+            addMemberToGroupMutation.mutate({ groupId: selectedGroup, userId: selectedUserToAdd });
+          }}
+        >
+          {addMemberToGroupMutation.isPending ? (
+            <ActivityIndicator color="#1e3a8a" />
+          ) : (
+            <View style={styles.buttonContent}><Check size={16} color="#1e3a8a" /><Text style={styles.secondaryButtonText}>Add Member</Text></View>
+          )}
+        </TouchableOpacity>
+
+        <Text style={styles.helpText}>Tip: We kept it simple. Paste the target Group ID and User ID above. A richer picker can be added next.</Text>
+      </View>
+
+      <View style={styles.spacer} />
+    </>
+  );
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar style="dark" />
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <ArrowLeft size={24} color="#1e3a8a" />
+          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>Admin Dashboard</Text>
+            <Text style={styles.subtitle}>Comprehensive admin management</Text>
+          </View>
+          <Settings size={24} color="#64748b" />
+        </View>
+
+        <View style={styles.tabBar}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'users' && styles.tabActive]}
+            onPress={() => setActiveTab('users')}
+          >
+            <Users size={18} color={activeTab === 'users' ? '#1e3a8a' : '#64748b'} />
+            <Text style={[styles.tabText, activeTab === 'users' && styles.tabTextActive]}>Users</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'sermons' && styles.tabActive]}
+            onPress={() => setActiveTab('sermons')}
+          >
+            <BookOpen size={18} color={activeTab === 'sermons' ? '#1e3a8a' : '#64748b'} />
+            <Text style={[styles.tabText, activeTab === 'sermons' && styles.tabTextActive]}>Sermons</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'groups' && styles.tabActive]}
+            onPress={() => setActiveTab('groups')}
+          >
+            <Church size={18} color={activeTab === 'groups' ? '#1e3a8a' : '#64748b'} />
+            <Text style={[styles.tabText, activeTab === 'groups' && styles.tabTextActive]}>Groups</Text>
+          </TouchableOpacity>
+        </View>
+
+        {activeTab === 'users' && renderUsersTab()}
+        {activeTab === 'sermons' && renderSermonsTab()}
+        {activeTab === 'groups' && renderGroupsTab()}
       </ScrollView>
     </SafeAreaView>
   );
@@ -277,9 +664,15 @@ export default function AdminScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   content: { flex: 1, padding: 24 },
-  header: { marginBottom: 12 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
+  backButton: { padding: 4 },
   title: { fontSize: 28, fontWeight: 'bold', color: '#1e293b' },
   subtitle: { fontSize: 14, color: '#64748b', marginTop: 4 },
+  tabBar: { flexDirection: 'row', gap: 8, marginBottom: 20, backgroundColor: 'white', padding: 6, borderRadius: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8 },
+  tabActive: { backgroundColor: '#eff6ff' },
+  tabText: { fontSize: 14, fontWeight: '600', color: '#64748b' },
+  tabTextActive: { color: '#1e3a8a' },
   card: { backgroundColor: 'white', borderRadius: 16, padding: 16, marginTop: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   cardTitle: { fontSize: 16, fontWeight: '700', color: '#1e293b' },
@@ -303,5 +696,23 @@ const styles = StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   deniedText: { marginTop: 8, color: '#ef4444', fontWeight: '600' },
   helpText: { marginTop: 8, color: '#64748b', fontSize: 12 },
+  textArea: { height: 100, textAlignVertical: 'top' },
+  youtubeSection: { backgroundColor: '#fef2f2', borderRadius: 12, padding: 12, marginBottom: 12 },
+  youtubeBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+  youtubeBadgeText: { fontSize: 12, fontWeight: '700', color: '#ef4444', letterSpacing: 0.5 },
+  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingVertical: 8 },
+  switchLabel: { fontSize: 15, fontWeight: '600', color: '#1e293b' },
+  buttonRow: { flexDirection: 'row', gap: 12 },
+  sermonRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  sermonTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  sermonTitle: { fontSize: 15, fontWeight: '600', color: '#1e293b', flex: 1 },
+  sermonMeta: { fontSize: 13, color: '#64748b', marginBottom: 4 },
+  featuredBadgeSmall: { backgroundColor: '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  featuredBadgeSmallText: { fontSize: 10, fontWeight: '700', color: '#92400e', letterSpacing: 0.5 },
+  youtubeIndicator: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  youtubeIndicatorText: { fontSize: 11, color: '#ef4444', fontWeight: '600' },
+  actionButtons: { flexDirection: 'row', gap: 8 },
+  iconButton: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 8 },
+  emptyText: { textAlign: 'center', color: '#94a3b8', paddingVertical: 16 },
   spacer: { height: 40 },
 });

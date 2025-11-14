@@ -80,8 +80,8 @@ export default function ProfileScreen() {
       onPress: () => {} 
     },
     ...(user?.role === 'admin' ? [{
-      title: 'Admin Panel',
-      subtitle: 'Manage users and groups',
+      title: 'Admin Dashboard',
+      subtitle: 'Manage users, sermons, and groups',
       icon: Shield,
       onPress: () => router.push('/admin')
     }] : []),
