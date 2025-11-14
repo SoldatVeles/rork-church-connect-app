@@ -320,6 +320,20 @@ export default function AdminScreen() {
 
           {usersQuery.isLoading ? (
             <View style={styles.loadingRow}><ActivityIndicator color="#1e3a8a" /></View>
+          ) : usersQuery.isError ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorTitle}>Unable to load users</Text>
+              <Text style={styles.errorMessage}>
+                {usersQuery.error?.message ?? 'Please verify your network connection and try again.'}
+              </Text>
+              <TouchableOpacity
+                testID="retry-load-users-button"
+                style={styles.retryButton}
+                onPress={() => usersQuery.refetch()}
+              >
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
           ) : usersQuery.data && usersQuery.data.length > 0 ? (
             usersQuery.data.map((u) => (
               <View key={u.id} style={styles.userCard}>
@@ -737,6 +751,20 @@ export default function AdminScreen() {
             <View style={styles.loadingRow}>
               <ActivityIndicator color="#1e3a8a" />
             </View>
+          ) : usersQuery.isError ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorTitle}>Unable to load users</Text>
+              <Text style={styles.errorMessage}>
+                {usersQuery.error?.message ?? 'Please verify your network connection and try again.'}
+              </Text>
+              <TouchableOpacity
+                testID="retry-load-users-for-group-button"
+                style={styles.retryButton}
+                onPress={() => usersQuery.refetch()}
+              >
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
           ) : usersQuery.data && usersQuery.data.length > 0 ? (
             <>
               {usersQuery.data.map((user) => (
@@ -903,6 +931,11 @@ const styles = StyleSheet.create({
   actionButtons: { flexDirection: 'row', gap: 8 },
   iconButton: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 8 },
   emptyText: { textAlign: 'center', color: '#94a3b8', paddingVertical: 16 },
+  errorContainer: { backgroundColor: '#fee2e2', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 12 },
+  errorTitle: { fontSize: 15, fontWeight: '700', color: '#b91c1c', marginBottom: 6 },
+  errorMessage: { fontSize: 13, color: '#7f1d1d', textAlign: 'center' },
+  retryButton: { marginTop: 12, backgroundColor: '#b91c1c', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 8 },
+  retryButtonText: { color: '#fff', fontWeight: '600' },
   spacer: { height: 40 },
   groupCard: { backgroundColor: '#f8fafc', borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#e2e8f0', flexDirection: 'row', alignItems: 'center' },
   groupCardSelected: { backgroundColor: '#eff6ff', borderColor: '#1e3a8a', borderWidth: 2 },

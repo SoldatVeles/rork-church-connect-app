@@ -3,15 +3,23 @@ import { initTRPC } from "@trpc/server";
 import superjson from "superjson";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase";
-import {
-  SUPABASE_ANON_KEY,
-  SUPABASE_SERVICE_ROLE_KEY,
-  SUPABASE_URL,
-} from "@/lib/supabase-config";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/supabase-config";
 
 const supabaseUrl = SUPABASE_URL;
 const supabaseAnonKey = SUPABASE_ANON_KEY;
-const supabaseServiceRoleKey = SUPABASE_SERVICE_ROLE_KEY;
+
+const resolveServiceRoleKey = () => {
+  const env = typeof process !== "undefined" ? process.env : undefined;
+  const candidates = [
+    env?.SUPABASE_SERVICE_ROLE_KEY,
+    env?.SUPABASE_SERVICE_KEY,
+    env?.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY,
+    env?.EXPO_PUBLIC_SUPABASE_SERVICE_KEY,
+  ];
+  return candidates.find((key): key is string => Boolean(key && key.length > 0));
+};
+
+const supabaseServiceRoleKey = resolveServiceRoleKey();
 
 export const createContext = async (opts: FetchCreateContextFnOptions) => {
   if (!supabaseUrl || !supabaseAnonKey) {
