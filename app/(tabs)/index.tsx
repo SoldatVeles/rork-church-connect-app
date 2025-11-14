@@ -105,14 +105,14 @@ export default function HomeScreen() {
       title: 'Latest Sermon',
       subtitle: 'The Power of Faith',
       color: '#10b981',
-      onPress: () => {},
+      onPress: () => router.push('/(tabs)/sermon'),
     },
     {
       icon: Users,
       title: 'Community',
       subtitle: `${membersCount} ${membersCount === 1 ? 'member' : 'members'}`,
       color: '#f59e0b',
-      onPress: () => {},
+      onPress: () => router.push('/(tabs)/community'),
     },
   ], [totalEventsCount, activeRequestsCount, membersCount]);
 
