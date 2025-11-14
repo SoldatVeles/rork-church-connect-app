@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { SafeAreaView, View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, Platform, Switch } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { Users, Shield, Plus, Check, UserPlus, Church, BookOpen, Settings, Youtube, Edit, Trash2, ArrowLeft } from 'lucide-react-native';
+import { Users, Shield, Plus, Check, UserPlus, Church, BookOpen, Settings, Youtube, Edit, Trash2, ArrowLeft, Ban, UserX } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -25,28 +25,7 @@ export default function AdminScreen() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<AdminTab>('users');
   
-  const usersQuery = useQuery({
-    queryKey: ['users'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (error) throw new Error(error.message);
-      
-      return data.map(profile => ({
-        id: profile.id,
-        firstName: profile.display_name?.split(' ')[0] || '',
-        lastName: profile.display_name?.split(' ').slice(1).join(' ') || '',
-        email: profile.email,
-        role: profile.role,
-        permissions: [],
-        joinedAt: new Date(profile.created_at),
-        createdAt: profile.created_at,
-      }));
-    },
-  });
+  const usersQuery = trpc.users.getAll.useQuery();
   
   const [newUser, setNewUser] = useState({ firstName: '', lastName: '', email: '', phone: '', password: '', role: 'member' as Role });
   const [groupName, setGroupName] = useState('');
@@ -99,9 +78,30 @@ export default function AdminScreen() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      usersQuery.refetch();
       Alert.alert('Updated', 'User role updated');
     },
     onError: (e: Error) => Alert.alert('Error', e.message ?? 'Failed to update role'),
+  });
+
+  const deleteUserMutation = trpc.users.delete.useMutation({
+    onSuccess: () => {
+      Alert.alert('Success', 'User deleted successfully');
+      usersQuery.refetch();
+    },
+    onError: (error) => {
+      Alert.alert('Error', error.message);
+    },
+  });
+
+  const blockUserMutation = trpc.users.block.useMutation({
+    onSuccess: (data) => {
+      Alert.alert('Success', data.isBlocked ? 'User blocked successfully' : 'User unblocked successfully');
+      usersQuery.refetch();
+    },
+    onError: (error) => {
+      Alert.alert('Error', error.message);
+    },
   });
   
   const createGroupMutation = useMutation({
@@ -238,6 +238,36 @@ export default function AdminScreen() {
 
   const roles: Role[] = ['visitor', 'member', 'pastor', 'admin'];
 
+  const handleDeleteUser = (userId: string, userName: string) => {
+    Alert.alert(
+      'Delete User',
+      `Are you sure you want to delete ${userName}? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => deleteUserMutation.mutate({ userId }),
+        },
+      ]
+    );
+  };
+
+  const handleBlockUser = (userId: string, userName: string, currentlyBlocked: boolean) => {
+    Alert.alert(
+      currentlyBlocked ? 'Unblock User' : 'Block User',
+      `Are you sure you want to ${currentlyBlocked ? 'unblock' : 'block'} ${userName}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: currentlyBlocked ? 'Unblock' : 'Block',
+          style: currentlyBlocked ? 'default' : 'destructive',
+          onPress: () => blockUserMutation.mutate({ userId, isBlocked: !currentlyBlocked }),
+        },
+      ]
+    );
+  };
+
   const canAccess = user?.role === 'admin';
   if (!canAccess) {
     return (
@@ -263,10 +293,36 @@ export default function AdminScreen() {
             <View style={styles.loadingRow}><ActivityIndicator color="#1e3a8a" /></View>
           ) : (
             usersQuery.data?.map((u) => (
-              <View key={u.id} style={styles.userRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.userName}>{u.firstName} {u.lastName}</Text>
-                  <Text style={styles.userEmail}>{u.email}</Text>
+              <View key={u.id} style={styles.userCard}>
+                <View style={styles.userCardHeader}>
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.userNameRow}>
+                      <Text style={styles.userName}>{u.firstName} {u.lastName}</Text>
+                      {u.isBlocked && (
+                        <View style={styles.blockedBadge}>
+                          <Ban size={10} color="#ef4444" />
+                          <Text style={styles.blockedBadgeText}>BLOCKED</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.userEmail}>{u.email}</Text>
+                  </View>
+                  <View style={styles.userActions}>
+                    <TouchableOpacity
+                      style={[styles.iconButtonSmall, u.isBlocked && styles.iconButtonWarning]}
+                      onPress={() => handleBlockUser(u.id, `${u.firstName} ${u.lastName}`, u.isBlocked)}
+                      disabled={blockUserMutation.isPending}
+                    >
+                      <Ban size={16} color={u.isBlocked ? "#f97316" : "#64748b"} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.iconButtonSmall}
+                      onPress={() => handleDeleteUser(u.id, `${u.firstName} ${u.lastName}`)}
+                      disabled={deleteUserMutation.isPending}
+                    >
+                      <Trash2 size={16} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
                 <View style={styles.roleSelector}>
                   {roles.map((r) => (
@@ -677,6 +733,14 @@ const styles = StyleSheet.create({
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   cardTitle: { fontSize: 16, fontWeight: '700', color: '#1e293b' },
   userRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  userCard: { backgroundColor: '#f8fafc', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#e2e8f0' },
+  userCardHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 },
+  userNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  userActions: { flexDirection: 'row', gap: 6 },
+  blockedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#fef2f2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#fee2e2' },
+  blockedBadgeText: { fontSize: 9, fontWeight: '700', color: '#ef4444', letterSpacing: 0.5 },
+  iconButtonSmall: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center', backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0' },
+  iconButtonWarning: { backgroundColor: '#fff7ed', borderColor: '#fed7aa' },
   userName: { fontSize: 14, fontWeight: '600', color: '#1e293b' },
   userEmail: { fontSize: 12, color: '#64748b' },
   roleSelector: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end' },
