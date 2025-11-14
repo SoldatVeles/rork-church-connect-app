@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Bell, Calendar, Heart, Users, Church, BookOpen } from 'lucide-react-native';
-import React, { useMemo, useState, useRef } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -16,11 +16,55 @@ import NotificationDropdown from '@/components/NotificationDropdown';
 import { supabase } from '@/lib/supabase';
 import { useQuery } from '@tanstack/react-query';
 
+const bibleVerses = [
+  {
+    text: '"Trust in the Lord with all your heart and lean not on your own understanding; in all your ways submit to him, and he will make your paths straight."',
+    reference: 'Proverbs 3:5-6',
+  },
+  {
+    text: '"For I know the plans I have for you," declares the Lord, "plans to prosper you and not to harm you, plans to give you hope and a future."',
+    reference: 'Jeremiah 29:11',
+  },
+  {
+    text: '"The Lord is my shepherd, I lack nothing. He makes me lie down in green pastures, he leads me beside quiet waters, he refreshes my soul."',
+    reference: 'Psalm 23:1-3',
+  },
+  {
+    text: '"I can do all this through him who gives me strength."',
+    reference: 'Philippians 4:13',
+  },
+  {
+    text: '"Be strong and courageous. Do not be afraid; do not be discouraged, for the Lord your God will be with you wherever you go."',
+    reference: 'Joshua 1:9',
+  },
+  {
+    text: '"The Lord bless you and keep you; the Lord make his face shine on you and be gracious to you; the Lord turn his face toward you and give you peace."',
+    reference: 'Numbers 6:24-26',
+  },
+  {
+    text: '"And we know that in all things God works for the good of those who love him, who have been called according to his purpose."',
+    reference: 'Romans 8:28',
+  },
+  {
+    text: '"Do not be anxious about anything, but in every situation, by prayer and petition, with thanksgiving, present your requests to God."',
+    reference: 'Philippians 4:6',
+  },
+  {
+    text: '"But those who hope in the Lord will renew their strength. They will soar on wings like eagles; they will run and not grow weary, they will walk and not be faint."',
+    reference: 'Isaiah 40:31',
+  },
+  {
+    text: '"The Lord is close to the brokenhearted and saves those who are crushed in spirit."',
+    reference: 'Psalm 34:18',
+  },
+];
+
 export default function HomeScreen() {
   const { user } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const bellButtonRef = useRef<View>(null);
   const [bellPosition, setBellPosition] = useState({ x: 0, y: 0 });
+  const [currentVerseIndex, setCurrentVerseIndex] = useState(0);
 
   const eventsQuery = useQuery({
     queryKey: ['events'],
@@ -83,7 +127,15 @@ export default function HomeScreen() {
 
   const activeRequestsCount = prayersActiveQuery.data?.length ?? 0;
   const membersCount = usersQuery.data?.length ?? 0;
-  const unreadNotificationsCount = 0; // Notifications not implemented yet
+  const unreadNotificationsCount = 0;
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentVerseIndex((prevIndex) => (prevIndex + 1) % bibleVerses.length);
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const quickActions = useMemo(() => [
     {
@@ -217,10 +269,9 @@ export default function HomeScreen() {
             <Text style={styles.verseTitle}>Verse of the Day</Text>
           </View>
           <Text style={styles.verseText}>
-            &ldquo;Trust in the Lord with all your heart and lean not on your own understanding; 
-            in all your ways submit to him, and he will make your paths straight.&rdquo;
+            {bibleVerses[currentVerseIndex].text}
           </Text>
-          <Text style={styles.verseReference}>Proverbs 3:5-6</Text>
+          <Text style={styles.verseReference}>{bibleVerses[currentVerseIndex].reference}</Text>
         </View>
 
         <View style={styles.spacer} />
