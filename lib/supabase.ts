@@ -13,8 +13,16 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: Platform.OS === 'web',
     flowType: 'pkce',
+    debug: true,
   },
 });
+
+// Add logging for auth events (useful for debugging)
+if (__DEV__) {
+  supabase.auth.onAuthStateChange((event, session) => {
+    console.log('[Supabase Auth]', event, session?.user?.id ? `User: ${session.user.id}` : 'No session');
+  });
+}
 
 // Export types for TypeScript
 export type Database = {

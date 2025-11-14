@@ -157,24 +157,40 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const logoutMutation = useMutation({
     mutationFn: async () => {
       console.log('Starting logout process...');
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error('Logout error:', error);
-        throw new Error(error.message);
+      console.log('Current session before logout:', session?.user?.id);
+      
+      try {
+        const { error } = await supabase.auth.signOut({ scope: 'local' });
+        if (error) {
+          console.error('Supabase signOut error:', error);
+          throw error;
+        }
+        console.log('Logout successful from Supabase');
+        return true;
+      } catch (err) {
+        console.error('Exception during logout:', err);
+        throw err;
       }
-      console.log('Logout successful from Supabase');
-      return true;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       console.log('Logout onSuccess - clearing state');
-      queryClient.clear();
-      setSession(null);
-      setAuthState({ user: null, isLoading: false, isAuthenticated: false });
-      console.log('Navigating to login screen...');
-      router.replace('/(auth)/login');
+      try {
+        queryClient.clear();
+        setSession(null);
+        setAuthState({ user: null, isLoading: false, isAuthenticated: false });
+        console.log('State cleared, navigating to login screen...');
+        router.replace('/(auth)/login');
+        console.log('Navigation command sent');
+      } catch (err) {
+        console.error('Error in logout onSuccess:', err);
+      }
     },
     onError: (error) => {
       console.error('Logout mutation error:', error);
+      queryClient.clear();
+      setSession(null);
+      setAuthState({ user: null, isLoading: false, isAuthenticated: false });
+      router.replace('/(auth)/login');
     },
   });
 
