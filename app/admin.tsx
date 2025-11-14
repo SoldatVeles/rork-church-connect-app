@@ -291,55 +291,44 @@ export default function AdminScreen() {
 
           {usersQuery.isLoading ? (
             <View style={styles.loadingRow}><ActivityIndicator color="#1e3a8a" /></View>
-          ) : (
-            usersQuery.data?.map((u) => (
-              <View key={u.id} style={styles.userCard}>
-                <View style={styles.userCardHeader}>
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.userNameRow}>
-                      <Text style={styles.userName}>{u.firstName} {u.lastName}</Text>
-                      {u.isBlocked && (
-                        <View style={styles.blockedBadge}>
-                          <Ban size={10} color="#ef4444" />
-                          <Text style={styles.blockedBadgeText}>BLOCKED</Text>
-                        </View>
-                      )}
-                    </View>
-                    <Text style={styles.userEmail}>{u.email}</Text>
+          ) : usersQuery.data && usersQuery.data.length > 0 ? (
+            usersQuery.data.map((u) => (
+              <View key={u.id} style={styles.userRow}>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.userNameRow}>
+                    <Text style={styles.userName}>{u.firstName} {u.lastName}</Text>
+                    {u.isBlocked && (
+                      <View style={styles.blockedBadge}>
+                        <Ban size={10} color="#ef4444" />
+                        <Text style={styles.blockedBadgeText}>BLOCKED</Text>
+                      </View>
+                    )}
                   </View>
-                  <View style={styles.userActions}>
-                    <TouchableOpacity
-                      style={[styles.iconButtonSmall, u.isBlocked && styles.iconButtonWarning]}
-                      onPress={() => handleBlockUser(u.id, `${u.firstName} ${u.lastName}`, u.isBlocked)}
-                      disabled={blockUserMutation.isPending}
-                    >
-                      <Ban size={16} color={u.isBlocked ? "#f97316" : "#64748b"} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.iconButtonSmall}
-                      onPress={() => handleDeleteUser(u.id, `${u.firstName} ${u.lastName}`)}
-                      disabled={deleteUserMutation.isPending}
-                    >
-                      <Trash2 size={16} color="#ef4444" />
-                    </TouchableOpacity>
-                  </View>
+                  <Text style={styles.userEmail}>{u.email}</Text>
+                  <Text style={styles.userRole}>
+                    {u.role.charAt(0).toUpperCase() + u.role.slice(1)}
+                  </Text>
                 </View>
-                <View style={styles.roleSelector}>
-                  {roles.map((r) => (
-                    <TouchableOpacity
-                      key={r}
-                      style={[styles.roleChip, u.role === r && styles.roleChipActive]}
-                      onPress={() => updateRoleMutation.mutate({ userId: u.id, role: r, permissions: [] })}
-                      testID={`set-role-${u.id}-${r}`}
-                    >
-                      <Text style={[styles.roleChipText, u.role === r && styles.roleChipTextActive]}>
-                        {r.charAt(0).toUpperCase() + r.slice(1)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                <View style={styles.userActions}>
+                  <TouchableOpacity
+                    style={[styles.iconButtonSmall, u.isBlocked && styles.iconButtonWarning]}
+                    onPress={() => handleBlockUser(u.id, `${u.firstName} ${u.lastName}`, u.isBlocked)}
+                    disabled={blockUserMutation.isPending}
+                  >
+                    <Ban size={16} color={u.isBlocked ? "#f97316" : "#64748b"} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.iconButtonSmall}
+                    onPress={() => handleDeleteUser(u.id, `${u.firstName} ${u.lastName}`)}
+                    disabled={deleteUserMutation.isPending}
+                  >
+                    <Trash2 size={16} color="#ef4444" />
+                  </TouchableOpacity>
                 </View>
               </View>
             ))
+          ) : (
+            <Text style={styles.emptyText}>No users found</Text>
           )}
         </View>
 
@@ -732,7 +721,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: 'white', borderRadius: 16, padding: 16, marginTop: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   cardTitle: { fontSize: 16, fontWeight: '700', color: '#1e293b' },
-  userRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  userRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
   userCard: { backgroundColor: '#f8fafc', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#e2e8f0' },
   userCardHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 },
   userNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
@@ -742,7 +731,8 @@ const styles = StyleSheet.create({
   iconButtonSmall: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center', backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0' },
   iconButtonWarning: { backgroundColor: '#fff7ed', borderColor: '#fed7aa' },
   userName: { fontSize: 14, fontWeight: '600', color: '#1e293b' },
-  userEmail: { fontSize: 12, color: '#64748b' },
+  userEmail: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  userRole: { fontSize: 11, color: '#3b82f6', fontWeight: '600', marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
   roleSelector: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end' },
   roleSelectorInline: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   roleChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: '#f1f5f9' },
