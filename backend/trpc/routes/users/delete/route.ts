@@ -1,5 +1,4 @@
-import { publicProcedure } from "@/backend/trpc/create-context";
-import { supabase } from "@/lib/supabase";
+import { publicProcedure } from "../../../create-context";
 import { z } from "zod";
 
 export const deleteUserProcedure = publicProcedure
@@ -8,22 +7,24 @@ export const deleteUserProcedure = publicProcedure
       userId: z.string(),
     })
   )
-  .mutation(async ({ input }) => {
-    const { error: deleteProfileError } = await supabase
-      .from('profiles')
+  .mutation(async ({ input, ctx }) => {
+    const { supabaseAdmin } = ctx;
+
+    const { error: deleteProfileError } = await supabaseAdmin
+      .from("profiles")
       .delete()
-      .eq('id', input.userId);
+      .eq("id", input.userId);
 
     if (deleteProfileError) {
       throw new Error(deleteProfileError.message);
     }
 
-    const { error: deleteAuthError } = await supabase.auth.admin.deleteUser(
+    const { error: deleteAuthError } = await supabaseAdmin.auth.admin.deleteUser(
       input.userId
     );
 
     if (deleteAuthError) {
-      console.error('Failed to delete auth user:', deleteAuthError);
+      console.error("Failed to delete auth user:", deleteAuthError);
     }
 
     return { success: true };

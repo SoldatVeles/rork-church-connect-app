@@ -1,5 +1,4 @@
-import { publicProcedure } from "@/backend/trpc/create-context";
-import { supabase } from "@/lib/supabase";
+import { publicProcedure } from "../../../create-context";
 import { z } from "zod";
 
 export const blockUserProcedure = publicProcedure
@@ -9,11 +8,13 @@ export const blockUserProcedure = publicProcedure
       isBlocked: z.boolean(),
     })
   )
-  .mutation(async ({ input }) => {
-    const { error } = await supabase
-      .from('profiles')
+  .mutation(async ({ input, ctx }) => {
+    const { supabaseAdmin } = ctx;
+
+    const { error } = await supabaseAdmin
+      .from("profiles")
       .update({ is_blocked: input.isBlocked })
-      .eq('id', input.userId);
+      .eq("id", input.userId);
 
     if (error) {
       throw new Error(error.message);
