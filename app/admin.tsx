@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { SafeAreaView, View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, Platform, Switch } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { Users, Shield, Plus, Check, UserPlus, Church, BookOpen, Settings, Youtube, Edit, Trash2, ArrowLeft, Ban, UserX } from 'lucide-react-native';
+import { Users, Shield, Plus, Check, UserPlus, Church, BookOpen, Settings, Youtube, Edit, Trash2, ArrowLeft, Ban } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -14,8 +14,12 @@ type Role = 'admin' | 'pastor' | 'member' | 'visitor';
 interface Group {
   id: string;
   name: string;
-  memberIds: string[];
-  createdAt: string;
+  created_by: string;
+  created_at: string;
+}
+
+interface GroupWithMembers extends Group {
+  memberCount: number;
 }
 
 type AdminTab = 'users' | 'sermons' | 'groups';
@@ -25,12 +29,29 @@ export default function AdminScreen() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<AdminTab>('users');
   
-  const usersQuery = trpc.users.getAll.useQuery();
+  const usersQuery = trpc.users.getAll.useQuery(undefined, {
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+    onSuccess: (data) => {
+      console.log('[Admin] Users query success, received users:', data?.length || 0);
+      console.log('[Admin] Users data:', JSON.stringify(data, null, 2));
+    },
+    onError: (error) => {
+      console.error('[Admin] Users query error:', error);
+    },
+  });
+
+  console.log('[Admin] Users query state:', {
+    isLoading: usersQuery.isLoading,
+    isError: usersQuery.isError,
+    dataLength: usersQuery.data?.length,
+    error: usersQuery.error,
+  });
   
   const [newUser, setNewUser] = useState({ firstName: '', lastName: '', email: '', phone: '', password: '', role: 'member' as Role });
   const [groupName, setGroupName] = useState('');
-  const [selectedGroup, setSelectedGroup] = useState<string>('');
-  const [selectedUserToAdd, setSelectedUserToAdd] = useState<string>('');
+  const [selectedGroupForAdding, setSelectedGroupForAdding] = useState<string>('');
+  const [selectedUsersForGroup, setSelectedUsersForGroup] = useState<string[]>([]);
   
   const [editingSermon, setEditingSermon] = useState<Sermon | null>(null);
   const [sermonForm, setSermonForm] = useState({
@@ -111,21 +132,44 @@ export default function AdminScreen() {
     onSuccess: () => {
       Alert.alert('Success', 'Group created');
       setGroupName('');
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
     },
     onError: (e: Error) => Alert.alert('Error', e.message ?? 'Failed to create group'),
   });
   
-  const addMemberToGroupMutation = useMutation({
-    mutationFn: async (data: { groupId: string; userId: string }) => {
-      console.log('Add member to group not implemented yet:', data);
-      throw new Error('Add member to group not implemented yet');
+  const groupsQuery = useQuery({
+    queryKey: ['groups'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('groups')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw new Error(error.message);
+      return data || [];
+    },
+  });
+
+  const addMembersToGroupMutation = useMutation({
+    mutationFn: async (data: { groupId: string; userIds: string[] }) => {
+      const { error } = await supabase
+        .from('group_members')
+        .insert(
+          data.userIds.map(userId => ({
+            group_id: data.groupId,
+            user_id: userId,
+          }))
+        );
+      
+      if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      Alert.alert('Success', 'Member added to group');
-      setSelectedGroup('');
-      setSelectedUserToAdd('');
+      Alert.alert('Success', 'Members added to group');
+      setSelectedGroupForAdding('');
+      setSelectedUsersForGroup([]);
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
     },
-    onError: (e: Error) => Alert.alert('Error', e.message ?? 'Failed to add member'),
+    onError: (e: Error) => Alert.alert('Error', e.message ?? 'Failed to add members'),
   });
 
   const sermonsQuery = trpc.sermons.getAll.useQuery();
@@ -401,49 +445,7 @@ export default function AdminScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Church size={18} color="#1e3a8a" />
-            <Text style={styles.cardTitle}>Groups</Text>
-          </View>
 
-          <View style={styles.row}>
-            <TextInput style={styles.input} placeholder="New group name (e.g. Church Bern)" value={groupName} onChangeText={setGroupName} />
-            <TouchableOpacity
-              style={[styles.primaryButton, { paddingHorizontal: 16 }]}
-              onPress={() => {
-                if (!groupName.trim()) return;
-                createGroupMutation.mutate({ name: groupName.trim() });
-              }}
-            >
-              <Text style={styles.primaryButtonText}>Add</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.row}>
-            <TextInput style={[styles.input, { flex: 1 }]} placeholder="Group ID" value={selectedGroup} onChangeText={setSelectedGroup} />
-            <TextInput style={[styles.input, { flex: 1 }]} placeholder="User ID" value={selectedUserToAdd} onChangeText={setSelectedUserToAdd} />
-          </View>
-          <TouchableOpacity
-            testID="add-to-group-button"
-            style={[styles.secondaryButton, addMemberToGroupMutation.isPending && { opacity: 0.7 }]}
-            onPress={() => {
-              if (!selectedGroup || !selectedUserToAdd) {
-                Alert.alert('Select group and user');
-                return;
-              }
-              addMemberToGroupMutation.mutate({ groupId: selectedGroup, userId: selectedUserToAdd });
-            }}
-          >
-            {addMemberToGroupMutation.isPending ? (
-              <ActivityIndicator color="#1e3a8a" />
-            ) : (
-              <View style={styles.buttonContent}><Check size={16} color="#1e3a8a" /><Text style={styles.secondaryButtonText}>Add Member</Text></View>
-            )}
-          </TouchableOpacity>
-
-          <Text style={styles.helpText}>Tip: We kept it simple. Paste the target Group ID and User ID above. A richer picker can be added next.</Text>
-        </View>
 
         <View style={styles.spacer} />
       </>
@@ -629,51 +631,172 @@ export default function AdminScreen() {
     </>
   );
 
+  const toggleUserSelection = (userId: string) => {
+    setSelectedUsersForGroup(prev => 
+      prev.includes(userId) 
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
+  const handleAddMembersToGroup = () => {
+    if (!selectedGroupForAdding) {
+      Alert.alert('Error', 'Please select a group first');
+      return;
+    }
+    if (selectedUsersForGroup.length === 0) {
+      Alert.alert('Error', 'Please select at least one user');
+      return;
+    }
+    addMembersToGroupMutation.mutate({
+      groupId: selectedGroupForAdding,
+      userIds: selectedUsersForGroup,
+    });
+  };
+
   const renderGroupsTab = () => (
     <>
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <Church size={18} color="#1e3a8a" />
-          <Text style={styles.cardTitle}>Groups</Text>
+          <Text style={styles.cardTitle}>Create Group</Text>
         </View>
 
         <View style={styles.row}>
-          <TextInput style={styles.input} placeholder="New group name (e.g. Church Bern)" value={groupName} onChangeText={setGroupName} />
+          <TextInput 
+            style={styles.input} 
+            placeholder="Group name (e.g. Church Bern)" 
+            value={groupName} 
+            onChangeText={setGroupName} 
+          />
           <TouchableOpacity
             style={[styles.primaryButton, { paddingHorizontal: 16 }]}
             onPress={() => {
-              if (!groupName.trim()) return;
+              if (!groupName.trim()) {
+                Alert.alert('Error', 'Please enter a group name');
+                return;
+              }
               createGroupMutation.mutate({ name: groupName.trim() });
             }}
+            disabled={createGroupMutation.isPending}
           >
-            <Text style={styles.primaryButtonText}>Add</Text>
+            {createGroupMutation.isPending ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={styles.primaryButtonText}>Create</Text>
+            )}
           </TouchableOpacity>
         </View>
-
-        <View style={styles.row}>
-          <TextInput style={[styles.input, { flex: 1 }]} placeholder="Group ID" value={selectedGroup} onChangeText={setSelectedGroup} />
-          <TextInput style={[styles.input, { flex: 1 }]} placeholder="User ID" value={selectedUserToAdd} onChangeText={setSelectedUserToAdd} />
-        </View>
-        <TouchableOpacity
-          testID="add-to-group-button"
-          style={[styles.secondaryButton, addMemberToGroupMutation.isPending && { opacity: 0.7 }]}
-          onPress={() => {
-            if (!selectedGroup || !selectedUserToAdd) {
-              Alert.alert('Select group and user');
-              return;
-            }
-            addMemberToGroupMutation.mutate({ groupId: selectedGroup, userId: selectedUserToAdd });
-          }}
-        >
-          {addMemberToGroupMutation.isPending ? (
-            <ActivityIndicator color="#1e3a8a" />
-          ) : (
-            <View style={styles.buttonContent}><Check size={16} color="#1e3a8a" /><Text style={styles.secondaryButtonText}>Add Member</Text></View>
-          )}
-        </TouchableOpacity>
-
-        <Text style={styles.helpText}>Tip: We kept it simple. Paste the target Group ID and User ID above. A richer picker can be added next.</Text>
       </View>
+
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Church size={18} color="#1e3a8a" />
+          <Text style={styles.cardTitle}>Existing Groups</Text>
+        </View>
+
+        {groupsQuery.isLoading ? (
+          <View style={styles.loadingRow}>
+            <ActivityIndicator color="#1e3a8a" />
+          </View>
+        ) : groupsQuery.data && groupsQuery.data.length > 0 ? (
+          groupsQuery.data.map((group) => (
+            <TouchableOpacity
+              key={group.id}
+              style={[
+                styles.groupCard,
+                selectedGroupForAdding === group.id && styles.groupCardSelected,
+              ]}
+              onPress={() => {
+                setSelectedGroupForAdding(
+                  selectedGroupForAdding === group.id ? '' : group.id
+                );
+                setSelectedUsersForGroup([]);
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.groupName}>{group.name}</Text>
+                <Text style={styles.groupMeta}>
+                  Created {new Date(group.created_at).toLocaleDateString()}
+                </Text>
+              </View>
+              {selectedGroupForAdding === group.id && (
+                <View style={styles.selectedBadge}>
+                  <Check size={14} color="#1e3a8a" />
+                </View>
+              )}
+            </TouchableOpacity>
+          ))
+        ) : (
+          <Text style={styles.emptyText}>No groups yet. Create your first one!</Text>
+        )}
+      </View>
+
+      {selectedGroupForAdding && (
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <UserPlus size={18} color="#1e3a8a" />
+            <Text style={styles.cardTitle}>Add Members to Group</Text>
+          </View>
+
+          <Text style={styles.helpText}>Select users to add to this group:</Text>
+
+          {usersQuery.isLoading ? (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator color="#1e3a8a" />
+            </View>
+          ) : usersQuery.data && usersQuery.data.length > 0 ? (
+            <>
+              {usersQuery.data.map((user) => (
+                <TouchableOpacity
+                  key={user.id}
+                  style={styles.userSelectCard}
+                  onPress={() => toggleUserSelection(user.id)}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.userName}>
+                      {user.firstName} {user.lastName}
+                    </Text>
+                    <Text style={styles.userEmail}>{user.email}</Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.checkbox,
+                      selectedUsersForGroup.includes(user.id) && styles.checkboxChecked,
+                    ]}
+                  >
+                    {selectedUsersForGroup.includes(user.id) && (
+                      <Check size={16} color="#fff" />
+                    )}
+                  </View>
+                </TouchableOpacity>
+              ))}
+
+              <TouchableOpacity
+                style={[
+                  styles.primaryButton,
+                  (addMembersToGroupMutation.isPending || selectedUsersForGroup.length === 0) && { opacity: 0.7 },
+                ]}
+                onPress={handleAddMembersToGroup}
+                disabled={addMembersToGroupMutation.isPending || selectedUsersForGroup.length === 0}
+              >
+                {addMembersToGroupMutation.isPending ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <View style={styles.buttonContent}>
+                    <Plus size={16} color="#fff" />
+                    <Text style={styles.primaryButtonText}>
+                      Add {selectedUsersForGroup.length} Member{selectedUsersForGroup.length !== 1 ? 's' : ''}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </>
+          ) : (
+            <Text style={styles.emptyText}>No users available</Text>
+          )}
+        </View>
+      )}
 
       <View style={styles.spacer} />
     </>
@@ -789,4 +912,12 @@ const styles = StyleSheet.create({
   iconButton: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 8 },
   emptyText: { textAlign: 'center', color: '#94a3b8', paddingVertical: 16 },
   spacer: { height: 40 },
+  groupCard: { backgroundColor: '#f8fafc', borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#e2e8f0', flexDirection: 'row', alignItems: 'center' },
+  groupCardSelected: { backgroundColor: '#eff6ff', borderColor: '#1e3a8a', borderWidth: 2 },
+  groupName: { fontSize: 15, fontWeight: '600', color: '#1e293b', marginBottom: 4 },
+  groupMeta: { fontSize: 12, color: '#64748b' },
+  selectedBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#1e3a8a', justifyContent: 'center', alignItems: 'center' },
+  userSelectCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: '#cbd5e1', justifyContent: 'center', alignItems: 'center' },
+  checkboxChecked: { backgroundColor: '#1e3a8a', borderColor: '#1e3a8a' },
 });
