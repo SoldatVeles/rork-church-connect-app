@@ -154,32 +154,29 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     },
   });
 
-  // Simple logout function without mutation wrapper
-  const logout = async () => {
-    console.log('Starting logout process...');
-    try {
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      console.log('Starting logout process...');
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error('Logout error:', error);
         throw new Error(error.message);
       }
       console.log('Logout successful from Supabase');
-      
-      // Clear all state
+      return true;
+    },
+    onSuccess: () => {
+      console.log('Logout onSuccess - clearing state');
       queryClient.clear();
       setSession(null);
       setAuthState({ user: null, isLoading: false, isAuthenticated: false });
-      
-      // Navigate to login
       console.log('Navigating to login screen...');
       router.replace('/(auth)/login');
-      
-      return true;
-    } catch (error) {
-      console.error('Logout error:', error);
-      throw error;
-    }
-  };
+    },
+    onError: (error) => {
+      console.error('Logout mutation error:', error);
+    },
+  });
 
   const registerMutation = useMutation({
     mutationFn: async (userData: {
@@ -228,12 +225,13 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     ...authState,
     session,
     login: loginMutation.mutate,
-    logout,
+    logout: logoutMutation.mutate,
     register: registerMutation.mutate,
     isLoginLoading: loginMutation.isPending,
-    isLogoutLoading: false, // Simplified - no longer using mutation
+    isLogoutLoading: logoutMutation.isPending,
     isRegisterLoading: registerMutation.isPending,
     loginError: (loginMutation.error as any)?.message as string | undefined,
+    logoutError: (logoutMutation.error as any)?.message as string | undefined,
     registerError: (registerMutation.error as any)?.message as string | undefined,
     hasPermission,
     isRole,

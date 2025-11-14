@@ -24,8 +24,7 @@ import { useAuth } from '@/providers/auth-provider';
 import { router } from 'expo-router';
 
 export default function ProfileScreen() {
-  const { user, logout } = useAuth();
-  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
+  const { user, logout, isLogoutLoading } = useAuth();
 
   const handleLogout = () => {
     console.log('handleLogout called');
@@ -37,17 +36,9 @@ export default function ProfileScreen() {
         { 
           text: 'Sign Out', 
           style: 'destructive', 
-          onPress: async () => {
+          onPress: () => {
             console.log('User confirmed logout, calling logout function');
-            setIsLoggingOut(true);
-            try {
-              await logout();
-              console.log('Logout completed successfully');
-            } catch (error) {
-              console.error('Error during logout:', error);
-              setIsLoggingOut(false);
-              Alert.alert('Error', 'Failed to sign out. Please try again.');
-            }
+            logout();
           }
         },
       ]
@@ -190,13 +181,13 @@ export default function ProfileScreen() {
 
         <View style={styles.logoutContainer}>
           <TouchableOpacity 
-            style={[styles.logoutButton, isLoggingOut && styles.logoutButtonDisabled]} 
+            style={[styles.logoutButton, isLogoutLoading && styles.logoutButtonDisabled]} 
             onPress={handleLogout}
-            disabled={isLoggingOut}
+            disabled={isLogoutLoading}
           >
-            <LogOut size={20} color={isLoggingOut ? "#94a3b8" : "#ef4444"} />
-            <Text style={[styles.logoutText, isLoggingOut && styles.logoutTextDisabled]}>
-              {isLoggingOut ? 'Signing out...' : 'Sign Out'}
+            <LogOut size={20} color={isLogoutLoading ? "#94a3b8" : "#ef4444"} />
+            <Text style={[styles.logoutText, isLogoutLoading && styles.logoutTextDisabled]}>
+              {isLogoutLoading ? 'Signing out...' : 'Sign Out'}
             </Text>
           </TouchableOpacity>
         </View>
