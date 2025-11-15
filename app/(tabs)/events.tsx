@@ -22,9 +22,10 @@ import type { Event, EventType } from '@/types/event';
 import { supabase } from '@/lib/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
+const allowedEventTypes: EventType[] = ['sabbath', 'bible_study', 'youth', 'special', 'conference'];
+
 const eventTypeColors: Record<EventType, string> = {
   sabbath: '#3b82f6',
-  prayer_meeting: '#ef4444',
   bible_study: '#10b981',
   youth: '#f59e0b',
   special: '#8b5cf6',
@@ -33,11 +34,18 @@ const eventTypeColors: Record<EventType, string> = {
 
 const eventTypeLabels: Record<EventType, string> = {
   sabbath: 'Sabbath',
-  prayer_meeting: 'Prayer',
   bible_study: 'Bible Study',
   youth: 'Youth',
   special: 'Special',
   conference: 'Conference',
+};
+
+const normalizeEventType = (value: unknown): EventType => {
+  const normalized = allowedEventTypes.includes(value as EventType) ? (value as EventType) : 'sabbath';
+  if (normalized === 'sabbath' && value !== 'sabbath') {
+    console.log('[Events] Normalized unexpected event type to sabbath:', value);
+  }
+  return normalized;
 };
 
 const fallbackEventImage = 'https://images.unsplash.com/photo-1530023367847-a683933f4177?w=1200&q=80&auto=format&fit=crop' as const;
@@ -107,31 +115,41 @@ export default function EventsScreen() {
 
       console.log('[Events] Fetched events:', data);
       
-      return (data as any[]).map((event: any) => {
-        const start = event.start_at ? new Date(event.start_at) : new Date();
-        const end = event.end_at ? new Date(event.end_at) : undefined;
-        
-        const registeredUsersSafe: string[] = Array.isArray(event?.registered_users)
-          ? (event.registered_users as string[])
-          : [];
+      const sanitizedEvents = (data as any[])
+        .map((event: any) => {
+          const rawType = (event.type ?? event.event_type ?? 'sabbath') as string;
 
-        return {
-          id: event.id,
-          title: event.title,
-          description: event.description ?? '',
-          date: start,
-          endDate: end,
-          location: event.location ?? '',
-          type: (event.type ?? 'sabbath') as EventType,
-          maxAttendees: event.max_attendees ?? undefined,
-          currentAttendees: event.current_attendees ?? 0,
-          registeredUsers: registeredUsersSafe,
-          isRegistrationOpen: event.is_registration_open ?? true,
-          createdBy: event.created_by,
-          imageUrl: event.image_url ?? undefined,
-          createdAt: new Date(event.created_at ?? new Date().toISOString()),
-        } as Event;
-      });
+          if (rawType === 'prayer_meeting') {
+            console.log('[Events] Skipping prayer entry in events feed:', event.id);
+            return null;
+          }
+
+          const start = event.start_at ? new Date(event.start_at) : new Date();
+          const end = event.end_at ? new Date(event.end_at) : undefined;
+          const registeredUsersSafe: string[] = Array.isArray(event?.registered_users)
+            ? (event.registered_users as string[])
+            : [];
+
+          return {
+            id: event.id,
+            title: event.title,
+            description: event.description ?? '',
+            date: start,
+            endDate: end,
+            location: event.location ?? '',
+            type: normalizeEventType(rawType),
+            maxAttendees: event.max_attendees ?? undefined,
+            currentAttendees: event.current_attendees ?? 0,
+            registeredUsers: registeredUsersSafe,
+            isRegistrationOpen: event.is_registration_open ?? true,
+            createdBy: event.created_by,
+            imageUrl: event.image_url ?? undefined,
+            createdAt: new Date(event.created_at ?? new Date().toISOString()),
+          } as Event;
+        })
+        .filter((item): item is Event => item !== null);
+
+      return sanitizedEvents;
     },
   });
 

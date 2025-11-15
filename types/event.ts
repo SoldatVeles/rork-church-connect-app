@@ -14,4 +14,4 @@ export interface Event {
   registeredUsers: string[];
 }
 
-export type EventType = 'sabbath' | 'prayer_meeting' | 'bible_study' | 'youth' | 'special' | 'conference';
+export type EventType = 'sabbath' | 'bible_study' | 'youth' | 'special' | 'conference';
