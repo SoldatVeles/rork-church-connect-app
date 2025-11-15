@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
-import { Calendar, MapPin, Users, Plus, Clock, AlertCircle } from 'lucide-react-native';
-import React, { useMemo, useState } from 'react';
+import { Calendar, MapPin, Users, Plus, Clock, AlertCircle, X } from 'lucide-react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -14,6 +14,8 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '@/providers/auth-provider';
 import type { Event, EventType } from '@/types/event';
@@ -38,12 +40,16 @@ const eventTypeLabels: Record<EventType, string> = {
   conference: 'Conference',
 };
 
+const fallbackEventImage = 'https://images.unsplash.com/photo-1530023367847-a683933f4177?w=1200&q=80&auto=format&fit=crop' as const;
+
 export default function EventsScreen() {
   const { user, isAuthenticated, isLoading } = useAuth();
   
   console.log('[Events] Auth state:', { user: user?.id, isAuthenticated, isLoading });
   const [selectedFilter, setSelectedFilter] = useState<EventType | 'all'>('all');
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
+  const [showDetailsModal, setShowDetailsModal] = useState<boolean>(false);
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [form, setForm] = useState<{
     title: string;
     description: string;
@@ -202,12 +208,44 @@ export default function EventsScreen() {
     },
   });
 
-  const allEvents: Event[] = listQuery.data ?? [];
+  const allEvents = useMemo<Event[]>(() => listQuery.data ?? [], [listQuery.data]);
 
   const events = useMemo(() => {
     if (selectedFilter === 'all') return allEvents;
     return allEvents.filter(e => e.type === selectedFilter);
   }, [allEvents, selectedFilter]);
+
+  const activeEvent = useMemo(() => {
+    if (!selectedEvent) {
+      return null;
+    }
+    const match = allEvents.find(item => item.id === selectedEvent.id);
+    return match ?? selectedEvent;
+  }, [allEvents, selectedEvent]);
+
+  useEffect(() => {
+    if (!selectedEvent) {
+      return;
+    }
+    const exists = allEvents.some(item => item.id === selectedEvent.id);
+    if (!exists) {
+      console.log('[Events] Selected event no longer available, closing details modal');
+      setShowDetailsModal(false);
+      setSelectedEvent(null);
+    }
+  }, [allEvents, selectedEvent]);
+
+  const handleOpenDetails = useCallback((event: Event) => {
+    console.log('[Events] Opening details for event', event.id);
+    setSelectedEvent(event);
+    setShowDetailsModal(true);
+  }, []);
+
+  const handleCloseDetails = useCallback(() => {
+    console.log('[Events] Closing event details modal');
+    setShowDetailsModal(false);
+    setSelectedEvent(null);
+  }, []);
 
   const registerMutation = useMutation({
     mutationFn: async ({ eventId }: { eventId: string }) => {
@@ -579,7 +617,11 @@ export default function EventsScreen() {
                 </TouchableOpacity>
               )}
               
-              <TouchableOpacity style={styles.detailsButton}>
+              <TouchableOpacity
+                testID={`view-details-button-${event.id}`}
+                style={styles.detailsButton}
+                onPress={() => handleOpenDetails(event)}
+              >
                 <Text style={styles.detailsButtonText}>View Details</Text>
               </TouchableOpacity>
             </View>
@@ -589,6 +631,172 @@ export default function EventsScreen() {
 
         <View style={styles.spacer} />
       </ScrollView>
+
+      <Modal
+        visible={showDetailsModal}
+        animationType="slide"
+        transparent
+        onRequestClose={handleCloseDetails}
+      >
+        <View style={styles.detailsOverlay}>
+          <View style={styles.detailsContainer} testID="event-details-modal">
+            <SafeAreaView style={styles.detailsSafeArea}>
+              {activeEvent ? (
+                <View style={styles.detailsContent}>
+                  <View style={styles.detailsHero}>
+                    <Image
+                      source={{ uri: activeEvent.imageUrl ?? fallbackEventImage }}
+                      style={styles.detailsHeroImage}
+                      contentFit="cover"
+                      transition={200}
+                    />
+                    <LinearGradient
+                      colors={['rgba(15, 23, 42, 0.1)', 'rgba(15, 23, 42, 0.75)', '#0f172a']}
+                      locations={[0, 0.6, 1]}
+                      style={styles.detailsHeroGradient}
+                    />
+                    <View style={styles.detailsHeroTopRow}>
+                      <View
+                        style={[
+                          styles.detailsTypeBadge,
+                          { backgroundColor: eventTypeColors[activeEvent.type] },
+                        ]}
+                      >
+                        <Text style={styles.detailsTypeBadgeText}>
+                          {eventTypeLabels[activeEvent.type]}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        testID="close-event-details-button"
+                        style={styles.detailsCloseButton}
+                        onPress={handleCloseDetails}
+                      >
+                        <X size={20} color="white" />
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.detailsHeroTextGroup}>
+                      <Text style={styles.detailsHeroTitle}>{activeEvent.title}</Text>
+                      <Text style={styles.detailsHeroMeta}>
+                        {formatDate(new Date(activeEvent.date))} · {formatTime(new Date(activeEvent.date))}
+                      </Text>
+                      {activeEvent.location ? (
+                        <Text style={styles.detailsHeroLocation}>{activeEvent.location}</Text>
+                      ) : null}
+                    </View>
+                  </View>
+
+                  <ScrollView
+                    style={styles.detailsScroll}
+                    contentContainerStyle={styles.detailsScrollContent}
+                    showsVerticalScrollIndicator={false}
+                  >
+                    <View style={styles.detailsSection}>
+                      <Text style={styles.detailsSectionTitle}>About this event</Text>
+                      <Text style={styles.detailsDescription}>{activeEvent.description}</Text>
+                    </View>
+
+                    <View style={styles.detailsInfoGrid}>
+                      <View style={styles.detailsInfoCard}>
+                        <Calendar size={18} color="#1e3a8a" />
+                        <Text style={styles.detailsInfoLabel}>Starts</Text>
+                        <Text style={styles.detailsInfoValue}>
+                          {formatDate(new Date(activeEvent.date))}
+                        </Text>
+                        <Text style={styles.detailsInfoSubValue}>
+                          {formatTime(new Date(activeEvent.date))}
+                        </Text>
+                      </View>
+                      {activeEvent.endDate ? (
+                        <View style={styles.detailsInfoCard}>
+                          <Clock size={18} color="#1e3a8a" />
+                          <Text style={styles.detailsInfoLabel}>Ends</Text>
+                          <Text style={styles.detailsInfoValue}>
+                            {formatDate(new Date(activeEvent.endDate))}
+                          </Text>
+                          <Text style={styles.detailsInfoSubValue}>
+                            {formatTime(new Date(activeEvent.endDate))}
+                          </Text>
+                        </View>
+                      ) : null}
+                      <View style={styles.detailsInfoCard}>
+                        <MapPin size={18} color="#1e3a8a" />
+                        <Text style={styles.detailsInfoLabel}>Location</Text>
+                        <Text style={styles.detailsInfoValue}>{activeEvent.location}</Text>
+                        {activeEvent.maxAttendees ? (
+                          <Text style={styles.detailsInfoSubValue}>
+                            Capacity {activeEvent.maxAttendees}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <View style={styles.detailsInfoCard}>
+                        <Users size={18} color="#1e3a8a" />
+                        <Text style={styles.detailsInfoLabel}>Attending</Text>
+                        <Text style={styles.detailsInfoValue}>
+                          {activeEvent.maxAttendees
+                            ? `${activeEvent.currentAttendees}/${activeEvent.maxAttendees}`
+                            : `${activeEvent.currentAttendees}`}
+                        </Text>
+                        <Text style={styles.detailsInfoSubValue}>
+                          {isUserRegistered(activeEvent) ? 'You are registered' : 'Spots available'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {activeEvent.isRegistrationOpen ? (
+                      <TouchableOpacity
+                        testID={`details-register-button-${activeEvent.id}`}
+                        style={[
+                          styles.detailsRegisterButton,
+                          isUserRegistered(activeEvent) && styles.detailsRegisterButtonActive,
+                        ]}
+                        onPress={() => {
+                          if (!user?.id) {
+                            Alert.alert('Login required', 'Please log in to register for events.');
+                            return;
+                          }
+                          registerMutation.mutate({ eventId: activeEvent.id });
+                        }}
+                        disabled={registerMutation.isPending}
+                      >
+                        <Text
+                          style={[
+                            styles.detailsRegisterButtonText,
+                            isUserRegistered(activeEvent) && styles.detailsRegisterButtonTextActive,
+                          ]}
+                        >
+                          {registerMutation.isPending
+                            ? 'Updating...'
+                            : isUserRegistered(activeEvent)
+                            ? 'Cancel registration'
+                            : 'Reserve your spot'}
+                        </Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={styles.detailsRegistrationClosed}>
+                        <Text style={styles.detailsRegistrationClosedText}>Registration closed</Text>
+                      </View>
+                    )}
+                  </ScrollView>
+                </View>
+              ) : (
+                <View style={styles.detailsEmpty}>
+                  <Text style={styles.detailsEmptyTitle}>Event unavailable</Text>
+                  <Text style={styles.detailsEmptySubtitle}>
+                    This event may have been removed or is no longer accessible.
+                  </Text>
+                  <TouchableOpacity
+                    testID="dismiss-event-details-button"
+                    style={styles.detailsDismissButton}
+                    onPress={handleCloseDetails}
+                  >
+                    <Text style={styles.detailsDismissButtonText}>Go back</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </SafeAreaView>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={showAddModal}
@@ -998,6 +1206,190 @@ const styles = StyleSheet.create({
   },
   spacer: {
     height: 40,
+  },
+  detailsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.82)',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 48,
+  },
+  detailsContainer: {
+    flex: 1,
+    borderRadius: 28,
+    backgroundColor: '#0f172a',
+    overflow: 'hidden',
+    maxHeight: '88%',
+  },
+  detailsSafeArea: {
+    flex: 1,
+  },
+  detailsContent: {
+    flex: 1,
+  },
+  detailsHero: {
+    height: 240,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  detailsHeroImage: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  detailsHeroGradient: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  detailsHeroTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 20,
+  },
+  detailsTypeBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  detailsTypeBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'white',
+  },
+  detailsCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(15, 23, 42, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  detailsHeroTextGroup: {
+    position: 'absolute',
+    left: 24,
+    right: 24,
+    bottom: 32,
+    gap: 6,
+  },
+  detailsHeroTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: 'white',
+  },
+  detailsHeroMeta: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: 'rgba(226, 232, 240, 0.95)',
+  },
+  detailsHeroLocation: {
+    fontSize: 14,
+    color: 'rgba(226, 232, 240, 0.85)',
+  },
+  detailsScroll: {
+    flex: 1,
+    backgroundColor: '#0f172a',
+  },
+  detailsScrollContent: {
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 36,
+    gap: 28,
+  },
+  detailsSection: {
+    gap: 12,
+  },
+  detailsSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#e2e8f0',
+  },
+  detailsDescription: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#cbd5f5',
+  },
+  detailsInfoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  detailsInfoCard: {
+    width: '46%',
+    backgroundColor: '#111c34',
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 20,
+    gap: 6,
+  },
+  detailsInfoLabel: {
+    fontSize: 12,
+    color: '#94a3b8',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  detailsInfoValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#e2e8f0',
+  },
+  detailsInfoSubValue: {
+    fontSize: 13,
+    color: '#cbd5f5',
+  },
+  detailsRegisterButton: {
+    backgroundColor: '#1e3a8a',
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  detailsRegisterButtonActive: {
+    backgroundColor: '#16a34a',
+  },
+  detailsRegisterButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: 'white',
+  },
+  detailsRegisterButtonTextActive: {
+    color: 'white',
+  },
+  detailsRegistrationClosed: {
+    paddingVertical: 16,
+    borderRadius: 16,
+    backgroundColor: '#1e293b',
+    alignItems: 'center',
+  },
+  detailsRegistrationClosedText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#94a3b8',
+  },
+  detailsEmpty: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+    paddingHorizontal: 24,
+  },
+  detailsEmptyTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#e2e8f0',
+  },
+  detailsEmptySubtitle: {
+    fontSize: 15,
+    color: '#cbd5f5',
+    textAlign: 'center',
+  },
+  detailsDismissButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 999,
+    backgroundColor: 'white',
+  },
+  detailsDismissButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#0f172a',
   },
   modalContainer: {
     flex: 1,
