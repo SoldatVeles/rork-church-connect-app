@@ -77,6 +77,17 @@ export default function EventsScreen() {
     mode: 'date' | 'time';
   }>({ field: null, mode: 'date' });
 
+  const filterOptions = useMemo<{ key: EventType | 'all'; label: string; accent: string }[]>(() => {
+    return [
+      { key: 'all', label: 'All', accent: '#1e293b' },
+      ...Object.entries(eventTypeLabels).map(([key, label]) => ({
+        key: key as EventType,
+        label,
+        accent: eventTypeColors[key as EventType],
+      })),
+    ];
+  }, []);
+
   const queryClient = useQueryClient();
 
   const listQuery = useQuery({
@@ -465,14 +476,6 @@ export default function EventsScreen() {
     });
   };
 
-  const filters: { key: EventType | 'all'; label: string }[] = [
-    { key: 'all', label: 'All' },
-    { key: 'sabbath', label: 'Sabbath' },
-    { key: 'prayer_meeting', label: 'Prayer' },
-    { key: 'youth', label: 'Youth' },
-    { key: 'special', label: 'Special' },
-  ];
-
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
@@ -489,33 +492,40 @@ export default function EventsScreen() {
           </TouchableOpacity>
         </View>
         
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          style={styles.filterContainer}
-          contentContainerStyle={styles.filterContent}
-        >
-          {filters.map((filter) => (
-            <TouchableOpacity
-              key={filter.key}
-              testID={`filter-${filter.key}`}
-              style={[
-                styles.filterButton,
-                selectedFilter === filter.key && styles.filterButtonActive,
-              ]}
-              onPress={() => setSelectedFilter(filter.key)}
-            >
-              <Text
+        <View style={styles.filtersContainer}>
+          {filterOptions.map((option) => {
+            const isActive = selectedFilter === option.key;
+            return (
+              <TouchableOpacity
+                key={option.key}
+                testID={`filter-${option.key}`}
                 style={[
-                  styles.filterButtonText,
-                  selectedFilter === filter.key && styles.filterButtonTextActive,
+                  styles.filterChip,
+                  { borderColor: option.accent },
+                  isActive && [styles.filterChipActive, { backgroundColor: option.accent }],
                 ]}
+                onPress={() => setSelectedFilter(option.key)}
+                accessibilityState={{ selected: isActive }}
               >
-                {filter.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+                <View
+                  style={[
+                    styles.filterChipIndicator,
+                    { backgroundColor: option.accent },
+                    isActive && styles.filterChipIndicatorActive,
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.filterChipLabel,
+                    isActive && styles.filterChipLabelActive,
+                  ]}
+                >
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -1076,28 +1086,47 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  filterContainer: {
-    marginHorizontal: -24,
+  filtersContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginHorizontal: -4,
+    paddingHorizontal: 4,
   },
-  filterContent: {
-    paddingHorizontal: 24,
-    gap: 12,
-  },
-  filterButton: {
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#f1f5f9',
+    paddingVertical: 10,
+    borderRadius: 18,
+    backgroundColor: 'white',
+    borderWidth: 1,
   },
-  filterButtonActive: {
-    backgroundColor: '#1e3a8a',
+  filterChipActive: {
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 6,
   },
-  filterButtonText: {
+  filterChipIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    opacity: 0.55,
+  },
+  filterChipIndicatorActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    opacity: 1,
+  },
+  filterChipLabel: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#64748b',
+    fontWeight: '600',
+    color: '#475569',
+    letterSpacing: 0.2,
   },
-  filterButtonTextActive: {
+  filterChipLabelActive: {
     color: 'white',
   },
   content: {
