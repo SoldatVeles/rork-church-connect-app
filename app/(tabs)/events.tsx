@@ -20,6 +20,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '@/providers/auth-provider';
 import type { Event, EventType } from '@/types/event';
 import { supabase } from '@/lib/supabase';
+import type { Database } from '@/lib/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const allowedEventTypes: EventType[] = ['sabbath', 'bible_study', 'youth', 'special', 'conference'];
@@ -185,17 +186,19 @@ export default function EventsScreen() {
       );
 
       // Use the correct column names from your database
-      const insertData = {
+      const insertData: Database['public']['Tables']['events']['Insert'] = {
         title: eventData.title,
         description: eventData.description,
         start_at: startAt.toISOString(),
         end_at: endAt.toISOString(),
         location: eventData.location,
-        type: eventData.type, // Using 'type' column that exists in your DB
+        event_type: eventData.type,
         max_attendees: eventData.maxAttendees ?? null,
         created_by: eventData.createdBy,
         is_registration_open: true,
-      } as const;
+        current_attendees: 0,
+        registered_users: [],
+      };
 
       console.log('[Events] Inserting event with data:', insertData);
       
