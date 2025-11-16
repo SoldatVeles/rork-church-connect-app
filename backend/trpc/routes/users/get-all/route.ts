@@ -1,13 +1,25 @@
 import { publicProcedure } from "../../../create-context";
 
 export const getAllUsersProcedure = publicProcedure.query(async ({ ctx }) => {
-  const { supabase } = ctx;
+  const { supabase, supabaseAdmin, hasServiceRoleAccess } = ctx;
 
-  console.log("[getAllUsersProcedure] Starting to fetch all users...");
+  console.log("[getAllUsersProcedure] Starting to fetch all users...", {
+    hasServiceRoleAccess,
+  });
 
-  const { data: profilesData, error: profilesError } = await supabase
+  const client = hasServiceRoleAccess ? supabaseAdmin : supabase;
+
+  if (!hasServiceRoleAccess) {
+    console.warn(
+      "[getAllUsersProcedure] Supabase service role key unavailable. Falling back to anon client. Ensure RLS policies allow select access for admin listing.",
+    );
+  }
+
+  const { data: profilesData, error: profilesError } = await client
     .from("profiles")
-    .select("id, email, full_name, display_name, role, is_blocked, created_at")
+    .select(
+      "id, email, full_name, display_name, role, is_blocked, created_at, phone",
+    )
     .order("created_at", { ascending: false });
 
   if (profilesError) {
@@ -35,17 +47,18 @@ export const getAllUsersProcedure = publicProcedure.query(async ({ ctx }) => {
         firstName: nameParts[0] || "User",
         lastName: nameParts.slice(1).join(" ") || "",
         email: profile.email,
-        role: profile.role || "member",
+        role: (profile.role as "admin" | "pastor" | "member" | "visitor") || "member",
         isBlocked: profile.is_blocked || false,
         createdAt: profile.created_at,
         displayName: fullName,
+        phone: profile.phone ?? undefined,
       };
     });
 
   console.log(
     "[getAllUsersProcedure] Successfully mapped",
     mappedUsers.length,
-    "users"
+    "users",
   );
   return mappedUsers;
 });

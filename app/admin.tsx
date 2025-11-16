@@ -18,10 +18,6 @@ interface Group {
   created_at: string;
 }
 
-interface GroupWithMembers extends Group {
-  memberCount: number;
-}
-
 type AdminTab = 'users' | 'sermons' | 'groups';
 
 export default function AdminScreen() {
@@ -38,6 +34,20 @@ export default function AdminScreen() {
     },
     onError: (error) => {
       console.error('[Admin] Users query error:', error);
+    },
+  });
+
+  const diagnosticsQuery = trpc.users.diagnostics.useQuery(undefined, {
+    enabled: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    onSuccess: (data) => {
+      console.log('[Admin] Diagnostics result', data);
+    },
+    onError: (error) => {
+      console.error('[Admin] Diagnostics failed', error);
+      Alert.alert('Diagnostics failed', error.message ?? 'Unable to run diagnostics');
     },
   });
 
@@ -72,7 +82,11 @@ export default function AdminScreen() {
       queryClient.invalidateQueries({ queryKey: trpc.users.getAll.getQueryKey() });
       usersQuery.refetch();
       setNewUser({ firstName: '', lastName: '', email: '', phone: '', password: '', role: 'member' });
-      Alert.alert('Success', 'User created');
+      const requiresEmailConfirmation = Boolean(createdUser?.requiresEmailConfirmation);
+      const successMessage = requiresEmailConfirmation
+        ? 'Account created. The user must confirm their email before they can sign in.'
+        : 'User created and ready to sign in.';
+      Alert.alert('Success', successMessage);
     },
     onError: (error) => {
       console.error('[Admin] User creation failed', error);
@@ -129,16 +143,16 @@ export default function AdminScreen() {
     onError: (e: Error) => Alert.alert('Error', e.message ?? 'Failed to create group'),
   });
   
-  const groupsQuery = useQuery({
+  const groupsQuery = useQuery<Group[]>({
     queryKey: ['groups'],
-    queryFn: async () => {
+    queryFn: async (): Promise<Group[]> => {
       const { data, error } = await supabase
         .from('groups')
         .select('*')
         .order('created_at', { ascending: false });
       
       if (error) throw new Error(error.message);
-      return data || [];
+      return (data as Group[] | null) ?? [];
     },
   });
 
@@ -316,7 +330,47 @@ export default function AdminScreen() {
           <View style={styles.cardHeader}>
             <Users size={18} color="#1e3a8a" />
             <Text style={styles.cardTitle}>Users</Text>
+            <TouchableOpacity
+              testID="run-diagnostics-button"
+              style={[styles.secondaryButtonCompact, diagnosticsQuery.isFetching && { opacity: 0.6 }]}
+              onPress={() => diagnosticsQuery.refetch()}
+              disabled={diagnosticsQuery.isFetching}
+            >
+              {diagnosticsQuery.isFetching ? (
+                <ActivityIndicator color="#1e3a8a" size="small" />
+              ) : (
+                <Text style={styles.secondaryButtonText}>Run diagnostics</Text>
+              )}
+            </TouchableOpacity>
           </View>
+
+          {diagnosticsQuery.data && (
+            <View style={styles.diagnosticsContainer}>
+              <View style={styles.diagnosticsRow}>
+                <Text style={styles.diagnosticsLabel}>Service role access</Text>
+                <Text style={[styles.diagnosticsValue, diagnosticsQuery.data.hasServiceRoleAccess ? styles.positiveText : styles.warningText]}>
+                  {diagnosticsQuery.data.hasServiceRoleAccess ? 'Available' : 'Missing'}
+                </Text>
+              </View>
+              {diagnosticsQuery.data.tableSummaries.map((summary) => (
+                <View key={summary.table} style={styles.diagnosticsRow}>
+                  <Text style={styles.diagnosticsLabel}>{summary.table}</Text>
+                  <Text style={styles.diagnosticsValue}>
+                    {summary.rowCount >= 0 ? summary.rowCount : 'Error'}
+                  </Text>
+                </View>
+              ))}
+              {diagnosticsQuery.data.authUserCount !== null && (
+                <View style={styles.diagnosticsRow}>
+                  <Text style={styles.diagnosticsLabel}>Auth users</Text>
+                  <Text style={styles.diagnosticsValue}>
+                    {diagnosticsQuery.data.authUserCount >= 0 ? diagnosticsQuery.data.authUserCount : 'Error'}
+                  </Text>
+                </View>
+              )}
+              <Text style={styles.diagnosticsTimestamp}>{new Date(diagnosticsQuery.data.timestamp).toLocaleString()}</Text>
+            </View>
+          )}
 
           {usersQuery.isLoading ? (
             <View style={styles.loadingRow}><ActivityIndicator color="#1e3a8a" /></View>
@@ -907,10 +961,18 @@ const styles = StyleSheet.create({
   primaryButton: { backgroundColor: '#1e3a8a', paddingVertical: 12, borderRadius: 10, alignItems: 'center', marginTop: 12 },
   primaryButtonText: { color: 'white', fontWeight: '700' },
   secondaryButton: { backgroundColor: 'white', borderWidth: 1, borderColor: '#1e3a8a', paddingVertical: 10, borderRadius: 10, alignItems: 'center', marginTop: 12 },
+  secondaryButtonCompact: { marginLeft: 'auto', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#1e3a8a', backgroundColor: '#fff' },
   secondaryButtonText: { color: '#1e3a8a', fontWeight: '700' },
   buttonContent: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   loadingRow: { paddingVertical: 16, alignItems: 'center' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  diagnosticsContainer: { backgroundColor: '#f8fafc', borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0', padding: 12, marginBottom: 12, gap: 8 },
+  diagnosticsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  diagnosticsLabel: { color: '#475569', fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.8 },
+  diagnosticsValue: { color: '#0f172a', fontSize: 14, fontWeight: '700' },
+  diagnosticsTimestamp: { color: '#94a3b8', fontSize: 11, textAlign: 'right' },
+  positiveText: { color: '#15803d' },
+  warningText: { color: '#b91c1c' },
   deniedText: { marginTop: 8, color: '#ef4444', fontWeight: '600' },
   helpText: { marginTop: 8, color: '#64748b', fontSize: 12 },
   textArea: { height: 100, textAlignVertical: 'top' },
