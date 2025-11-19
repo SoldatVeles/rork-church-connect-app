@@ -1,10 +1,22 @@
 import { publicProcedure } from "../../../create-context";
 
+type ProfileRow = {
+  id: string;
+  email: string;
+  full_name: string | null;
+  display_name: string | null;
+  role: string;
+  is_blocked: boolean | null;
+  created_at: string;
+  phone: string | null;
+};
+
 export const getAllUsersProcedure = publicProcedure.query(async ({ ctx }) => {
   const { supabase, supabaseAdmin, hasServiceRoleAccess } = ctx;
 
   console.log("[getAllUsersProcedure] Starting to fetch all users...", {
     hasServiceRoleAccess,
+    timestamp: new Date().toISOString(),
   });
 
   const client = hasServiceRoleAccess ? supabaseAdmin : supabase;
@@ -15,6 +27,8 @@ export const getAllUsersProcedure = publicProcedure.query(async ({ ctx }) => {
     );
   }
 
+  console.log("[getAllUsersProcedure] Querying profiles table...");
+
   const { data: profilesData, error: profilesError } = await client
     .from("profiles")
     .select(
@@ -23,16 +37,27 @@ export const getAllUsersProcedure = publicProcedure.query(async ({ ctx }) => {
     .order("created_at", { ascending: false });
 
   if (profilesError) {
-    console.error("[getAllUsersProcedure] Error fetching profiles:", profilesError);
-    throw new Error(profilesError.message);
+    console.error("[getAllUsersProcedure] Error fetching profiles:", {
+      message: profilesError.message,
+      details: profilesError.details,
+      hint: profilesError.hint,
+      code: profilesError.code,
+    });
+    throw new Error(`Failed to fetch profiles: ${profilesError.message}`);
   }
+
+  console.log("[getAllUsersProcedure] Raw profiles data received:", {
+    count: profilesData?.length || 0,
+    hasData: Boolean(profilesData),
+    firstProfile: profilesData?.[0] || null,
+  });
 
   if (!profilesData || profilesData.length === 0) {
     console.warn("[getAllUsersProcedure] No profiles found in database");
     return [];
   }
 
-  const mappedUsers = profilesData
+  const mappedUsers = (profilesData as ProfileRow[])
     .filter((profile) => Boolean(profile.email))
     .map((profile) => {
       const fullName =
