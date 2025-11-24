@@ -1,7 +1,7 @@
 import createContextHook from '@nkzw/create-context-hook';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { AuthState, User as AppUser, UserRole } from '@/types/user';
 import { supabase } from '@/lib/supabase';
@@ -129,6 +129,27 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         console.error('Login error:', error);
+        console.error('Error code:', error.status);
+        console.error('Error name:', error.name);
+        
+        if (error.message.includes('Invalid login credentials')) {
+          const { data: userData, error: userError } = await supabase
+            .from('profiles')
+            .select('email')
+            .eq('email', email)
+            .single();
+          
+          if (userError || !userData) {
+            throw new Error('No account found with this email. Please register first.');
+          } else {
+            throw new Error('Invalid password. Please check your password and try again.');
+          }
+        }
+        
+        if (error.message.includes('Email not confirmed')) {
+          throw new Error('Please verify your email before signing in. Check your inbox for the confirmation link.');
+        }
+        
         throw new Error(error.message);
       }
       console.log('Login successful, session:', data.session);
