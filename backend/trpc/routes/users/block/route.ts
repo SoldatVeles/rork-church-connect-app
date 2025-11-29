@@ -20,8 +20,8 @@ export const blockUserProcedure = publicProcedure
       );
     }
 
-    const { error } = await supabaseAdmin
-      .from("profiles")
+    const { error } = await (supabaseAdmin
+      .from("profiles") as any)
       .update({ is_blocked: input.isBlocked })
       .eq("id", input.userId);
 

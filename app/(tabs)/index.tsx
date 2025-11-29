@@ -265,25 +265,7 @@ export default function HomeScreen() {
     },
   });
 
-  const notificationsQuery = useQuery({
-    queryKey: ['notifications'],
-    queryFn: async () => {
-      // For now, return empty array as notifications table doesn't exist yet
-      return [];
-    },
-    refetchInterval: 30000, // Refetch every 30 seconds
-  });
-
   const totalEventsCount = eventsQuery.data?.length ?? 0;
-  
-  const upcomingEventsCount = useMemo(() => {
-    const events = eventsQuery.data ?? [];
-    const now = new Date();
-    return events.filter((e) => {
-      const d = new Date(e.start_at);
-      return d >= now;
-    }).length;
-  }, [eventsQuery.data]);
 
   const activeRequestsCount = prayersActiveQuery.data?.length ?? 0;
   const membersCount = usersQuery.data?.length ?? 0;
@@ -317,14 +299,14 @@ export default function HomeScreen() {
       title: 'Latest Sermon',
       subtitle: 'The Power of Faith',
       color: '#10b981',
-      onPress: () => router.push('/(tabs)/sermon'),
+      onPress: () => router.push('/manage-sermons'),
     },
     {
       icon: Users,
       title: 'Community',
       subtitle: `${membersCount} ${membersCount === 1 ? 'member' : 'members'}`,
       color: '#f59e0b',
-      onPress: () => router.push('/(tabs)/community'),
+      onPress: () => router.push('/community'),
     },
   ], [totalEventsCount, activeRequestsCount, membersCount]);
 

@@ -1,7 +1,7 @@
 import { FetchCreateContextFnOptions } from "@trpc/server/adapters/fetch";
 import { initTRPC } from "@trpc/server";
 import superjson from "superjson";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/supabase-config";
 
@@ -42,7 +42,7 @@ export const createContext = async (opts: FetchCreateContextFnOptions) => {
     supabaseServiceRoleKey && supabaseServiceRoleKey.length > 0,
   );
 
-  const supabaseAdmin: SupabaseClient<Database> = hasServiceRoleAccess
+  const supabaseAdmin = hasServiceRoleAccess && supabaseServiceRoleKey
     ? createClient<Database>(supabaseUrl, supabaseServiceRoleKey)
     : supabase;
 

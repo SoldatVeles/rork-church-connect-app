@@ -65,7 +65,7 @@ export const createUserProcedure = publicProcedure
             phone: input.phone ?? null,
             role: input.role,
             is_blocked: false,
-          },
+          } as any,
           { onConflict: "id" }
         )
         .select(
@@ -81,21 +81,22 @@ export const createUserProcedure = publicProcedure
         throw new Error(fallbackUpsertError.message ?? "Unable to persist user profile");
       }
 
+      const profile = profileData as any;
       console.log("[createUserProcedure] User created via signUp fallback", {
-        id: profileData.id,
+        id: profile.id,
       });
 
       const fallbackNameParts = displayName.split(/\s+/);
 
       return {
-        id: profileData.id,
-        email: profileData.email,
+        id: profile.id,
+        email: profile.email,
         firstName: fallbackNameParts[0] ?? "",
         lastName: fallbackNameParts.slice(1).join(" "),
-        role: profileData.role,
-        isBlocked: profileData.is_blocked ?? false,
-        createdAt: profileData.created_at,
-        phone: profileData.phone,
+        role: profile.role,
+        isBlocked: profile.is_blocked ?? false,
+        createdAt: profile.created_at,
+        phone: profile.phone,
         requiresEmailConfirmation: !signUpData.session,
       };
     }
@@ -141,7 +142,7 @@ export const createUserProcedure = publicProcedure
           phone: input.phone ?? null,
           role: input.role,
           is_blocked: false,
-        },
+        } as any,
         { onConflict: "id" }
       )
       .select(
@@ -155,21 +156,22 @@ export const createUserProcedure = publicProcedure
       throw new Error(upsertError.message);
     }
 
+    const profile = profileData as any;
     console.log("[createUserProcedure] User created successfully", {
-      id: profileData?.id,
+      id: profile?.id,
     });
 
     const nameParts = displayName.split(/\s+/);
 
     return {
-      id: profileData.id,
-      email: profileData.email,
+      id: profile.id,
+      email: profile.email,
       firstName: nameParts[0] ?? "",
       lastName: nameParts.slice(1).join(" "),
-      role: profileData.role,
-      isBlocked: profileData.is_blocked ?? false,
-      createdAt: profileData.created_at,
-      phone: profileData.phone,
+      role: profile.role,
+      isBlocked: profile.is_blocked ?? false,
+      createdAt: profile.created_at,
+      phone: profile.phone,
       requiresEmailConfirmation: false,
     };
   });

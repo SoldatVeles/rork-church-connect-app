@@ -22,8 +22,8 @@ export const updateUserRoleProcedure = publicProcedure
 
     console.log("[updateUserRoleProcedure] Updating user role:", input);
 
-    const { error } = await supabaseAdmin
-      .from("profiles")
+    const { error } = await (supabaseAdmin
+      .from("profiles") as any)
       .update({ role: input.role })
       .eq("id", input.userId);
 

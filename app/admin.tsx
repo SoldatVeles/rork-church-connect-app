@@ -28,28 +28,40 @@ export default function AdminScreen() {
   const usersQuery = trpc.users.getAll.useQuery(undefined, {
     refetchOnMount: true,
     refetchOnWindowFocus: false,
-    onSuccess: (data) => {
-      console.log('[Admin] Users query success, received users:', data?.length || 0);
-      console.log('[Admin] Users data:', JSON.stringify(data, null, 2));
-    },
-    onError: (error) => {
-      console.error('[Admin] Users query error:', error);
-    },
   });
+
+  React.useEffect(() => {
+    if (usersQuery.data) {
+      console.log('[Admin] Users query success, received users:', usersQuery.data.length);
+      console.log('[Admin] Users data:', JSON.stringify(usersQuery.data, null, 2));
+    }
+  }, [usersQuery.data]);
+
+  React.useEffect(() => {
+    if (usersQuery.error) {
+      console.error('[Admin] Users query error:', usersQuery.error);
+    }
+  }, [usersQuery.error]);
 
   const diagnosticsQuery = trpc.users.diagnostics.useQuery(undefined, {
     enabled: false,
     refetchOnReconnect: false,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
-    onSuccess: (data) => {
-      console.log('[Admin] Diagnostics result', data);
-    },
-    onError: (error) => {
-      console.error('[Admin] Diagnostics failed', error);
-      Alert.alert('Diagnostics failed', error.message ?? 'Unable to run diagnostics');
-    },
   });
+
+  React.useEffect(() => {
+    if (diagnosticsQuery.data) {
+      console.log('[Admin] Diagnostics result', diagnosticsQuery.data);
+    }
+  }, [diagnosticsQuery.data]);
+
+  React.useEffect(() => {
+    if (diagnosticsQuery.error) {
+      console.error('[Admin] Diagnostics failed', diagnosticsQuery.error);
+      Alert.alert('Diagnostics failed', diagnosticsQuery.error.message ?? 'Unable to run diagnostics');
+    }
+  }, [diagnosticsQuery.error]);
 
   console.log('[Admin] Users query state:', {
     isLoading: usersQuery.isLoading,
@@ -79,7 +91,7 @@ export default function AdminScreen() {
   const createUserMutation = trpc.users.create.useMutation({
     onSuccess: (createdUser) => {
       console.log('[Admin] User created successfully', createdUser);
-      queryClient.invalidateQueries({ queryKey: trpc.users.getAll.getQueryKey() });
+      queryClient.invalidateQueries({ queryKey: ['users', 'getAll'] });
       usersQuery.refetch();
       setNewUser({ firstName: '', lastName: '', email: '', phone: '', password: '', role: 'member' });
       const requiresEmailConfirmation = Boolean(createdUser?.requiresEmailConfirmation);
