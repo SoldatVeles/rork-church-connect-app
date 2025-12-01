@@ -22,9 +22,20 @@ import {
 } from 'react-native';
 import { useAuth } from '@/providers/auth-provider';
 import { router } from 'expo-router';
+import { trpc } from '@/lib/trpc';
 
 export default function ProfileScreen() {
   const { user, logout, isLogoutLoading } = useAuth();
+
+  const { data: userStats, isLoading: isStatsLoading } = trpc.users.getStats.useQuery(
+    { userId: user?.id ?? '' },
+    { enabled: !!user?.id && user?.role !== 'admin' }
+  );
+
+  const { data: totalCount, isLoading: isTotalCountLoading } = trpc.users.getTotalCount.useQuery(
+    undefined,
+    { enabled: user?.role === 'admin' }
+  );
 
   const handleLogout = () => {
     console.log('handleLogout called');
@@ -45,10 +56,29 @@ export default function ProfileScreen() {
     );
   };
 
+  const isAdmin = user?.role === 'admin';
+
   const profileStats = [
-    { label: 'Events Attended', value: '12', icon: Calendar, color: '#3b82f6' },
-    { label: 'Prayers Shared', value: '8', icon: Heart, color: '#ef4444' },
-    { label: 'Community Points', value: '156', icon: Users, color: '#10b981' },
+    { 
+      label: 'Events Attended', 
+      value: isStatsLoading ? '...' : String(userStats?.eventsAttended ?? 0), 
+      icon: Calendar, 
+      color: '#3b82f6' 
+    },
+    { 
+      label: 'Prayers Shared', 
+      value: isStatsLoading ? '...' : String(userStats?.prayersShared ?? 0), 
+      icon: Heart, 
+      color: '#ef4444' 
+    },
+    { 
+      label: isAdmin ? 'Total Users' : 'Church Members', 
+      value: isAdmin 
+        ? (isTotalCountLoading ? '...' : String(totalCount?.totalUsers ?? 0))
+        : (isStatsLoading ? '...' : String(userStats?.membersCount ?? 0)), 
+      icon: Users, 
+      color: '#10b981' 
+    },
   ];
 
   const menuItems = [

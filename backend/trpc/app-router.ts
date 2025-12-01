@@ -10,6 +10,8 @@ import blockUserProcedure from "./routes/users/block/route";
 import updateUserRoleProcedure from "./routes/users/update-role/route";
 import createUserProcedure from "./routes/users/create/route";
 import getUserDiagnosticsProcedure from "./routes/users/diagnostics/route";
+import getUserStatsProcedure from "./routes/users/get-stats/route";
+import getTotalCountProcedure from "./routes/users/get-total-count/route";
 
 export const appRouter = createTRPCRouter({
   example: createTRPCRouter({
@@ -28,6 +30,8 @@ export const appRouter = createTRPCRouter({
     block: blockUserProcedure,
     updateRole: updateUserRoleProcedure,
     diagnostics: getUserDiagnosticsProcedure,
+    getStats: getUserStatsProcedure,
+    getTotalCount: getTotalCountProcedure,
   }),
 });
 
