@@ -1,5 +1,5 @@
-import { publicProcedure } from "../../create-context";
-import type { Context } from "../../create-context";
+import { publicProcedure } from "../../../create-context";
+import type { Context } from "../../../create-context";
 
 export default publicProcedure.query(async ({ ctx }: { ctx: Context }) => {
   const { count, error } = await ctx.supabase

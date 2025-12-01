@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { publicProcedure } from "../../create-context";
-import type { Context } from "../../create-context";
+import { publicProcedure } from "../../../create-context";
+import type { Context } from "../../../create-context";
 
 export default publicProcedure
   .input(z.object({
