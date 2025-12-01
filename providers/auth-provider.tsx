@@ -133,17 +133,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         console.error('Error name:', error.name);
         
         if (error.message.includes('Invalid login credentials')) {
-          const { data: userData, error: userError } = await supabase
-            .from('profiles')
-            .select('email')
-            .eq('email', email)
-            .single();
-          
-          if (userError || !userData) {
-            throw new Error('No account found with this email. Please register first.');
-          } else {
-            throw new Error('Invalid password. Please check your password and try again.');
-          }
+          throw new Error('Invalid email or password. Please check your credentials and try again.');
         }
         
         if (error.message.includes('Email not confirmed')) {
