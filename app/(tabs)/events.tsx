@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { Calendar, MapPin, Users, Plus, Clock, AlertCircle, X } from 'lucide-react-native';
+import { Calendar, MapPin, Users, Plus, Clock, AlertCircle, X, CalendarPlus } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   StyleSheet,
@@ -20,6 +20,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '@/providers/auth-provider';
 import type { Event, EventType } from '@/types/event';
 import { supabase } from '@/lib/supabase';
+import { addEventToCalendar } from '@/utils/calendar-sync';
 import type { Database } from '@/lib/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -773,6 +774,15 @@ export default function EventsScreen() {
                       </View>
                     </View>
 
+                    <TouchableOpacity
+                      testID={`add-to-calendar-button-${activeEvent.id}`}
+                      style={styles.calendarSyncButton}
+                      onPress={() => addEventToCalendar(activeEvent)}
+                    >
+                      <CalendarPlus size={18} color="#1e3a8a" />
+                      <Text style={styles.calendarSyncButtonText}>Add to Calendar</Text>
+                    </TouchableOpacity>
+
                     {activeEvent.isRegistrationOpen ? (
                       <TouchableOpacity
                         testID={`details-register-button-${activeEvent.id}`}
@@ -1384,6 +1394,22 @@ const styles = StyleSheet.create({
   detailsInfoSubValue: {
     fontSize: 13,
     color: '#cbd5f5',
+  },
+  calendarSyncButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#eff6ff',
+    borderRadius: 12,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  calendarSyncButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1e3a8a',
   },
   detailsRegisterButton: {
     backgroundColor: '#1e3a8a',

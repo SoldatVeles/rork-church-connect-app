@@ -5,6 +5,7 @@ import React, { useEffect } from "react";
 import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AuthProvider, useAuth } from "@/providers/auth-provider";
+import { OfflineProvider } from "@/providers/offline-provider";
 import LoadingScreen from "@/components/LoadingScreen";
 import { trpc, trpcClient } from "@/lib/trpc";
 
@@ -43,6 +44,8 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ presentation: "modal" }} />
+      <Stack.Screen name="groups" options={{ headerShown: false }} />
+      <Stack.Screen name="group-chat" options={{ headerShown: false }} />
     </Stack>
   );
 }
@@ -56,9 +59,11 @@ export default function RootLayout() {
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <GestureHandlerRootView style={styles.container}>
-            <RootLayoutNav />
-          </GestureHandlerRootView>
+          <OfflineProvider>
+            <GestureHandlerRootView style={styles.container}>
+              <RootLayoutNav />
+            </GestureHandlerRootView>
+          </OfflineProvider>
         </AuthProvider>
       </QueryClientProvider>
     </trpc.Provider>

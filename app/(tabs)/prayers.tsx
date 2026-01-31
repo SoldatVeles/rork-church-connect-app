@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { Heart, Plus, Clock, User, AlertCircle, CheckCircle } from 'lucide-react-native';
+import { Heart, Plus, Clock, User, AlertCircle, CheckCircle, MessageSquarePlus, ChevronDown, ChevronUp, Sparkles } from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
 import {
   StyleSheet,
@@ -15,7 +15,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useAuth } from '@/providers/auth-provider';
-import type { PrayerRequest, PrayerStatus } from '@/types/prayer';
+import type { PrayerRequest, PrayerStatus, PrayerUpdate } from '@/types/prayer';
 import { supabase } from '@/lib/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -29,6 +29,11 @@ export default function PrayersScreen() {
     isAnonymous: false,
     isUrgent: false,
   });
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [selectedPrayerForUpdate, setSelectedPrayerForUpdate] = useState<PrayerRequest | null>(null);
+  const [updateContent, setUpdateContent] = useState('');
+  const [isAnsweredUpdate, setIsAnsweredUpdate] = useState(false);
+  const [expandedPrayers, setExpandedPrayers] = useState<Set<string>>(new Set());
 
   const queryClient = useQueryClient();
   
@@ -74,17 +79,59 @@ export default function PrayersScreen() {
     },
   });
 
+  const updatesQuery = useQuery({
+    queryKey: ['prayer_updates'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('prayer_updates')
+        .select(`
+          id,
+          prayer_id,
+          content,
+          is_answered_update,
+          created_by,
+          created_at,
+          profiles!prayer_updates_created_by_fkey(full_name)
+        `)
+        .order('created_at', { ascending: true });
+      if (error) {
+        console.warn('[Prayers] prayer_updates table not available:', error.message);
+        return [] as PrayerUpdate[];
+      }
+      return (data || []).map((u: any) => ({
+        id: u.id,
+        prayerId: u.prayer_id,
+        content: u.content,
+        isAnsweredUpdate: u.is_answered_update || false,
+        createdBy: u.created_by,
+        createdByName: u.profiles?.full_name || 'Anonymous',
+        createdAt: new Date(u.created_at),
+      })) as PrayerUpdate[];
+    },
+  });
+
   const mergedPrayers: PrayerRequest[] = useMemo(() => {
     const base = allPrayersQuery.data ?? [];
     const praying = prayingQuery.data ?? [];
-    const map = new Map<string, string[]>();
+    const updates = updatesQuery.data ?? [];
+    const prayMap = new Map<string, string[]>();
     for (const row of praying) {
-      const list = map.get(row.prayer_id) ?? [];
+      const list = prayMap.get(row.prayer_id) ?? [];
       list.push(row.user_id);
-      map.set(row.prayer_id, list);
+      prayMap.set(row.prayer_id, list);
     }
-    return base.map(p => ({ ...p, prayedBy: map.get(p.id) ?? [] }));
-  }, [allPrayersQuery.data, prayingQuery.data]);
+    const updateMap = new Map<string, PrayerUpdate[]>();
+    for (const upd of updates) {
+      const list = updateMap.get(upd.prayerId) ?? [];
+      list.push(upd);
+      updateMap.set(upd.prayerId, list);
+    }
+    return base.map(p => ({
+      ...p,
+      prayedBy: prayMap.get(p.id) ?? [],
+      updates: updateMap.get(p.id) ?? [],
+    }));
+  }, [allPrayersQuery.data, prayingQuery.data, updatesQuery.data]);
   
   const createPrayerMutation = useMutation({
     mutationFn: async (prayerData: {
@@ -147,6 +194,7 @@ export default function PrayersScreen() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['prayers'] });
+      queryClient.invalidateQueries({ queryKey: ['prayer_updates'] });
       Alert.alert('Success', 'Prayer status updated');
     },
     onError: (error: Error) => {
@@ -154,6 +202,83 @@ export default function PrayersScreen() {
       Alert.alert('Error', error.message || 'Failed to update prayer status');
     },
   });
+
+  const createUpdateMutation = useMutation({
+    mutationFn: async (data: {
+      prayerId: string;
+      content: string;
+      isAnsweredUpdate: boolean;
+      createdBy: string;
+    }) => {
+      const { error } = await supabase.from('prayer_updates').insert({
+        prayer_id: data.prayerId,
+        content: data.content,
+        is_answered_update: data.isAnsweredUpdate,
+        created_by: data.createdBy,
+      });
+      if (error) {
+        if (error.message.includes('relation') && error.message.includes('does not exist')) {
+          throw new Error('Prayer updates table not configured. Please run the database setup SQL.');
+        }
+        throw new Error(error.message);
+      }
+      if (data.isAnsweredUpdate) {
+        await supabase
+          .from('prayers')
+          .update({ is_answered: true, updated_at: new Date().toISOString() })
+          .eq('id', data.prayerId);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['prayers'] });
+      queryClient.invalidateQueries({ queryKey: ['prayer_updates'] });
+      setShowUpdateModal(false);
+      setSelectedPrayerForUpdate(null);
+      setUpdateContent('');
+      setIsAnsweredUpdate(false);
+      Alert.alert('Success', 'Your update has been posted');
+    },
+    onError: (error: Error) => {
+      console.error('[Prayers] Error creating update:', error);
+      Alert.alert('Error', error.message || 'Failed to post update');
+    },
+  });
+
+  const togglePrayerExpanded = (prayerId: string) => {
+    setExpandedPrayers(prev => {
+      const next = new Set(prev);
+      if (next.has(prayerId)) {
+        next.delete(prayerId);
+      } else {
+        next.add(prayerId);
+      }
+      return next;
+    });
+  };
+
+  const handleOpenUpdateModal = (prayer: PrayerRequest) => {
+    setSelectedPrayerForUpdate(prayer);
+    setUpdateContent('');
+    setIsAnsweredUpdate(false);
+    setShowUpdateModal(true);
+  };
+
+  const handleSubmitUpdate = () => {
+    if (!updateContent.trim()) {
+      Alert.alert('Error', 'Please enter an update message');
+      return;
+    }
+    if (!user?.id || !selectedPrayerForUpdate) {
+      Alert.alert('Error', 'Unable to submit update');
+      return;
+    }
+    createUpdateMutation.mutate({
+      prayerId: selectedPrayerForUpdate.id,
+      content: updateContent.trim(),
+      isAnsweredUpdate,
+      createdBy: user.id,
+    });
+  };
 
   const allPrayers = mergedPrayers || [];
   
@@ -510,6 +635,53 @@ export default function PrayersScreen() {
               </TouchableOpacity>
               </View>
             </View>
+
+            {/* Updates Section */}
+            {((prayer.updates && prayer.updates.length > 0) || canUpdateStatus(prayer)) && (
+              <View style={styles.updatesSection}>
+                {prayer.updates && prayer.updates.length > 0 && (
+                  <TouchableOpacity
+                    style={styles.updatesToggle}
+                    onPress={() => togglePrayerExpanded(prayer.id)}
+                  >
+                    <MessageSquarePlus size={14} color="#1e3a8a" />
+                    <Text style={styles.updatesToggleText}>
+                      {prayer.updates.length} update{prayer.updates.length !== 1 ? 's' : ''}
+                    </Text>
+                    {expandedPrayers.has(prayer.id) ? (
+                      <ChevronUp size={16} color="#64748b" />
+                    ) : (
+                      <ChevronDown size={16} color="#64748b" />
+                    )}
+                  </TouchableOpacity>
+                )}
+
+                {expandedPrayers.has(prayer.id) && prayer.updates && prayer.updates.map((upd) => (
+                  <View key={upd.id} style={styles.updateItem}>
+                    {upd.isAnsweredUpdate && (
+                      <View style={styles.answeredUpdateBadge}>
+                        <Sparkles size={12} color="#16a34a" />
+                        <Text style={styles.answeredUpdateBadgeText}>Prayer Answered!</Text>
+                      </View>
+                    )}
+                    <Text style={styles.updateContent}>{upd.content}</Text>
+                    <Text style={styles.updateMeta}>
+                      {upd.createdByName} • {formatDate(upd.createdAt)}
+                    </Text>
+                  </View>
+                ))}
+
+                {canUpdateStatus(prayer) && (
+                  <TouchableOpacity
+                    style={styles.addUpdateButton}
+                    onPress={() => handleOpenUpdateModal(prayer)}
+                  >
+                    <Plus size={14} color="#1e3a8a" />
+                    <Text style={styles.addUpdateButtonText}>Post Update</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
           </View>
           ))
         )}
@@ -600,6 +772,71 @@ export default function PrayersScreen() {
                   trackColor={{ false: '#e2e8f0', true: '#ef4444' }}
                   thumbColor={newPrayer.isUrgent ? 'white' : '#f4f4f5'}
                   testID="prayer-urgent-switch"
+                />
+              </View>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Update Modal */}
+      <Modal
+        visible={showUpdateModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowUpdateModal(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowUpdateModal(false)}>
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Post Update</Text>
+            <TouchableOpacity
+              onPress={handleSubmitUpdate}
+              disabled={createUpdateMutation.isPending}
+            >
+              <Text style={[
+                styles.modalSubmitText,
+                createUpdateMutation.isPending && styles.modalSubmitTextDisabled
+              ]}>
+                {createUpdateMutation.isPending ? 'Posting...' : 'Post'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            {selectedPrayerForUpdate && (
+              <View style={styles.updatePrayerContext}>
+                <Text style={styles.updatePrayerContextLabel}>Updating:</Text>
+                <Text style={styles.updatePrayerContextTitle}>{selectedPrayerForUpdate.title}</Text>
+              </View>
+            )}
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Your Update</Text>
+              <TextInput
+                style={[styles.textInput, styles.textArea]}
+                placeholder="Share an update, testimony, or how God is working..."
+                value={updateContent}
+                onChangeText={setUpdateContent}
+                multiline
+                numberOfLines={6}
+                textAlignVertical="top"
+              />
+            </View>
+
+            <View style={styles.switchGroup}>
+              <View style={styles.switchRow}>
+                <View>
+                  <Text style={styles.switchLabel}>Mark as Answered Prayer</Text>
+                  <Text style={styles.switchDescription}>Share your testimony of answered prayer</Text>
+                </View>
+                <Switch
+                  value={isAnsweredUpdate}
+                  onValueChange={setIsAnsweredUpdate}
+                  trackColor={{ false: '#e2e8f0', true: '#16a34a' }}
+                  thumbColor={isAnsweredUpdate ? 'white' : '#f4f4f5'}
                 />
               </View>
             </View>
@@ -906,5 +1143,94 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: 'white',
+  },
+  updatesSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  updatesToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+  },
+  updatesToggleText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1e3a8a',
+    flex: 1,
+  },
+  updateItem: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: '#3b82f6',
+  },
+  answeredUpdateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  answeredUpdateBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#16a34a',
+  },
+  updateContent: {
+    fontSize: 14,
+    color: '#374151',
+    lineHeight: 20,
+  },
+  updateMeta: {
+    fontSize: 11,
+    color: '#94a3b8',
+    marginTop: 8,
+  },
+  addUpdateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 12,
+    paddingVertical: 10,
+    backgroundColor: '#eff6ff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  addUpdateButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1e3a8a',
+  },
+  updatePrayerContext: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 20,
+    borderLeftWidth: 3,
+    borderLeftColor: '#ef4444',
+  },
+  updatePrayerContextLabel: {
+    fontSize: 11,
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  updatePrayerContextTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1e293b',
   },
 });
