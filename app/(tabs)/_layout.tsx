@@ -1,10 +1,10 @@
 import { Tabs, Redirect } from 'expo-router';
-import { Home, Calendar, Heart, User } from 'lucide-react-native';
+import { Home, Calendar, Heart, User, Shield } from 'lucide-react-native';
 import React from 'react';
 import { useAuth } from '@/providers/auth-provider';
 
 export default function TabLayout() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, isAdmin } = useAuth();
 
   if (!isLoading && !isAuthenticated) {
     return <Redirect href="/(auth)/login" />;
@@ -57,6 +57,14 @@ export default function TabLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="admin"
+        options={{
+          title: 'Admin',
+          tabBarIcon: ({ color, size }) => <Shield size={size} color={color} />,
+          href: isAdmin() ? '/(tabs)/admin' : null,
         }}
       />
     </Tabs>
