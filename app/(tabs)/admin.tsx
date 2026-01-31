@@ -117,14 +117,27 @@ export default function AdminTabScreen() {
   
   const createGroupMutation = useMutation({
     mutationFn: async (data: { name: string }) => {
-      const { error } = await supabase
+      if (!user?.id) {
+        throw new Error('You must be logged in to create a group');
+      }
+      
+      console.log('[Admin] Creating group:', data.name, 'by user:', user.id);
+      
+      const { data: insertedData, error } = await supabase
         .from('groups')
         .insert({
           name: data.name,
-          created_by: user?.id || '',
-        });
+          created_by: user.id,
+        })
+        .select();
       
-      if (error) throw new Error(error.message);
+      if (error) {
+        console.error('[Admin] Group creation error:', error);
+        throw new Error(error.message);
+      }
+      
+      console.log('[Admin] Group created successfully:', insertedData);
+      return insertedData;
     },
     onSuccess: () => {
       Alert.alert('Success', 'Church group created');
