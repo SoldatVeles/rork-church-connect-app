@@ -19,12 +19,13 @@ const resolveServiceRoleKey = () => {
   return candidates.find((key): key is string => Boolean(key && key.length > 0));
 };
 
-const supabaseServiceRoleKey = resolveServiceRoleKey();
-
 export const createContext = async (opts: FetchCreateContextFnOptions) => {
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error("Supabase credentials not configured");
   }
+
+  const supabaseServiceRoleKey = resolveServiceRoleKey();
+  console.log('[createContext] Service role key available:', Boolean(supabaseServiceRoleKey));
 
   const authHeader = opts.req.headers.get("authorization") ?? undefined;
 
