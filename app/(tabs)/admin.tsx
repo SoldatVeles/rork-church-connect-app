@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, Platform, Switch } from 'react-native';
 import { Stack } from 'expo-router';
-import { Users, Shield, Plus, Check, UserPlus, Church, BookOpen, Youtube, Edit, Trash2, Ban, RefreshCw } from 'lucide-react-native';
+import { Users, Shield, Plus, Check, UserPlus, Church, BookOpen, Youtube, Edit, Trash2, Ban, RefreshCw, ChevronDown, ChevronUp, X } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -52,6 +52,7 @@ export default function AdminTabScreen() {
   const [newUser, setNewUser] = useState({ firstName: '', lastName: '', email: '', phone: '', password: '', role: 'member' as Role });
   const [groupName, setGroupName] = useState('');
   const [selectedGroupForAdding, setSelectedGroupForAdding] = useState<string>('');
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   const [selectedUsersForGroup, setSelectedUsersForGroup] = useState<string[]>([]);
   
   const [editingSermon, setEditingSermon] = useState<Sermon | null>(null);
@@ -147,6 +148,98 @@ export default function AdminTabScreen() {
     onError: (e: Error) => Alert.alert('Error', e.message ?? 'Failed to create group'),
   });
   
+  const groupMembersQuery = useQuery<{ userId: string; firstName: string; lastName: string; email: string; role: string }[]>({
+    queryKey: ['group-members', expandedGroupId],
+    queryFn: async () => {
+      if (!expandedGroupId) return [];
+      const { data: memberLinks, error: linkError } = await supabase
+        .from('group_members')
+        .select('user_id')
+        .eq('group_id', expandedGroupId);
+      if (linkError) throw new Error(linkError.message);
+      if (!memberLinks || memberLinks.length === 0) return [];
+      const userIds = memberLinks.map((m: any) => m.user_id);
+      const { data: profiles, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, first_name, last_name, email, role')
+        .in('id', userIds);
+      if (profileError) throw new Error(profileError.message);
+      return (profiles || []).map((p: any) => ({
+        userId: p.id,
+        firstName: p.first_name || '',
+        lastName: p.last_name || '',
+        email: p.email || '',
+        role: p.role || 'member',
+      }));
+    },
+    enabled: !!expandedGroupId,
+  });
+
+  const removeMemberFromGroupMutation = useMutation({
+    mutationFn: async (data: { groupId: string; userId: string }) => {
+      const { error } = await supabase
+        .from('group_members')
+        .delete()
+        .eq('group_id', data.groupId)
+        .eq('user_id', data.userId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      Alert.alert('Success', 'Member removed from group');
+      queryClient.invalidateQueries({ queryKey: ['group-members', expandedGroupId] });
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
+    },
+    onError: (e: Error) => Alert.alert('Error', e.message),
+  });
+
+  const deleteGroupMutation = useMutation({
+    mutationFn: async (groupId: string) => {
+      const { error: membersError } = await supabase
+        .from('group_members')
+        .delete()
+        .eq('group_id', groupId);
+      if (membersError) console.warn('[Admin] Error deleting group members:', membersError.message);
+      const { error: messagesError } = await supabase
+        .from('group_messages')
+        .delete()
+        .eq('group_id', groupId);
+      if (messagesError) console.warn('[Admin] Error deleting group messages:', messagesError.message);
+      const { error } = await supabase
+        .from('groups')
+        .delete()
+        .eq('id', groupId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      Alert.alert('Success', 'Group deleted');
+      setExpandedGroupId(null);
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
+    },
+    onError: (e: Error) => Alert.alert('Error', e.message),
+  });
+
+  const handleDeleteGroup = (groupId: string, groupName: string) => {
+    Alert.alert(
+      'Delete Group',
+      `Are you sure you want to delete "${groupName}"? All members and messages will be removed.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => deleteGroupMutation.mutate(groupId) },
+      ]
+    );
+  };
+
+  const handleRemoveMemberFromGroup = (groupId: string, userId: string, name: string) => {
+    Alert.alert(
+      'Remove Member',
+      `Remove ${name} from this group?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: () => removeMemberFromGroupMutation.mutate({ groupId, userId }) },
+      ]
+    );
+  };
+
   const groupsQuery = useQuery<Group[]>({
     queryKey: ['groups'],
     queryFn: async (): Promise<Group[]> => {
@@ -758,31 +851,89 @@ export default function AdminTabScreen() {
           </View>
         ) : groupsQuery.data && groupsQuery.data.length > 0 ? (
           groupsQuery.data.map((group) => (
-            <TouchableOpacity
-              key={group.id}
-              style={[
+            <View key={group.id} style={styles.groupSection}>
+              <View style={[
                 styles.groupCard,
                 selectedGroupForAdding === group.id && styles.groupCardSelected,
-              ]}
-              onPress={() => {
-                setSelectedGroupForAdding(
-                  selectedGroupForAdding === group.id ? '' : group.id
-                );
-                setSelectedUsersForGroup([]);
-              }}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={styles.groupName}>{group.name}</Text>
-                <Text style={styles.groupMeta}>
-                  Created {new Date(group.created_at).toLocaleDateString()}
-                </Text>
+              ]}>
+                <TouchableOpacity
+                  style={{ flex: 1 }}
+                  onPress={() => {
+                    setSelectedGroupForAdding(
+                      selectedGroupForAdding === group.id ? '' : group.id
+                    );
+                    setSelectedUsersForGroup([]);
+                  }}
+                >
+                  <Text style={styles.groupName}>{group.name}</Text>
+                  <Text style={styles.groupMeta}>
+                    Created {new Date(group.created_at).toLocaleDateString()}
+                  </Text>
+                </TouchableOpacity>
+                <View style={styles.groupActions}>
+                  <TouchableOpacity
+                    style={styles.groupActionBtn}
+                    onPress={() => {
+                      const next = expandedGroupId === group.id ? null : group.id;
+                      setExpandedGroupId(next);
+                    }}
+                  >
+                    {expandedGroupId === group.id ? (
+                      <ChevronUp size={18} color="#1e3a8a" />
+                    ) : (
+                      <ChevronDown size={18} color="#64748b" />
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.groupActionBtn}
+                    onPress={() => handleDeleteGroup(group.id, group.name)}
+                    disabled={deleteGroupMutation.isPending}
+                  >
+                    <Trash2 size={16} color="#ef4444" />
+                  </TouchableOpacity>
+                  {selectedGroupForAdding === group.id && (
+                    <View style={styles.selectedBadge}>
+                      <Check size={14} color="#fff" />
+                    </View>
+                  )}
+                </View>
               </View>
-              {selectedGroupForAdding === group.id && (
-                <View style={styles.selectedBadge}>
-                  <Check size={14} color="#fff" />
+
+              {expandedGroupId === group.id && (
+                <View style={styles.membersPanel}>
+                  <Text style={styles.membersPanelTitle}>Group Members</Text>
+                  {groupMembersQuery.isLoading ? (
+                    <ActivityIndicator color="#1e3a8a" style={{ paddingVertical: 12 }} />
+                  ) : groupMembersQuery.data && groupMembersQuery.data.length > 0 ? (
+                    groupMembersQuery.data.map((member) => (
+                      <View key={member.userId} style={styles.memberRow}>
+                        <View style={styles.memberAvatar}>
+                          <Text style={styles.memberAvatarText}>
+                            {(member.firstName?.[0] || '').toUpperCase()}{(member.lastName?.[0] || '').toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.memberName}>{member.firstName} {member.lastName}</Text>
+                          <Text style={styles.memberEmail}>{member.email}</Text>
+                        </View>
+                        <View style={styles.memberRoleBadge}>
+                          <Text style={styles.memberRoleText}>{member.role}</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.removeMemberBtn}
+                          onPress={() => handleRemoveMemberFromGroup(group.id, member.userId, `${member.firstName} ${member.lastName}`)}
+                          disabled={removeMemberFromGroupMutation.isPending}
+                        >
+                          <X size={14} color="#ef4444" />
+                        </TouchableOpacity>
+                      </View>
+                    ))
+                  ) : (
+                    <Text style={styles.noMembersText}>No members in this group</Text>
+                  )}
                 </View>
               )}
-            </TouchableOpacity>
+            </View>
           ))
         ) : (
           <Text style={styles.emptyText}>No groups yet. Create your first one!</Text>
@@ -976,9 +1127,23 @@ const styles = StyleSheet.create({
   helpText: { color: '#64748b', fontSize: 13, marginBottom: 12 },
   groupCard: { backgroundColor: '#f8fafc', borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#e2e8f0', flexDirection: 'row' as const, alignItems: 'center' as const },
   groupCardSelected: { backgroundColor: '#eff6ff', borderColor: '#1e3a8a', borderWidth: 2 },
+  groupSection: { marginBottom: 10 },
   groupName: { fontSize: 15, fontWeight: '600' as const, color: '#1e293b', marginBottom: 4 },
   groupMeta: { fontSize: 12, color: '#64748b' },
+  groupActions: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
+  groupActionBtn: { width: 34, height: 34, justifyContent: 'center' as const, alignItems: 'center' as const, backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0' },
   selectedBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#1e3a8a', justifyContent: 'center' as const, alignItems: 'center' as const },
+  membersPanel: { backgroundColor: '#f0f4ff', borderRadius: 12, padding: 14, marginTop: -4, borderWidth: 1, borderColor: '#dbeafe' },
+  membersPanelTitle: { fontSize: 13, fontWeight: '700' as const, color: '#1e3a8a', marginBottom: 10, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
+  memberRow: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#dbeafe', gap: 10 },
+  memberAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#1e3a8a', justifyContent: 'center' as const, alignItems: 'center' as const },
+  memberAvatarText: { color: '#fff', fontSize: 13, fontWeight: '700' as const },
+  memberName: { fontSize: 14, fontWeight: '600' as const, color: '#1e293b' },
+  memberEmail: { fontSize: 12, color: '#64748b', marginTop: 1 },
+  memberRoleBadge: { backgroundColor: '#e0e7ff', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  memberRoleText: { fontSize: 11, fontWeight: '600' as const, color: '#3730a3', textTransform: 'capitalize' as const },
+  removeMemberBtn: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center' as const, alignItems: 'center' as const, backgroundColor: '#fee2e2' },
+  noMembersText: { color: '#64748b', fontSize: 13, textAlign: 'center' as const, paddingVertical: 16 },
   userSelectCard: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
   checkbox: { width: 26, height: 26, borderRadius: 8, borderWidth: 2, borderColor: '#cbd5e1', justifyContent: 'center' as const, alignItems: 'center' as const },
   checkboxChecked: { backgroundColor: '#1e3a8a', borderColor: '#1e3a8a' },
