@@ -1,6 +1,7 @@
 -- =====================================================
 -- DATABASE SETUP FOR NEW FEATURES
 -- Run this SQL in your Supabase SQL Editor
+-- Safe to re-run (uses DROP IF EXISTS before CREATE)
 -- =====================================================
 
 -- 1. CHURCHES TABLE (Multi-Church Support)
@@ -14,18 +15,13 @@ CREATE TABLE IF NOT EXISTS churches (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Add church_id to existing tables (optional - for data isolation)
--- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS church_id UUID REFERENCES churches(id);
--- ALTER TABLE events ADD COLUMN IF NOT EXISTS church_id UUID REFERENCES churches(id);
--- ALTER TABLE prayers ADD COLUMN IF NOT EXISTS church_id UUID REFERENCES churches(id);
--- ALTER TABLE groups ADD COLUMN IF NOT EXISTS church_id UUID REFERENCES churches(id);
-
--- RLS for churches
 ALTER TABLE churches ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Anyone can view churches" ON churches;
 CREATE POLICY "Anyone can view churches" ON churches
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Admins can manage churches" ON churches;
 CREATE POLICY "Admins can manage churches" ON churches
   FOR ALL USING (
     EXISTS (
@@ -36,7 +32,34 @@ CREATE POLICY "Admins can manage churches" ON churches
   );
 
 
--- 2. GROUP MESSAGES TABLE (Small Group Chat)
+-- 2. GROUP MEMBERS TABLE (must come before group_messages)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS group_members (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  group_id UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  joined_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(group_id, user_id)
+);
+
+ALTER TABLE group_members ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Anyone can view group members" ON group_members;
+CREATE POLICY "Anyone can view group members" ON group_members
+  FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins can manage group members" ON group_members;
+CREATE POLICY "Admins can manage group members" ON group_members
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM profiles 
+      WHERE profiles.id = auth.uid() 
+      AND profiles.role IN ('admin', 'pastor')
+    )
+  );
+
+
+-- 3. GROUP MESSAGES TABLE (Small Group Chat)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS group_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -46,13 +69,12 @@ CREATE TABLE IF NOT EXISTS group_messages (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Index for faster message retrieval
 CREATE INDEX IF NOT EXISTS idx_group_messages_group_id ON group_messages(group_id);
 CREATE INDEX IF NOT EXISTS idx_group_messages_created_at ON group_messages(created_at);
 
--- RLS for group messages
 ALTER TABLE group_messages ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Group members can view messages" ON group_messages;
 CREATE POLICY "Group members can view messages" ON group_messages
   FOR SELECT USING (
     EXISTS (
@@ -62,6 +84,7 @@ CREATE POLICY "Group members can view messages" ON group_messages
     )
   );
 
+DROP POLICY IF EXISTS "Group members can send messages" ON group_messages;
 CREATE POLICY "Group members can send messages" ON group_messages
   FOR INSERT WITH CHECK (
     EXISTS (
@@ -73,7 +96,7 @@ CREATE POLICY "Group members can send messages" ON group_messages
   );
 
 
--- 3. PRAYER UPDATES TABLE (Prayer Wall Updates)
+-- 4. PRAYER UPDATES TABLE (Prayer Wall Updates)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS prayer_updates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -84,15 +107,15 @@ CREATE TABLE IF NOT EXISTS prayer_updates (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Index for faster update retrieval
 CREATE INDEX IF NOT EXISTS idx_prayer_updates_prayer_id ON prayer_updates(prayer_id);
 
--- RLS for prayer updates
 ALTER TABLE prayer_updates ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Anyone can view prayer updates" ON prayer_updates;
 CREATE POLICY "Anyone can view prayer updates" ON prayer_updates
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Prayer requesters can add updates" ON prayer_updates;
 CREATE POLICY "Prayer requesters can add updates" ON prayer_updates
   FOR INSERT WITH CHECK (
     EXISTS (
@@ -103,7 +126,7 @@ CREATE POLICY "Prayer requesters can add updates" ON prayer_updates
     AND created_by = auth.uid()
   );
 
--- Admins and pastors can also add updates
+DROP POLICY IF EXISTS "Admins can add updates" ON prayer_updates;
 CREATE POLICY "Admins can add updates" ON prayer_updates
   FOR INSERT WITH CHECK (
     EXISTS (
@@ -115,23 +138,14 @@ CREATE POLICY "Admins can add updates" ON prayer_updates
   );
 
 
--- 4. GROUP MEMBERS TABLE (if not exists)
+-- 5. RLS POLICIES FOR GROUPS TABLE (if groups table exists)
 -- =====================================================
-CREATE TABLE IF NOT EXISTS group_members (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  group_id UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  joined_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(group_id, user_id)
-);
-
--- RLS for group members
-ALTER TABLE group_members ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Anyone can view group members" ON group_members
+DROP POLICY IF EXISTS "Anyone can view groups" ON groups;
+CREATE POLICY "Anyone can view groups" ON groups
   FOR SELECT USING (true);
 
-CREATE POLICY "Admins can manage group members" ON group_members
+DROP POLICY IF EXISTS "Admins can manage groups" ON groups;
+CREATE POLICY "Admins can manage groups" ON groups
   FOR ALL USING (
     EXISTS (
       SELECT 1 FROM profiles 
@@ -141,9 +155,8 @@ CREATE POLICY "Admins can manage group members" ON group_members
   );
 
 
--- 5. SAMPLE DATA (Optional)
+-- 6. SAMPLE DATA (Optional)
 -- =====================================================
--- Insert a default church if none exists
 INSERT INTO churches (name, address) 
 SELECT 'Default Church', 'Main Street, City'
 WHERE NOT EXISTS (SELECT 1 FROM churches LIMIT 1);
