@@ -180,16 +180,32 @@ export default function AdminTabScreen() {
       console.log('[Admin] Looking up profiles for user IDs:', userIds);
       const { data: profiles, error: profileError } = await supabase
         .from('profiles')
-        .select('id, full_name, email, role')
+        .select('id, full_name, display_name, email, role')
         .in('id', userIds);
       console.log('[Admin] Profiles result:', { profiles, profileError });
       if (profileError) throw new Error(profileError.message);
-      return (profiles || []).map((p: any) => ({
-        userId: p.id,
-        fullName: p.full_name || 'Unknown',
-        email: p.email || '',
-        role: p.role || 'member',
-      }));
+
+      const profileMap = new Map<string, any>();
+      (profiles || []).forEach((p: any) => profileMap.set(p.id, p));
+
+      return userIds.map((uid: string) => {
+        const p = profileMap.get(uid);
+        if (p) {
+          const name = p.full_name || p.display_name || p.email?.split('@')[0] || 'Member';
+          return {
+            userId: p.id,
+            fullName: name,
+            email: p.email || '',
+            role: p.role || 'member',
+          };
+        }
+        return {
+          userId: uid,
+          fullName: 'Member',
+          email: '',
+          role: 'member',
+        };
+      });
     },
     enabled: !!expandedGroupId,
   });
