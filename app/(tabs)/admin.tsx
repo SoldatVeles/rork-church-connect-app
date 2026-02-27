@@ -186,7 +186,7 @@ export default function AdminTabScreen() {
       if (profileError) throw new Error(profileError.message);
       return (profiles || []).map((p: any) => ({
         userId: p.id,
-        fullName: p.full_name || p.email?.split('@')[0] || 'Unknown',
+        fullName: p.full_name || 'Unknown',
         email: p.email || '',
         role: p.role || 'member',
       }));
@@ -933,7 +933,6 @@ export default function AdminTabScreen() {
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.memberName}>{member.fullName}</Text>
-                          <Text style={styles.memberEmail}>{member.email}</Text>
                         </View>
                         <View style={styles.memberRoleBadge}>
                           <Text style={styles.memberRoleText}>{member.role}</Text>
