@@ -56,6 +56,7 @@ export default function AdminTabScreen() {
   const [selectedUsersForGroup, setSelectedUsersForGroup] = useState<string[]>([]);
   
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
+  const [addUserExpanded, setAddUserExpanded] = useState(false);
   const [editingSermon, setEditingSermon] = useState<Sermon | null>(null);
   const [sermonForm, setSermonForm] = useState({
     title: '',
@@ -611,54 +612,75 @@ export default function AdminTabScreen() {
         )}
       </View>
 
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <UserPlus size={20} color="#1e3a8a" />
-          <Text style={styles.cardTitle}>Add New Member</Text>
-        </View>
-
-        <View style={styles.row}>
-          <TextInput style={styles.input} placeholder="First name" value={newUser.firstName} onChangeText={(t)=>setNewUser((p)=>({...p, firstName:t}))} placeholderTextColor="#94a3b8" />
-          <TextInput style={styles.input} placeholder="Last name" value={newUser.lastName} onChangeText={(t)=>setNewUser((p)=>({...p, lastName:t}))} placeholderTextColor="#94a3b8" />
-        </View>
-        <TextInput style={styles.input} placeholder="Email" autoCapitalize="none" keyboardType="email-address" value={newUser.email} onChangeText={(t)=>setNewUser((p)=>({...p, email:t}))} placeholderTextColor="#94a3b8" />
-        <TextInput style={styles.input} placeholder="Phone (optional)" keyboardType="phone-pad" value={newUser.phone} onChangeText={(t)=>setNewUser((p)=>({...p, phone:t}))} placeholderTextColor="#94a3b8" />
-        <TextInput style={styles.input} placeholder="Password" secureTextEntry value={newUser.password} onChangeText={(t)=>setNewUser((p)=>({...p, password:t}))} placeholderTextColor="#94a3b8" />
-
-        <Text style={styles.roleLabel}>Select Role:</Text>
-        <View style={styles.roleSelectorInline}>
-          {roles.map((r) => (
-            <TouchableOpacity key={r} style={[styles.roleChip, newUser.role === r && styles.roleChipActive]} onPress={()=>setNewUser((p)=>({...p, role: r}))}>
-              <Text style={[styles.roleChipText, newUser.role === r && styles.roleChipTextActive]}>{getRoleDisplayName(r)}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
+      <View style={styles.userSection}>
         <TouchableOpacity
-          testID="create-user-button"
-          style={[styles.primaryButton, createUserMutation.isPending && { opacity: 0.7 }]}
-          onPress={() => {
-            if (!newUser.firstName || !newUser.lastName || !newUser.email || !newUser.password) {
-              Alert.alert('Missing Information', 'Please fill in first name, last name, email, and password.');
-              return;
-            }
-            createUserMutation.mutate({
-              email: newUser.email,
-              password: newUser.password,
-              firstName: newUser.firstName,
-              lastName: newUser.lastName,
-              phone: newUser.phone || undefined,
-              role: newUser.role,
-              permissions: [],
-            });
-          }}
+          style={[
+            styles.userCardCollapsed,
+            addUserExpanded && styles.userCardCollapsedActive,
+          ]}
+          onPress={() => setAddUserExpanded(!addUserExpanded)}
+          activeOpacity={0.7}
         >
-          {createUserMutation.isPending ? (
-            <ActivityIndicator color="#fff" />
+          <View style={[styles.userAvatarCircle, { backgroundColor: '#16a34a' }]}>
+            <UserPlus size={18} color="#fff" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.userName}>Add New Member</Text>
+            <Text style={styles.userEmail}>Tap to expand and fill in details</Text>
+          </View>
+          {addUserExpanded ? (
+            <ChevronUp size={18} color="#1e3a8a" />
           ) : (
-            <View style={styles.buttonContent}><Plus size={18} color="#fff" /><Text style={styles.primaryButtonText}>Add Member</Text></View>
+            <ChevronDown size={18} color="#64748b" />
           )}
         </TouchableOpacity>
+
+        {addUserExpanded && (
+          <View style={styles.userExpandedPanel}>
+            <View style={styles.row}>
+              <TextInput style={styles.inputInPanel} placeholder="First name" value={newUser.firstName} onChangeText={(t)=>setNewUser((p)=>({...p, firstName:t}))} placeholderTextColor="#94a3b8" />
+              <TextInput style={styles.inputInPanel} placeholder="Last name" value={newUser.lastName} onChangeText={(t)=>setNewUser((p)=>({...p, lastName:t}))} placeholderTextColor="#94a3b8" />
+            </View>
+            <TextInput style={styles.inputInPanel} placeholder="Email" autoCapitalize="none" keyboardType="email-address" value={newUser.email} onChangeText={(t)=>setNewUser((p)=>({...p, email:t}))} placeholderTextColor="#94a3b8" />
+            <TextInput style={styles.inputInPanel} placeholder="Phone (optional)" keyboardType="phone-pad" value={newUser.phone} onChangeText={(t)=>setNewUser((p)=>({...p, phone:t}))} placeholderTextColor="#94a3b8" />
+            <TextInput style={styles.inputInPanel} placeholder="Password" secureTextEntry value={newUser.password} onChangeText={(t)=>setNewUser((p)=>({...p, password:t}))} placeholderTextColor="#94a3b8" />
+
+            <Text style={styles.roleLabel}>Select Role:</Text>
+            <View style={styles.roleSelectorInline}>
+              {roles.map((r) => (
+                <TouchableOpacity key={r} style={[styles.roleChip, newUser.role === r && styles.roleChipActive]} onPress={()=>setNewUser((p)=>({...p, role: r}))}>
+                  <Text style={[styles.roleChipText, newUser.role === r && styles.roleChipTextActive]}>{getRoleDisplayName(r)}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity
+              testID="create-user-button"
+              style={[styles.primaryButton, createUserMutation.isPending && { opacity: 0.7 }]}
+              onPress={() => {
+                if (!newUser.firstName || !newUser.lastName || !newUser.email || !newUser.password) {
+                  Alert.alert('Missing Information', 'Please fill in first name, last name, email, and password.');
+                  return;
+                }
+                createUserMutation.mutate({
+                  email: newUser.email,
+                  password: newUser.password,
+                  firstName: newUser.firstName,
+                  lastName: newUser.lastName,
+                  phone: newUser.phone || undefined,
+                  role: newUser.role,
+                  permissions: [],
+                });
+              }}
+            >
+              {createUserMutation.isPending ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <View style={styles.buttonContent}><Plus size={18} color="#fff" /><Text style={styles.primaryButtonText}>Add Member</Text></View>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     </>
   );
@@ -1232,5 +1254,6 @@ const styles = StyleSheet.create({
   userSelectCard: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
   checkbox: { width: 26, height: 26, borderRadius: 8, borderWidth: 2, borderColor: '#cbd5e1', justifyContent: 'center' as const, alignItems: 'center' as const },
   checkboxChecked: { backgroundColor: '#1e3a8a', borderColor: '#1e3a8a' },
+  inputInPanel: { flex: 1, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 14, paddingVertical: Platform.OS === 'ios' ? 14 : 12, borderWidth: 1, borderColor: '#e2e8f0', color: '#1e293b', fontSize: 15, marginBottom: 12 },
   spacer: { height: 40 },
 });
