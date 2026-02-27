@@ -55,6 +55,7 @@ export default function AdminTabScreen() {
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   const [selectedUsersForGroup, setSelectedUsersForGroup] = useState<string[]>([]);
   
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [editingSermon, setEditingSermon] = useState<Sermon | null>(null);
   const [sermonForm, setSermonForm] = useState({
     title: '',
@@ -510,8 +511,20 @@ export default function AdminTabScreen() {
           </View>
         ) : usersQuery.data && usersQuery.data.length > 0 ? (
           usersQuery.data.map((u) => (
-            <View key={u.id} style={styles.userCard}>
-              <View style={styles.userCardHeader}>
+            <View key={u.id} style={styles.userSection}>
+              <TouchableOpacity
+                style={[
+                  styles.userCardCollapsed,
+                  expandedUserId === u.id && styles.userCardCollapsedActive,
+                ]}
+                onPress={() => setExpandedUserId(expandedUserId === u.id ? null : u.id)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.userAvatarCircle}>
+                  <Text style={styles.userAvatarText}>
+                    {(u.firstName?.[0] || '').toUpperCase()}{(u.lastName?.[0] || '').toUpperCase()}
+                  </Text>
+                </View>
                 <View style={{ flex: 1 }}>
                   <View style={styles.userNameRow}>
                     <Text style={styles.userName}>{u.firstName} {u.lastName}</Text>
@@ -522,54 +535,75 @@ export default function AdminTabScreen() {
                       </View>
                     )}
                   </View>
-                  <Text style={styles.userEmail}>{u.email}</Text>
+                  <View style={styles.userRoleInlineBadge}>
+                    <Text style={styles.userRoleInlineText}>{getRoleDisplayName(u.role as Role)}</Text>
+                  </View>
                 </View>
-                <View style={styles.userActions}>
-                  <TouchableOpacity
-                    style={[styles.iconButtonSmall, u.isBlocked && styles.iconButtonWarning]}
-                    onPress={() => handleBlockUser(u.id, `${u.firstName} ${u.lastName}`, u.isBlocked)}
-                    disabled={blockUserMutation.isPending}
-                  >
-                    <Ban size={16} color={u.isBlocked ? "#f97316" : "#64748b"} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.iconButtonSmall}
-                    onPress={() => handleDeleteUser(u.id, `${u.firstName} ${u.lastName}`)}
-                    disabled={deleteUserMutation.isPending}
-                  >
-                    <Trash2 size={16} color="#ef4444" />
-                  </TouchableOpacity>
+                {expandedUserId === u.id ? (
+                  <ChevronUp size={18} color="#1e3a8a" />
+                ) : (
+                  <ChevronDown size={18} color="#64748b" />
+                )}
+              </TouchableOpacity>
+
+              {expandedUserId === u.id && (
+                <View style={styles.userExpandedPanel}>
+                  <View style={styles.userDetailRow}>
+                    <Text style={styles.userDetailLabel}>Email</Text>
+                    <Text style={styles.userDetailValue}>{u.email}</Text>
+                  </View>
+
+                  <Text style={styles.roleLabel}>Change Role:</Text>
+                  <View style={styles.roleSelector}>
+                    {roles.map((r) => (
+                      <TouchableOpacity
+                        key={r}
+                        style={[
+                          styles.roleChip,
+                          u.role === r && styles.roleChipActive,
+                        ]}
+                        onPress={() => {
+                          if (u.role !== r) {
+                            updateRoleMutation.mutate({
+                              userId: u.id,
+                              role: r,
+                            });
+                          }
+                        }}
+                        disabled={updateRoleMutation.isPending}
+                      >
+                        <Text style={[
+                          styles.roleChipText,
+                          u.role === r && styles.roleChipTextActive,
+                        ]}>
+                          {getRoleDisplayName(r)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <View style={styles.userExpandedActions}>
+                    <TouchableOpacity
+                      style={[styles.userActionButton, u.isBlocked ? styles.userActionButtonWarning : styles.userActionButtonDefault]}
+                      onPress={() => handleBlockUser(u.id, `${u.firstName} ${u.lastName}`, u.isBlocked)}
+                      disabled={blockUserMutation.isPending}
+                    >
+                      <Ban size={14} color={u.isBlocked ? "#f97316" : "#64748b"} />
+                      <Text style={[styles.userActionButtonText, u.isBlocked && styles.userActionButtonTextWarning]}>
+                        {u.isBlocked ? 'Unblock' : 'Block'}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.userActionButton, styles.userActionButtonDanger]}
+                      onPress={() => handleDeleteUser(u.id, `${u.firstName} ${u.lastName}`)}
+                      disabled={deleteUserMutation.isPending}
+                    >
+                      <Trash2 size={14} color="#ef4444" />
+                      <Text style={styles.userActionButtonTextDanger}>Remove</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
-              
-              <Text style={styles.roleLabel}>Change Role:</Text>
-              <View style={styles.roleSelector}>
-                {roles.map((r) => (
-                  <TouchableOpacity
-                    key={r}
-                    style={[
-                      styles.roleChip,
-                      u.role === r && styles.roleChipActive,
-                    ]}
-                    onPress={() => {
-                      if (u.role !== r) {
-                        updateRoleMutation.mutate({
-                          userId: u.id,
-                          role: r,
-                        });
-                      }
-                    }}
-                    disabled={updateRoleMutation.isPending}
-                  >
-                    <Text style={[
-                      styles.roleChipText,
-                      u.role === r && styles.roleChipTextActive,
-                    ]}>
-                      {getRoleDisplayName(r)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              )}
             </View>
           ))
         ) : (
@@ -1108,10 +1142,27 @@ const styles = StyleSheet.create({
   cardHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginBottom: 16 },
   cardTitle: { fontSize: 17, fontWeight: '700' as const, color: '#1e293b', flex: 1 },
   refreshButton: { padding: 8 },
-  userCard: { backgroundColor: '#f8fafc', borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#e2e8f0' },
-  userCardHeader: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, marginBottom: 12 },
-  userNameRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 4, flexWrap: 'wrap' as const },
-  userActions: { flexDirection: 'row' as const, gap: 8 },
+  userSection: { marginBottom: 10 },
+  userCardCollapsed: { backgroundColor: '#f8fafc', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#e2e8f0', flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
+  userCardCollapsedActive: { backgroundColor: '#eff6ff', borderColor: '#1e3a8a', borderWidth: 2, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
+  userAvatarCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#1e3a8a', justifyContent: 'center' as const, alignItems: 'center' as const },
+  userAvatarText: { color: '#fff', fontSize: 14, fontWeight: '700' as const },
+  userRoleInlineBadge: { backgroundColor: '#e0e7ff', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start' as const, marginTop: 4 },
+  userRoleInlineText: { fontSize: 11, fontWeight: '600' as const, color: '#3730a3', textTransform: 'capitalize' as const },
+  userExpandedPanel: { backgroundColor: '#f0f4ff', borderRadius: 12, borderTopLeftRadius: 0, borderTopRightRadius: 0, padding: 14, marginTop: -1, borderWidth: 1, borderTopWidth: 0, borderColor: '#dbeafe' },
+  userDetailRow: { marginBottom: 12 },
+  userDetailLabel: { fontSize: 11, fontWeight: '700' as const, color: '#64748b', textTransform: 'uppercase' as const, letterSpacing: 0.5, marginBottom: 2 },
+  userDetailValue: { fontSize: 14, color: '#1e293b' },
+  userExpandedActions: { flexDirection: 'row' as const, gap: 10, marginTop: 14 },
+  userActionButton: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, borderWidth: 1 },
+  userActionButtonDefault: { backgroundColor: '#fff', borderColor: '#e2e8f0' },
+  userActionButtonWarning: { backgroundColor: '#fff7ed', borderColor: '#fed7aa' },
+  userActionButtonDanger: { backgroundColor: '#fef2f2', borderColor: '#fecaca' },
+  userActionButtonText: { fontSize: 13, fontWeight: '600' as const, color: '#64748b' },
+  userActionButtonTextWarning: { color: '#f97316' },
+  userActionButtonTextDanger: { fontSize: 13, fontWeight: '600' as const, color: '#ef4444' },
+  userNameRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, flexWrap: 'wrap' as const },
+
   blockedBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, backgroundColor: '#fef2f2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#fee2e2' },
   blockedBadgeText: { fontSize: 9, fontWeight: '700' as const, color: '#ef4444', letterSpacing: 0.5 },
   iconButtonSmall: { width: 36, height: 36, justifyContent: 'center' as const, alignItems: 'center' as const, backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0' },
