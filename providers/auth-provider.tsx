@@ -57,6 +57,17 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
     const firstName = (user.user_metadata?.first_name as string | undefined) ?? '';
     const lastName = (user.user_metadata?.last_name as string | undefined) ?? '';
+    const currentFullName = (profile as any).full_name as string | null;
+
+    if (!currentFullName || currentFullName.trim() === '') {
+      const derivedName = `${firstName} ${lastName}`.trim() || user.email?.split('@')[0] || 'User';
+      console.log('[Auth] Profile missing full_name, updating to:', derivedName);
+      await supabase
+        .from('profiles')
+        .update({ full_name: derivedName })
+        .eq('id', user.id);
+      (profile as any).full_name = derivedName;
+    }
 
     return {
       id: (profile as any).id as string,
