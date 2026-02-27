@@ -138,36 +138,55 @@ export default function AdminTabScreen() {
       }
       
       console.log('[Admin] Group created successfully:', insertedData);
+
+      if (insertedData && insertedData[0]) {
+        const newGroupId = insertedData[0].id;
+        console.log('[Admin] Auto-adding creator as member of group:', newGroupId);
+        const { error: memberError } = await supabase
+          .from('group_members')
+          .upsert({ group_id: newGroupId, user_id: user.id }, { onConflict: 'group_id,user_id', ignoreDuplicates: true });
+        if (memberError) {
+          console.warn('[Admin] Error auto-adding creator as member:', memberError.message);
+        }
+      }
+
       return insertedData;
     },
     onSuccess: () => {
       Alert.alert('Success', 'Church group created');
       setGroupName('');
       queryClient.invalidateQueries({ queryKey: ['groups'] });
+      queryClient.invalidateQueries({ queryKey: ['user-groups'] });
     },
     onError: (e: Error) => Alert.alert('Error', e.message ?? 'Failed to create group'),
   });
   
-  const groupMembersQuery = useQuery<{ userId: string; firstName: string; lastName: string; email: string; role: string }[]>({
+  const groupMembersQuery = useQuery<{ userId: string; fullName: string; email: string; role: string }[]>({
     queryKey: ['group-members', expandedGroupId],
     queryFn: async () => {
       if (!expandedGroupId) return [];
+      console.log('[Admin] Fetching members for group:', expandedGroupId);
       const { data: memberLinks, error: linkError } = await supabase
         .from('group_members')
         .select('user_id')
         .eq('group_id', expandedGroupId);
+      console.log('[Admin] Member links result:', { memberLinks, linkError });
       if (linkError) throw new Error(linkError.message);
-      if (!memberLinks || memberLinks.length === 0) return [];
+      if (!memberLinks || memberLinks.length === 0) {
+        console.log('[Admin] No member links found for group:', expandedGroupId);
+        return [];
+      }
       const userIds = memberLinks.map((m: any) => m.user_id);
+      console.log('[Admin] Looking up profiles for user IDs:', userIds);
       const { data: profiles, error: profileError } = await supabase
         .from('profiles')
-        .select('id, first_name, last_name, email, role')
+        .select('id, full_name, email, role')
         .in('id', userIds);
+      console.log('[Admin] Profiles result:', { profiles, profileError });
       if (profileError) throw new Error(profileError.message);
       return (profiles || []).map((p: any) => ({
         userId: p.id,
-        firstName: p.first_name || '',
-        lastName: p.last_name || '',
+        fullName: p.full_name || p.email?.split('@')[0] || 'Unknown',
         email: p.email || '',
         role: p.role || 'member',
       }));
@@ -255,14 +274,13 @@ export default function AdminTabScreen() {
 
   const addMembersToGroupMutation = useMutation({
     mutationFn: async (data: { groupId: string; userIds: string[] }) => {
+      const rows = data.userIds.map(userId => ({
+        group_id: data.groupId,
+        user_id: userId,
+      }));
       const { error } = await supabase
         .from('group_members')
-        .insert(
-          data.userIds.map(userId => ({
-            group_id: data.groupId,
-            user_id: userId,
-          }))
-        );
+        .upsert(rows, { onConflict: 'group_id,user_id', ignoreDuplicates: true });
       
       if (error) throw new Error(error.message);
     },
@@ -271,6 +289,7 @@ export default function AdminTabScreen() {
       setSelectedGroupForAdding('');
       setSelectedUsersForGroup([]);
       queryClient.invalidateQueries({ queryKey: ['groups'] });
+      queryClient.invalidateQueries({ queryKey: ['group-members'] });
     },
     onError: (e: Error) => Alert.alert('Error', e.message ?? 'Failed to add members'),
   });
@@ -909,11 +928,11 @@ export default function AdminTabScreen() {
                       <View key={member.userId} style={styles.memberRow}>
                         <View style={styles.memberAvatar}>
                           <Text style={styles.memberAvatarText}>
-                            {(member.firstName?.[0] || '').toUpperCase()}{(member.lastName?.[0] || '').toUpperCase()}
+                            {(member.fullName?.[0] || '').toUpperCase()}
                           </Text>
                         </View>
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.memberName}>{member.firstName} {member.lastName}</Text>
+                          <Text style={styles.memberName}>{member.fullName}</Text>
                           <Text style={styles.memberEmail}>{member.email}</Text>
                         </View>
                         <View style={styles.memberRoleBadge}>
@@ -921,7 +940,7 @@ export default function AdminTabScreen() {
                         </View>
                         <TouchableOpacity
                           style={styles.removeMemberBtn}
-                          onPress={() => handleRemoveMemberFromGroup(group.id, member.userId, `${member.firstName} ${member.lastName}`)}
+                          onPress={() => handleRemoveMemberFromGroup(group.id, member.userId, member.fullName)}
                           disabled={removeMemberFromGroupMutation.isPending}
                         >
                           <X size={14} color="#ef4444" />

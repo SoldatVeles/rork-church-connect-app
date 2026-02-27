@@ -138,19 +138,34 @@ export default function AdminScreen() {
   
   const createGroupMutation = useMutation({
     mutationFn: async (data: { name: string }) => {
-      const { error } = await supabase
+      if (!user?.id) throw new Error('You must be logged in to create a group');
+
+      const { data: insertedData, error } = await supabase
         .from('groups')
         .insert({
           name: data.name,
-          created_by: user?.id || '',
-        });
+          created_by: user.id,
+        })
+        .select();
       
       if (error) throw new Error(error.message);
+
+      if (insertedData && insertedData[0]) {
+        const newGroupId = insertedData[0].id;
+        console.log('[Admin] Auto-adding creator as member of group:', newGroupId);
+        const { error: memberError } = await supabase
+          .from('group_members')
+          .upsert({ group_id: newGroupId, user_id: user.id }, { onConflict: 'group_id,user_id', ignoreDuplicates: true });
+        if (memberError) {
+          console.warn('[Admin] Error auto-adding creator as member:', memberError.message);
+        }
+      }
     },
     onSuccess: () => {
       Alert.alert('Success', 'Group created');
       setGroupName('');
       queryClient.invalidateQueries({ queryKey: ['groups'] });
+      queryClient.invalidateQueries({ queryKey: ['user-groups'] });
     },
     onError: (e: Error) => Alert.alert('Error', e.message ?? 'Failed to create group'),
   });
