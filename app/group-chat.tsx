@@ -114,6 +114,27 @@ export default function GroupChatScreen() {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
+  const getInitials = (name: string): string => {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return (name[0] || '?').toUpperCase();
+  };
+
+  const avatarColors = [
+    '#1e3a8a', '#b91c1c', '#047857', '#7c3aed',
+    '#c2410c', '#0e7490', '#a16207', '#4338ca',
+  ];
+
+  const getAvatarColor = (senderId: string): string => {
+    let hash = 0;
+    for (let i = 0; i < senderId.length; i++) {
+      hash = senderId.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return avatarColors[Math.abs(hash) % avatarColors.length];
+  };
+
   const groupMessagesByDate = (messages: ChatMessage[]) => {
     const groups: { date: string; messages: ChatMessage[] }[] = [];
     let currentDate = '';
@@ -188,35 +209,57 @@ export default function GroupChatScreen() {
                 <Text style={styles.dateText}>{group.date}</Text>
                 <View style={styles.dateLine} />
               </View>
-              {group.messages.map((msg) => {
+              {group.messages.map((msg, msgIndex) => {
                 const isOwnMessage = msg.senderId === user?.id;
+                const showAvatar = !isOwnMessage && (
+                  msgIndex === 0 ||
+                  group.messages[msgIndex - 1].senderId !== msg.senderId
+                );
                 return (
                   <View
                     key={msg.id}
                     style={[
-                      styles.messageBubble,
-                      isOwnMessage ? styles.ownMessage : styles.otherMessage,
+                      styles.messageRow,
+                      isOwnMessage ? styles.ownMessageRow : styles.otherMessageRow,
                     ]}
                   >
                     {!isOwnMessage && (
-                      <Text style={styles.senderName}>{msg.senderName}</Text>
+                      <View style={styles.avatarSlot}>
+                        {showAvatar ? (
+                          <View style={[styles.avatar, { backgroundColor: getAvatarColor(msg.senderId) }]}>
+                            <Text style={styles.avatarText}>{getInitials(msg.senderName)}</Text>
+                          </View>
+                        ) : null}
+                      </View>
                     )}
-                    <Text
+                    <View
                       style={[
-                        styles.messageText,
-                        isOwnMessage ? styles.ownMessageText : styles.otherMessageText,
+                        styles.messageBubble,
+                        isOwnMessage ? styles.ownMessage : styles.otherMessage,
                       ]}
                     >
-                      {msg.content}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.messageTime,
-                        isOwnMessage ? styles.ownMessageTime : styles.otherMessageTime,
-                      ]}
-                    >
-                      {formatTime(msg.createdAt)}
-                    </Text>
+                      {showAvatar && (
+                        <Text style={[styles.senderName, { color: getAvatarColor(msg.senderId) }]}>
+                          {msg.senderName}
+                        </Text>
+                      )}
+                      <Text
+                        style={[
+                          styles.messageText,
+                          isOwnMessage ? styles.ownMessageText : styles.otherMessageText,
+                        ]}
+                      >
+                        {msg.content}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.messageTime,
+                          isOwnMessage ? styles.ownMessageTime : styles.otherMessageTime,
+                        ]}
+                      >
+                        {formatTime(msg.createdAt)}
+                      </Text>
+                    </View>
                   </View>
                 );
               })}
@@ -329,19 +372,46 @@ const styles = StyleSheet.create({
     fontWeight: '500' as const,
     color: '#64748b',
   },
+  messageRow: {
+    flexDirection: 'row' as const,
+    marginBottom: 4,
+    alignItems: 'flex-end' as const,
+  },
+  ownMessageRow: {
+    justifyContent: 'flex-end' as const,
+  },
+  otherMessageRow: {
+    justifyContent: 'flex-start' as const,
+  },
+  avatarSlot: {
+    width: 32,
+    marginRight: 6,
+    alignItems: 'center' as const,
+    justifyContent: 'flex-end' as const,
+  },
+  avatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  avatarText: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+    color: '#fff',
+  },
   messageBubble: {
-    maxWidth: '80%',
+    maxWidth: '75%',
     padding: 12,
     borderRadius: 16,
-    marginBottom: 8,
+    marginBottom: 2,
   },
   ownMessage: {
-    alignSelf: 'flex-end' as const,
     backgroundColor: '#1e3a8a',
     borderBottomRightRadius: 4,
   },
   otherMessage: {
-    alignSelf: 'flex-start' as const,
     backgroundColor: '#fff',
     borderBottomLeftRadius: 4,
     shadowColor: '#000',
@@ -353,7 +423,6 @@ const styles = StyleSheet.create({
   senderName: {
     fontSize: 12,
     fontWeight: '600' as const,
-    color: '#1e3a8a',
     marginBottom: 4,
   },
   messageText: {
