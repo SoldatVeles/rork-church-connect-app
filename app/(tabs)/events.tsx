@@ -203,23 +203,21 @@ export default function EventsScreen() {
 
       console.log('[Events] Inserting event with data:', insertData);
       
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('events')
-        .insert(insertData)
-        .select()
-        .single();
+        .insert(insertData);
 
       if (error) {
         console.error('[Events] Insert failed:', error);
         throw new Error(error.message ?? 'Failed to create event');
       }
 
-      console.log('[Events] Insert succeeded:', data);
-      return data;
+      console.log('[Events] Insert succeeded');
+      return true;
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       console.log('[Events] Mutation success, invalidating queries');
-      queryClient.invalidateQueries({ queryKey: ['events'] });
+      void queryClient.invalidateQueries({ queryKey: ['events'] });
       const now = new Date();
       setForm({
         title: '',
@@ -333,7 +331,7 @@ export default function EventsScreen() {
     },
     onSuccess: () => {
       console.log('[Events] Register mutation success - invalidating events');
-      queryClient.invalidateQueries({ queryKey: ['events'] });
+      void queryClient.invalidateQueries({ queryKey: ['events'] });
       Alert.alert('Success', 'Your registration status was updated.');
     },
     onError: (error) => {
@@ -989,6 +987,28 @@ export default function EventsScreen() {
                 keyboardType="numeric"
               />
             </View>
+
+            <TouchableOpacity
+              testID="submit-event-button-bottom"
+              style={[styles.createButtonBottom, createMutation.isPending && styles.createButtonBottomDisabled]}
+              onPress={() => {
+                console.log('[Events] Bottom create button pressed!');
+                handleCreate();
+              }}
+              disabled={createMutation.isPending}
+              activeOpacity={0.8}
+            >
+              {createMutation.isPending ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Plus size={20} color="white" />
+              )}
+              <Text style={styles.createButtonBottomText}>
+                {createMutation.isPending ? 'Creating Event...' : 'Create Event'}
+              </Text>
+            </TouchableOpacity>
+
+            <View style={{ height: 40 }} />
           </ScrollView>
 
           {showDatePicker.field && (
@@ -1644,7 +1664,26 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
     borderRadius: 8,
-    border: '1px solid #e2e8f0',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     backgroundColor: '#f8fafc',
+  },
+  createButtonBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: '#1e3a8a',
+    borderRadius: 14,
+    paddingVertical: 16,
+    marginTop: 8,
+  },
+  createButtonBottomDisabled: {
+    backgroundColor: '#94a3b8',
+  },
+  createButtonBottomText: {
+    fontSize: 17,
+    fontWeight: '700' as const,
+    color: 'white',
   },
 });
