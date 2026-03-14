@@ -192,6 +192,7 @@ export default function EventsScreen() {
         start_at: startAt.toISOString(),
         end_at: endAt.toISOString(),
         location: eventData.location,
+        type: eventData.type,
         event_type: eventData.type,
         max_attendees: eventData.maxAttendees ?? null,
         created_by: eventData.createdBy,
