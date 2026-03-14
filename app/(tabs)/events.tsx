@@ -186,13 +186,12 @@ export default function EventsScreen() {
       );
 
       // Use the correct column names from your database
-      const insertData = {
+      const insertData: Record<string, unknown> = {
         title: eventData.title,
         description: eventData.description,
         start_at: startAt.toISOString(),
         end_at: endAt.toISOString(),
         location: eventData.location,
-        type: eventData.type,
         event_type: eventData.type,
         max_attendees: eventData.maxAttendees ?? null,
         created_by: eventData.createdBy,
@@ -201,28 +200,50 @@ export default function EventsScreen() {
         registered_users: [],
       };
 
-      console.log('[Events] Inserting event with data:', insertData);
-      
-      const { data, error, status } = await supabase
-        .from('events')
-        .insert(insertData)
-        .select()
-        .single();
+      console.log('[Events] Inserting event with data:', JSON.stringify(insertData, null, 2));
 
-      console.log('[Events] Insert response:', { data, error, status });
+      const { data: checkSession } = await supabase.auth.getSession();
+      console.log('[Events] Current auth session uid:', checkSession?.session?.user?.id ?? 'NO SESSION');
+      console.log('[Events] created_by value:', eventData.createdBy);
 
-      if (error) {
-        console.error('[Events] Insert failed:', error);
-        throw new Error(error.message ?? 'Failed to create event');
+      if (!checkSession?.session) {
+        throw new Error('Your session has expired. Please log out and log in again.');
       }
 
-      if (!data) {
-        console.error('[Events] Insert returned no data - likely RLS policy blocking insert');
-        throw new Error('Event was not created. You may not have permission to create events.');
-      }
+      try {
+        const { data, error, status } = await supabase
+          .from('events')
+          .insert(insertData)
+          .select()
+          .single();
 
-      console.log('[Events] Insert succeeded, created event:', data.id);
-      return true;
+        console.log('[Events] Insert response status:', status);
+        console.log('[Events] Insert response data:', JSON.stringify(data));
+        console.log('[Events] Insert response error:', JSON.stringify(error));
+
+        if (error) {
+          console.error('[Events] Insert failed:', JSON.stringify(error));
+          const msg = error.message ?? 'Failed to create event';
+          if (msg.includes('type')) {
+            throw new Error(
+              msg + ' — You may need to run the database fix script. Check with your admin.'
+            );
+          }
+          throw new Error(msg);
+        }
+
+        if (!data) {
+          console.error('[Events] Insert returned no data - likely RLS policy blocking insert');
+          throw new Error('Event was not created. You may not have permission to create events.');
+        }
+
+        console.log('[Events] Insert succeeded, created event:', data.id);
+        return true;
+      } catch (networkError: any) {
+        console.error('[Events] Network/insert error:', networkError);
+        if (networkError instanceof Error) throw networkError;
+        throw new Error(String(networkError?.message ?? networkError ?? 'Unknown error during event creation'));
+      }
     },
     onSuccess: () => {
       console.log('[Events] Mutation success, invalidating queries');
