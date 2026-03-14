@@ -203,16 +203,25 @@ export default function EventsScreen() {
 
       console.log('[Events] Inserting event with data:', insertData);
       
-      const { error } = await supabase
+      const { data, error, status } = await supabase
         .from('events')
-        .insert(insertData);
+        .insert(insertData)
+        .select()
+        .single();
+
+      console.log('[Events] Insert response:', { data, error, status });
 
       if (error) {
         console.error('[Events] Insert failed:', error);
         throw new Error(error.message ?? 'Failed to create event');
       }
 
-      console.log('[Events] Insert succeeded');
+      if (!data) {
+        console.error('[Events] Insert returned no data - likely RLS policy blocking insert');
+        throw new Error('Event was not created. You may not have permission to create events.');
+      }
+
+      console.log('[Events] Insert succeeded, created event:', data.id);
       return true;
     },
     onSuccess: () => {
