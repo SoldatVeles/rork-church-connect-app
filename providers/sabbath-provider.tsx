@@ -139,29 +139,50 @@ export const [SabbathProvider, useSabbath] = createContextHook(() => {
   }, []);
 
   const fetchGroupMembers = useCallback(async (groupId: string) => {
-    const { data, error } = await supabase
-      .from('group_members')
+    console.log('[Sabbath] Fetching group members for group:', groupId);
+
+    const { data: homeMembers, error: homeError } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .eq('home_group_id', groupId);
+
+    if (homeError) {
+      console.error('[Sabbath] Error fetching home group members:', homeError.message);
+    }
+
+    const { data: pastors, error: pastorError } = await supabase
+      .from('group_pastors')
       .select('user_id')
       .eq('group_id', groupId);
 
-    if (error) {
-      console.error('[Sabbath] Error fetching group members:', error.message);
-      return [];
+    if (pastorError) {
+      console.error('[Sabbath] Error fetching group pastors:', pastorError.message);
     }
 
-    const memberIds = (data || []).map((m: any) => m.user_id as string);
+    const memberMap = new Map<string, string>();
 
-    if (memberIds.length === 0) return [];
+    (homeMembers || []).forEach((p: any) => {
+      memberMap.set(p.id as string, (p.full_name as string) || 'Unknown');
+    });
 
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, full_name')
-      .in('id', memberIds);
+    const pastorIds = (pastors || [])
+      .map((p: any) => p.user_id as string)
+      .filter((id) => !memberMap.has(id));
 
-    return (profiles || []).map((p: any) => ({
-      id: p.id as string,
-      name: (p.full_name as string) || 'Unknown',
-    }));
+    if (pastorIds.length > 0) {
+      const { data: pastorProfiles } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', pastorIds);
+
+      (pastorProfiles || []).forEach((p: any) => {
+        memberMap.set(p.id as string, (p.full_name as string) || 'Unknown');
+      });
+    }
+
+    const results = Array.from(memberMap.entries()).map(([id, name]) => ({ id, name }));
+    console.log('[Sabbath] Found', results.length, 'members for group', groupId);
+    return results;
   }, []);
 
   const createSabbathMutation = useMutation({
