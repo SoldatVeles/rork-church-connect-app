@@ -209,40 +209,34 @@ export default function EventsScreen() {
         throw new Error('Your session has expired. Please log out and log in again.');
       }
 
-      try {
-        const { data, error, status } = await supabase
-          .from('events')
-          .insert(insertData)
-          .select()
-          .single();
+      const { data, error, status } = await supabase
+        .from('events')
+        .insert(insertData)
+        .select()
+        .single();
 
-        console.log('[Events] Insert response status:', status);
-        console.log('[Events] Insert response data:', JSON.stringify(data));
-        console.log('[Events] Insert response error:', JSON.stringify(error));
+      console.log('[Events] Insert response status:', status);
+      console.log('[Events] Insert response data:', JSON.stringify(data));
+      console.log('[Events] Insert response error:', JSON.stringify(error));
 
-        if (error) {
-          console.error('[Events] Insert failed:', JSON.stringify(error));
-          const msg = error.message ?? 'Failed to create event';
-          if (msg.includes('type')) {
-            throw new Error(
-              msg + ' — You may need to run the database fix script. Check with your admin.'
-            );
-          }
-          throw new Error(msg);
+      if (error) {
+        console.error('[Events] Insert failed:', JSON.stringify(error));
+        const msg = error.message ?? 'Failed to create event';
+        if (msg.includes('type')) {
+          throw new Error(
+            msg + ' — You may need to run the database fix script (database-fix-events-creation.sql).'
+          );
         }
-
-        if (!data) {
-          console.error('[Events] Insert returned no data - likely RLS policy blocking insert');
-          throw new Error('Event was not created. You may not have permission to create events.');
-        }
-
-        console.log('[Events] Insert succeeded, created event:', data.id);
-        return true;
-      } catch (networkError: any) {
-        console.error('[Events] Network/insert error:', networkError);
-        if (networkError instanceof Error) throw networkError;
-        throw new Error(String(networkError?.message ?? networkError ?? 'Unknown error during event creation'));
+        throw new Error(msg);
       }
+
+      if (!data) {
+        console.error('[Events] Insert returned no data - likely RLS policy blocking insert');
+        throw new Error('Event was not created. You may not have permission to create events.');
+      }
+
+      console.log('[Events] Insert succeeded, created event:', data.id);
+      return true;
     },
     onSuccess: () => {
       console.log('[Events] Mutation success, invalidating queries');

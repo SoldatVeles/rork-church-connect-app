@@ -11,16 +11,36 @@
 -- ============================================================
 
 -- Status of a Sabbath plan: draft (hidden from members), published (visible), cancelled (soft-delete)
-DO $ BEGIN CREATE TYPE sabbath_status AS ENUM ('draft', 'published', 'cancelled'); EXCEPTION WHEN duplicate_object THEN NULL; END $;
+DO $
+BEGIN
+  CREATE TYPE sabbath_status AS ENUM ('draft', 'published', 'cancelled');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $;
 
 -- Fixed roles that can be assigned for each Sabbath service
-DO $ BEGIN CREATE TYPE sabbath_role AS ENUM ('first_part_leader', 'lesson_presenter', 'second_part_leader', 'sermon_speaker'); EXCEPTION WHEN duplicate_object THEN NULL; END $;
+DO $
+BEGIN
+  CREATE TYPE sabbath_role AS ENUM ('first_part_leader', 'lesson_presenter', 'second_part_leader', 'sermon_speaker');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $;
 
 -- Status of a role assignment
-DO $ BEGIN CREATE TYPE assignment_status AS ENUM ('pending', 'accepted', 'declined', 'replacement_suggested', 'reassigned'); EXCEPTION WHEN duplicate_object THEN NULL; END $;
+DO $
+BEGIN
+  CREATE TYPE assignment_status AS ENUM ('pending', 'accepted', 'declined', 'replacement_suggested', 'reassigned');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $;
 
 -- Attendance RSVP status
-DO $ BEGIN CREATE TYPE attendance_status AS ENUM ('attending', 'not_attending'); EXCEPTION WHEN duplicate_object THEN NULL; END $;
+DO $
+BEGIN
+  CREATE TYPE attendance_status AS ENUM ('attending', 'not_attending');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $;
 
 
 -- ============================================================
