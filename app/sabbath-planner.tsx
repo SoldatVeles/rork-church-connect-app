@@ -449,7 +449,7 @@ export default function SabbathPlannerScreen() {
                 {isCreatingSabbath ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.createBtnText}>Create Plan</Text>
+                  <Text style={styles.createBtnText}>Save as Draft</Text>
                 )}
               </TouchableOpacity>
             </View>
