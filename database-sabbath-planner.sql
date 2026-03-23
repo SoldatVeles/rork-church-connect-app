@@ -11,27 +11,16 @@
 -- ============================================================
 
 -- Status of a Sabbath plan: draft (hidden from members), published (visible), cancelled (soft-delete)
-CREATE TYPE sabbath_status AS ENUM ('draft', 'published', 'cancelled');
+DO $ BEGIN CREATE TYPE sabbath_status AS ENUM ('draft', 'published', 'cancelled'); EXCEPTION WHEN duplicate_object THEN NULL; END $;
 
 -- Fixed roles that can be assigned for each Sabbath service
-CREATE TYPE sabbath_role AS ENUM (
-  'first_part_leader',
-  'lesson_presenter',
-  'second_part_leader',
-  'sermon_speaker'
-);
+DO $ BEGIN CREATE TYPE sabbath_role AS ENUM ('first_part_leader', 'lesson_presenter', 'second_part_leader', 'sermon_speaker'); EXCEPTION WHEN duplicate_object THEN NULL; END $;
 
 -- Status of a role assignment
-CREATE TYPE assignment_status AS ENUM (
-  'pending',
-  'accepted',
-  'declined',
-  'replacement_suggested',
-  'reassigned'
-);
+DO $ BEGIN CREATE TYPE assignment_status AS ENUM ('pending', 'accepted', 'declined', 'replacement_suggested', 'reassigned'); EXCEPTION WHEN duplicate_object THEN NULL; END $;
 
 -- Attendance RSVP status
-CREATE TYPE attendance_status AS ENUM ('attending', 'not_attending');
+DO $ BEGIN CREATE TYPE attendance_status AS ENUM ('attending', 'not_attending'); EXCEPTION WHEN duplicate_object THEN NULL; END $;
 
 
 -- ============================================================
@@ -240,14 +229,17 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Apply trigger to each table with updated_at
+DROP TRIGGER IF EXISTS trg_sabbaths_updated_at ON sabbaths;
 CREATE TRIGGER trg_sabbaths_updated_at
   BEFORE UPDATE ON sabbaths
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trg_sabbath_assignments_updated_at ON sabbath_assignments;
 CREATE TRIGGER trg_sabbath_assignments_updated_at
   BEFORE UPDATE ON sabbath_assignments
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trg_sabbath_attendance_updated_at ON sabbath_attendance;
 CREATE TRIGGER trg_sabbath_attendance_updated_at
   BEFORE UPDATE ON sabbath_attendance
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -264,6 +256,11 @@ ALTER TABLE sabbath_attendance ENABLE ROW LEVEL SECURITY;
 ALTER TABLE group_pastors ENABLE ROW LEVEL SECURITY;
 
 -- ----- sabbaths -----
+
+DROP POLICY IF EXISTS sabbaths_select_published ON sabbaths;
+DROP POLICY IF EXISTS sabbaths_insert ON sabbaths;
+DROP POLICY IF EXISTS sabbaths_update ON sabbaths;
+DROP POLICY IF EXISTS sabbaths_delete ON sabbaths;
 
 -- Members can only see published Sabbaths for their home church
 CREATE POLICY sabbaths_select_published ON sabbaths
@@ -308,6 +305,11 @@ CREATE POLICY sabbaths_delete ON sabbaths
   );
 
 -- ----- sabbath_assignments -----
+
+DROP POLICY IF EXISTS assignments_select ON sabbath_assignments;
+DROP POLICY IF EXISTS assignments_insert ON sabbath_assignments;
+DROP POLICY IF EXISTS assignments_update ON sabbath_assignments;
+DROP POLICY IF EXISTS assignments_delete ON sabbath_assignments;
 
 -- Anyone in the church can see assignments for published Sabbaths
 CREATE POLICY assignments_select ON sabbath_assignments
@@ -364,6 +366,11 @@ CREATE POLICY assignments_delete ON sabbath_assignments
 
 -- ----- sabbath_attendance -----
 
+DROP POLICY IF EXISTS attendance_select ON sabbath_attendance;
+DROP POLICY IF EXISTS attendance_insert ON sabbath_attendance;
+DROP POLICY IF EXISTS attendance_update ON sabbath_attendance;
+DROP POLICY IF EXISTS attendance_delete ON sabbath_attendance;
+
 -- Anyone can see attendance for published Sabbaths
 CREATE POLICY attendance_select ON sabbath_attendance
   FOR SELECT USING (
@@ -393,6 +400,10 @@ CREATE POLICY attendance_delete ON sabbath_attendance
   );
 
 -- ----- group_pastors -----
+
+DROP POLICY IF EXISTS group_pastors_select ON group_pastors;
+DROP POLICY IF EXISTS group_pastors_insert ON group_pastors;
+DROP POLICY IF EXISTS group_pastors_delete ON group_pastors;
 
 -- Anyone can see who the pastors are
 CREATE POLICY group_pastors_select ON group_pastors
