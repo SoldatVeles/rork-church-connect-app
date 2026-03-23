@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { Bell, Calendar, Heart, Users, Church, BookOpen, MessageCircle } from 'lucide-react-native';
+import { Bell, Calendar, Heart, Users, Church, BookOpen, MessageCircle, Sun } from 'lucide-react-native';
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import {
   StyleSheet,
@@ -314,6 +314,13 @@ export default function HomeScreen() {
       subtitle: 'Connect with your groups',
       color: '#8b5cf6',
       onPress: () => router.push('/groups'),
+    },
+    {
+      icon: Sun,
+      title: 'Sabbath Planner',
+      subtitle: 'Plan & manage services',
+      color: '#0f172a',
+      onPress: () => router.push('/sabbath-planner' as any),
     },
   ], [totalEventsCount, activeRequestsCount, membersCount]);
 

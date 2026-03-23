@@ -6,10 +6,11 @@ import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AuthProvider, useAuth } from "@/providers/auth-provider";
 import { OfflineProvider } from "@/providers/offline-provider";
+import { SabbathProvider } from "@/providers/sabbath-provider";
 import LoadingScreen from "@/components/LoadingScreen";
 import { trpc, trpcClient } from "@/lib/trpc";
 
-SplashScreen.preventAutoHideAsync();
+void SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
@@ -46,13 +47,15 @@ function RootLayoutNav() {
       <Stack.Screen name="modal" options={{ presentation: "modal" }} />
       <Stack.Screen name="groups" options={{ headerShown: false }} />
       <Stack.Screen name="group-chat" options={{ headerShown: false }} />
+      <Stack.Screen name="sabbath-planner" options={{ headerShown: false }} />
+      <Stack.Screen name="sabbath-detail" options={{ headerShown: false }} />
     </Stack>
   );
 }
 
 export default function RootLayout() {
   useEffect(() => {
-    SplashScreen.hideAsync();
+    void SplashScreen.hideAsync();
   }, []);
 
   return (
@@ -60,9 +63,11 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <OfflineProvider>
-            <GestureHandlerRootView style={styles.container}>
-              <RootLayoutNav />
-            </GestureHandlerRootView>
+            <SabbathProvider>
+              <GestureHandlerRootView style={styles.container}>
+                <RootLayoutNav />
+              </GestureHandlerRootView>
+            </SabbathProvider>
           </OfflineProvider>
         </AuthProvider>
       </QueryClientProvider>
