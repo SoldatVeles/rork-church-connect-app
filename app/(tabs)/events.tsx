@@ -185,7 +185,6 @@ export default function EventsScreen() {
         eventData.endTime.getMinutes(),
       );
 
-      // Use the correct column names from your database
       const insertData: Record<string, unknown> = {
         title: eventData.title,
         description: eventData.description,
