@@ -284,6 +284,33 @@ export const [SabbathProvider, useSabbath] = createContextHook(() => {
     },
   });
 
+  const deleteSabbathMutation = useMutation({
+    mutationFn: async (sabbathId: string) => {
+      console.log('[Sabbath] Deleting sabbath:', sabbathId);
+      const { error: attError } = await supabase
+        .from('sabbath_attendance')
+        .delete()
+        .eq('sabbath_id', sabbathId);
+      if (attError) console.warn('[Sabbath] Error deleting attendance:', attError.message);
+
+      const { error: assError } = await supabase
+        .from('sabbath_assignments')
+        .delete()
+        .eq('sabbath_id', sabbathId);
+      if (assError) console.warn('[Sabbath] Error deleting assignments:', assError.message);
+
+      const { error } = await supabase
+        .from('sabbaths')
+        .delete()
+        .eq('id', sabbathId);
+      if (error) throw new Error(error.message);
+      console.log('[Sabbath] Deleted sabbath:', sabbathId);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['sabbaths'] });
+    },
+  });
+
   const upsertAttendanceMutation = useMutation({
     mutationFn: async (params: {
       sabbath_id: string;
@@ -336,6 +363,9 @@ export const [SabbathProvider, useSabbath] = createContextHook(() => {
     respondAssignment: respondAssignmentMutation.mutateAsync,
     isRespondingAssignment: respondAssignmentMutation.isPending,
 
+    deleteSabbath: deleteSabbathMutation.mutateAsync,
+    isDeletingSabbath: deleteSabbathMutation.isPending,
+
     upsertAttendance: upsertAttendanceMutation.mutateAsync,
     isUpsertingAttendance: upsertAttendanceMutation.isPending,
   }), [
@@ -346,6 +376,7 @@ export const [SabbathProvider, useSabbath] = createContextHook(() => {
     updateSabbathMutation.mutateAsync, updateSabbathMutation.isPending,
     upsertAssignmentMutation.mutateAsync, upsertAssignmentMutation.isPending,
     respondAssignmentMutation.mutateAsync, respondAssignmentMutation.isPending,
+    deleteSabbathMutation.mutateAsync, deleteSabbathMutation.isPending,
     upsertAttendanceMutation.mutateAsync, upsertAttendanceMutation.isPending,
   ]);
 });

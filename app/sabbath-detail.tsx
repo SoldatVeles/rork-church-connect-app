@@ -26,6 +26,7 @@ import {
   UserCheck,
   MessageSquare,
   RotateCcw,
+  Trash2,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -82,6 +83,8 @@ export default function SabbathDetailScreen() {
     isPastorOfGroup,
     updateSabbath,
     isUpdatingSabbath,
+    deleteSabbath,
+    isDeletingSabbath,
     upsertAssignment,
     isUpsertingAssignment,
     respondAssignment,
@@ -224,6 +227,33 @@ export default function SabbathDetailScreen() {
       Alert.alert('Error', err.message || 'Failed to cancel.');
     }
   }, [sabbath, updateSabbath, cancelReason]);
+
+  const handleDelete = useCallback(async () => {
+    if (!sabbath) return;
+    Alert.alert(
+      'Delete Sabbath',
+      'This will permanently delete this Sabbath plan and all its assignments and attendance records. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              try {
+                await deleteSabbath(sabbath.id);
+                void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                router.back();
+              } catch (err: any) {
+                console.error('[SabbathDetail] Delete error:', err);
+                Alert.alert('Error', err.message || 'Failed to delete Sabbath.');
+              }
+            })();
+          },
+        },
+      ]
+    );
+  }, [sabbath, deleteSabbath]);
 
   const handleRevertToDraft = useCallback(async () => {
     if (!sabbath) return;
@@ -614,6 +644,26 @@ export default function SabbathDetailScreen() {
                 <Text style={styles.cancelSabbathBtnText}>Cancel Sabbath</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        )}
+
+        {canManage && (
+          <View style={styles.dangerSection}>
+            <TouchableOpacity
+              style={styles.deleteBtn}
+              onPress={handleDelete}
+              disabled={isDeletingSabbath}
+              testID="delete-sabbath-button"
+            >
+              {isDeletingSabbath ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Trash2 size={16} color="#fff" />
+                  <Text style={styles.deleteBtnText}>Delete Sabbath Permanently</Text>
+                </>
+              )}
+            </TouchableOpacity>
           </View>
         )}
 
@@ -1223,6 +1273,24 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600' as const,
     color: '#ef4444',
+  },
+  dangerSection: {
+    marginTop: 10,
+    marginBottom: 14,
+  },
+  deleteBtn: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#dc2626',
+  },
+  deleteBtnText: {
+    fontSize: 15,
+    fontWeight: '700' as const,
+    color: '#fff',
   },
   modalOverlay: {
     flex: 1,
