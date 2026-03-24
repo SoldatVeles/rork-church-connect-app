@@ -94,6 +94,7 @@ export default function SabbathDetailScreen() {
     fetchAssignments,
     fetchAttendance,
     fetchGroupMembers,
+    fetchAllMembersGrouped,
   } = useSabbath();
 
   const sabbath = useMemo(
@@ -126,6 +127,12 @@ export default function SabbathDetailScreen() {
     enabled: !!sabbath?.group_id && canManage,
   });
 
+  const groupedMembersQuery = useQuery({
+    queryKey: ['grouped-members', sabbath?.group_id],
+    queryFn: () => fetchAllMembersGrouped(sabbath!.group_id),
+    enabled: !!sabbath?.group_id && canManage,
+  });
+
   const groupQuery = useQuery({
     queryKey: ['group-name', sabbath?.group_id],
     queryFn: async () => {
@@ -151,7 +158,8 @@ export default function SabbathDetailScreen() {
 
   const assignments = useMemo(() => assignmentsQuery.data || [], [assignmentsQuery.data]);
   const attendance = useMemo(() => attendanceQuery.data || [], [attendanceQuery.data]);
-  const members = groupMembersQuery.data || [];
+  const _members = groupMembersQuery.data || [];
+  const groupedMembers = groupedMembersQuery.data || [];
 
   const myAttendance = useMemo(
     () => attendance.find((a) => a.user_id === user?.id),
@@ -654,27 +662,48 @@ export default function SabbathDetailScreen() {
               Assign {assigningRole ? ROLE_LABELS[assigningRole] : ''}
             </Text>
             <ScrollView style={styles.membersList} showsVerticalScrollIndicator={false}>
-              {members.length === 0 ? (
+              {groupedMembers.length === 0 ? (
                 <View style={styles.emptyMembers}>
                   <Users size={32} color="#cbd5e1" />
                   <Text style={styles.emptyMembersText}>No group members found</Text>
                 </View>
               ) : (
-                members.map((m) => (
-                  <TouchableOpacity
-                    key={m.id}
-                    style={styles.memberItem}
-                    onPress={() => handleAssign(m.id)}
-                    disabled={isUpsertingAssignment}
-                  >
-                    <View style={styles.memberAvatar}>
-                      <Text style={styles.memberAvatarText}>
-                        {m.name.charAt(0).toUpperCase()}
+                groupedMembers.map((section) => (
+                  <View key={section.groupId}>
+                    <View style={styles.groupSectionHeader}>
+                      <View style={[
+                        styles.groupSectionDot,
+                        section.groupId === sabbath?.group_id && styles.groupSectionDotPrimary,
+                      ]} />
+                      <Text style={[
+                        styles.groupSectionTitle,
+                        section.groupId === sabbath?.group_id && styles.groupSectionTitlePrimary,
+                      ]}>
+                        {section.groupName}
                       </Text>
+                      {section.groupId === sabbath?.group_id && (
+                        <View style={styles.yourChurchBadge}>
+                          <Text style={styles.yourChurchBadgeText}>Your Church</Text>
+                        </View>
+                      )}
                     </View>
-                    <Text style={styles.memberName}>{m.name}</Text>
-                    <ChevronDown size={16} color="#94a3b8" style={{ transform: [{ rotate: '-90deg' }] }} />
-                  </TouchableOpacity>
+                    {section.members.map((m) => (
+                      <TouchableOpacity
+                        key={m.id}
+                        style={styles.memberItem}
+                        onPress={() => handleAssign(m.id)}
+                        disabled={isUpsertingAssignment}
+                      >
+                        <View style={styles.memberAvatar}>
+                          <Text style={styles.memberAvatarText}>
+                            {m.name.charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                        <Text style={styles.memberName}>{m.name}</Text>
+                        <ChevronDown size={16} color="#94a3b8" style={{ transform: [{ rotate: '-90deg' }] }} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 ))
               )}
             </ScrollView>
@@ -1402,5 +1431,48 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700' as const,
     color: '#fff',
+  },
+  groupSectionHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    marginTop: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    gap: 8,
+  },
+  groupSectionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#94a3b8',
+  },
+  groupSectionDotPrimary: {
+    backgroundColor: '#1e3a8a',
+  },
+  groupSectionTitle: {
+    fontSize: 13,
+    fontWeight: '700' as const,
+    color: '#64748b',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+    flex: 1,
+  },
+  groupSectionTitlePrimary: {
+    color: '#1e3a8a',
+  },
+  yourChurchBadge: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  yourChurchBadgeText: {
+    fontSize: 10,
+    fontWeight: '700' as const,
+    color: '#1e3a8a',
   },
 });

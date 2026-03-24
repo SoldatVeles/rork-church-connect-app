@@ -208,6 +208,123 @@ export const [SabbathProvider, useSabbath] = createContextHook(() => {
     return results;
   }, []);
 
+  const fetchAllMembersGrouped = useCallback(async (primaryGroupId: string) => {
+    console.log('[Sabbath] Fetching all members grouped by church, primary group:', primaryGroupId);
+
+    const { data: allGroups, error: groupsError } = await supabase
+      .from('groups')
+      .select('id, name')
+      .order('name', { ascending: true });
+
+    if (groupsError) {
+      console.error('[Sabbath] Error fetching groups:', groupsError.message);
+      return [];
+    }
+
+    const groupNameMap = new Map<string, string>();
+    (allGroups || []).forEach((g: any) => {
+      groupNameMap.set(g.id as string, g.name as string);
+    });
+
+    const { data: allProfiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, full_name, display_name, home_group_id')
+      .order('full_name', { ascending: true });
+
+    if (profilesError) {
+      console.error('[Sabbath] Error fetching all profiles:', profilesError.message);
+      return [];
+    }
+
+    const { data: allPastors, error: pastorsError } = await supabase
+      .from('group_pastors')
+      .select('user_id, group_id');
+
+    if (pastorsError) {
+      console.error('[Sabbath] Error fetching all pastors:', pastorsError.message);
+    }
+
+    const pastorGroupMap = new Map<string, Set<string>>();
+    (allPastors || []).forEach((p: any) => {
+      const uid = p.user_id as string;
+      const gid = p.group_id as string;
+      if (!pastorGroupMap.has(uid)) pastorGroupMap.set(uid, new Set());
+      pastorGroupMap.get(uid)!.add(gid);
+    });
+
+    type GroupedSection = {
+      groupId: string;
+      groupName: string;
+      members: { id: string; name: string }[];
+    };
+
+    const sectionMap = new Map<string, GroupedSection>();
+
+    const getOrCreateSection = (gId: string): GroupedSection => {
+      if (!sectionMap.has(gId)) {
+        sectionMap.set(gId, {
+          groupId: gId,
+          groupName: groupNameMap.get(gId) || 'Unknown Church',
+          members: [],
+        });
+      }
+      return sectionMap.get(gId)!;
+    };
+
+    const addedToGroup = new Map<string, Set<string>>();
+
+    const addMember = (gId: string, memberId: string, memberName: string) => {
+      if (!addedToGroup.has(gId)) addedToGroup.set(gId, new Set());
+      if (addedToGroup.get(gId)!.has(memberId)) return;
+      addedToGroup.get(gId)!.add(memberId);
+      const section = getOrCreateSection(gId);
+      section.members.push({ id: memberId, name: memberName });
+    };
+
+    (allProfiles || []).forEach((p: any) => {
+      const name = (p.full_name as string)?.trim() || (p.display_name as string)?.trim() || 'Unknown';
+      const homeGroup = p.home_group_id as string | null;
+      if (homeGroup && groupNameMap.has(homeGroup)) {
+        addMember(homeGroup, p.id as string, name);
+      }
+
+      const pastorGroups = pastorGroupMap.get(p.id as string);
+      if (pastorGroups) {
+        pastorGroups.forEach((gId) => {
+          if (groupNameMap.has(gId)) {
+            addMember(gId, p.id as string, name);
+          }
+        });
+      }
+
+      if (!homeGroup && !pastorGroups) {
+        addMember('__unassigned__', p.id as string, name);
+      }
+    });
+
+    if (sectionMap.has('__unassigned__')) {
+      const unassigned = sectionMap.get('__unassigned__')!;
+      unassigned.groupName = 'Unassigned Members';
+    }
+
+    const sections = Array.from(sectionMap.values());
+
+    sections.sort((a, b) => {
+      if (a.groupId === primaryGroupId) return -1;
+      if (b.groupId === primaryGroupId) return 1;
+      if (a.groupId === '__unassigned__') return 1;
+      if (b.groupId === '__unassigned__') return -1;
+      return a.groupName.localeCompare(b.groupName);
+    });
+
+    sections.forEach((s) => {
+      s.members.sort((a, b) => a.name.localeCompare(b.name));
+    });
+
+    console.log('[Sabbath] Grouped members into', sections.length, 'sections');
+    return sections;
+  }, []);
+
   const createSabbathMutation = useMutation({
     mutationFn: async (params: {
       group_id: string;
@@ -425,6 +542,7 @@ export const [SabbathProvider, useSabbath] = createContextHook(() => {
     fetchAssignments,
     fetchAttendance,
     fetchGroupMembers,
+    fetchAllMembersGrouped,
 
     createSabbath: createSabbathMutation.mutateAsync,
     isCreatingSabbath: createSabbathMutation.isPending,
@@ -447,7 +565,7 @@ export const [SabbathProvider, useSabbath] = createContextHook(() => {
   }), [
     sabbathsQuery.data, sabbathsQuery.isLoading, sabbathsQuery.refetch,
     pastorGroupsQuery.data, isPastorOfGroup, isPastorOfAnyGroup,
-    fetchAssignments, fetchAttendance, fetchGroupMembers,
+    fetchAssignments, fetchAttendance, fetchGroupMembers, fetchAllMembersGrouped,
     createSabbathMutation.mutateAsync, createSabbathMutation.isPending, createSabbathMutation.error,
     updateSabbathMutation.mutateAsync, updateSabbathMutation.isPending,
     upsertAssignmentMutation.mutateAsync, upsertAssignmentMutation.isPending,
