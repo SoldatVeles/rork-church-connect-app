@@ -1,5 +1,5 @@
 import { Tabs, Redirect } from 'expo-router';
-import { Home, Calendar, Heart, User, Shield } from 'lucide-react-native';
+import { Home, Calendar, Heart, User, Shield, Sun } from 'lucide-react-native';
 import React from 'react';
 import { useAuth } from '@/providers/auth-provider';
 
@@ -57,6 +57,13 @@ export default function TabLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="sabbath"
+        options={{
+          title: 'Sabbath',
+          tabBarIcon: ({ color, size }) => <Sun size={size} color={color} />,
         }}
       />
       <Tabs.Screen
