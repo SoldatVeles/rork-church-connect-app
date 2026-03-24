@@ -53,24 +53,11 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
--- Keep the legacy name around so existing columns don't break.
-DO $$ BEGIN
-  CREATE TYPE assignment_status AS ENUM (
-    'pending', 'accepted', 'declined', 'replacement_suggested', 'reassigned'
-  );
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-
 -- Sabbath-specific attendance RSVP status
-DO $$ BEGIN
+DO $ BEGIN
   CREATE TYPE sabbath_attendance_status AS ENUM ('attending', 'not_attending');
 EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-
-DO $$ BEGIN
-  CREATE TYPE attendance_status AS ENUM ('attending', 'not_attending');
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
+END $;
 
 
 -- ============================================================
@@ -91,9 +78,10 @@ $$ LANGUAGE sql STABLE SECURITY DEFINER;
 -- ============================================================
 -- 3. HELPER: is_church_pastor(target_group_id)
 -- ============================================================
--- Returns TRUE when the current user is a pastor of the given
--- church via group_pastors, OR has the 'pastor' profile role
--- and their home_group_id matches.
+-- Returns TRUE when the current user is listed as a pastor of
+-- the given church in the group_pastors table.
+-- NOTE: This function checks group_pastors ONLY. It does NOT
+-- check profiles.role or profiles.home_group_id.
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION is_church_pastor(_group_id UUID)
@@ -124,8 +112,8 @@ $$ LANGUAGE sql STABLE SECURITY DEFINER;
 -- ============================================================
 -- One row per Sabbath service plan for one church on one Saturday.
 -- Published Sabbaths are nationally browseable by any authenticated user.
--- Draft and cancelled Sabbaths are only visible to admins, church pastors,
--- and the original creator.
+-- Draft Sabbaths are visible to admins, church pastors, and the original creator.
+-- Cancelled Sabbaths are visible only to admins and church pastors.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS sabbaths (
@@ -176,7 +164,7 @@ CREATE TABLE IF NOT EXISTS sabbath_assignments (
 
   user_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
 
-  status assignment_status NOT NULL DEFAULT 'pending',
+  status sabbath_assignment_status NOT NULL DEFAULT 'pending',
 
   decline_reason TEXT,
 
@@ -208,7 +196,7 @@ CREATE TABLE IF NOT EXISTS sabbath_attendance (
 
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
 
-  status attendance_status NOT NULL DEFAULT 'attending',
+  status sabbath_attendance_status NOT NULL DEFAULT 'attending',
 
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -328,13 +316,18 @@ DROP POLICY IF EXISTS sabbaths_update ON sabbaths;
 DROP POLICY IF EXISTS sabbaths_delete ON sabbaths;
 
 -- SELECT: published Sabbaths are nationally browseable by any authenticated user.
--- Draft/cancelled Sabbaths are visible only to admins, hosting-church pastors, or the creator.
+-- Draft Sabbaths are visible to admins, hosting-church pastors, or the original creator
+-- (creator access is kept so the user who started a draft can still find and edit it
+-- even if they are not formally in group_pastors, e.g. an admin who later lost the role).
+-- Cancelled Sabbaths are visible only to admins and hosting-church pastors
+-- (the creator does NOT get automatic access to cancelled rows to prevent leaking
+-- assignment data that was cleared on cancellation).
 CREATE POLICY sabbaths_select ON sabbaths
   FOR SELECT USING (
     (status = 'published' AND auth.uid() IS NOT NULL)
     OR is_app_admin()
     OR is_church_pastor(group_id)
-    OR created_by = auth.uid()
+    OR (status = 'draft' AND created_by = auth.uid())
   );
 
 -- INSERT: admins or pastors of the hosting church can create Sabbaths.
@@ -368,9 +361,9 @@ DROP POLICY IF EXISTS assignments_delete ON sabbath_assignments;
 
 -- SELECT: For published Sabbaths, any authenticated user can see assignments
 -- (since published Sabbaths are nationally browseable, their roles are public info).
--- For draft Sabbaths, admins/pastors/creator can see.
--- For cancelled Sabbaths, only admins/pastors can see assignments (not normal members).
--- An assigned user can always see their own assignment row regardless of status.
+-- For draft Sabbaths, admins, pastors, and the creator can see.
+-- For cancelled Sabbaths, only admins and pastors can see (not normal members or creator).
+-- An assigned user can always see their own assignment row regardless of Sabbath status.
 CREATE POLICY assignments_select ON sabbath_assignments
   FOR SELECT USING (
     sabbath_assignments.user_id = auth.uid()
@@ -381,7 +374,7 @@ CREATE POLICY assignments_select ON sabbath_assignments
         AND (
           (s.status = 'published' AND auth.uid() IS NOT NULL)
           OR is_church_pastor(s.group_id)
-          OR s.created_by = auth.uid()
+          OR (s.status = 'draft' AND s.created_by = auth.uid())
         )
     )
   );
