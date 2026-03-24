@@ -54,10 +54,10 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 -- Sabbath-specific attendance RSVP status
-DO $ BEGIN
+DO $$ BEGIN
   CREATE TYPE sabbath_attendance_status AS ENUM ('attending', 'not_attending');
 EXCEPTION WHEN duplicate_object THEN NULL;
-END $;
+END $$;
 
 
 -- ============================================================
