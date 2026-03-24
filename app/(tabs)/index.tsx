@@ -269,7 +269,20 @@ export default function HomeScreen() {
 
   const activeRequestsCount = prayersActiveQuery.data?.length ?? 0;
   const membersCount = usersQuery.data?.length ?? 0;
-  const unreadNotificationsCount = 0;
+  const notificationsCountQuery = useQuery({
+    queryKey: ['notifications', 'count'],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true });
+      
+      if (error) throw new Error(error.message);
+      return count ?? 0;
+    },
+    refetchInterval: 15000,
+  });
+
+  const unreadNotificationsCount = notificationsCountQuery.data ?? 0;
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -369,6 +382,7 @@ export default function HomeScreen() {
               bellButtonRef.current?.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
                 setBellPosition({ x: pageX + width / 2, y: pageY + height });
                 setShowNotifications(true);
+                void notificationsCountQuery.refetch();
               });
             }}
           >
