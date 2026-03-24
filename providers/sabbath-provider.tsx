@@ -157,11 +157,12 @@ export const [SabbathProvider, useSabbath] = createContextHook(() => {
     if (gmUserIds.length > 0) {
       const { data: gmProfiles } = await supabase
         .from('profiles')
-        .select('id, full_name')
+        .select('id, full_name, email')
         .in('id', gmUserIds);
 
       (gmProfiles || []).forEach((p: any) => {
-        memberMap.set(p.id as string, (p.full_name as string) || 'Unknown');
+        const name = (p.full_name as string)?.trim() || (p.email as string)?.split('@')[0] || 'Unknown';
+        memberMap.set(p.id as string, name);
       });
     }
 
@@ -181,11 +182,12 @@ export const [SabbathProvider, useSabbath] = createContextHook(() => {
     if (pastorIds.length > 0) {
       const { data: pastorProfiles } = await supabase
         .from('profiles')
-        .select('id, full_name')
+        .select('id, full_name, email')
         .in('id', pastorIds);
 
       (pastorProfiles || []).forEach((p: any) => {
-        memberMap.set(p.id as string, (p.full_name as string) || 'Unknown');
+        const name = (p.full_name as string)?.trim() || (p.email as string)?.split('@')[0] || 'Unknown';
+        memberMap.set(p.id as string, name);
       });
     }
 
@@ -193,7 +195,7 @@ export const [SabbathProvider, useSabbath] = createContextHook(() => {
       console.log('[Sabbath] No group_members or pastors found, falling back to all profiles');
       const { data: allProfiles, error: allError } = await supabase
         .from('profiles')
-        .select('id, full_name')
+        .select('id, full_name, email')
         .order('full_name', { ascending: true })
         .limit(100);
 
@@ -202,7 +204,8 @@ export const [SabbathProvider, useSabbath] = createContextHook(() => {
       }
 
       (allProfiles || []).forEach((p: any) => {
-        memberMap.set(p.id as string, (p.full_name as string) || 'Unknown');
+        const name = (p.full_name as string)?.trim() || (p.email as string)?.split('@')[0] || 'Unknown';
+        memberMap.set(p.id as string, name);
       });
     }
 
