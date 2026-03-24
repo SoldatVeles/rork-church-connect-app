@@ -8,6 +8,7 @@ import type {
   SabbathAssignmentStatus,
   SabbathDetailView,
   SabbathGroupInfo,
+  SabbathWithGroup,
   UpcomingResponsibilityItem,
   SabbathDateGroup,
 } from "@/types/sabbath";
@@ -138,13 +139,22 @@ const getMyChurchUpcoming = publicProcedure.query(async ({ ctx }) => {
   }
 
   const today = getTodayDateString();
+  const canManage = await checkCanManageSabbath(
+    ctx.supabase,
+    user.id,
+    profile.home_group_id
+  );
+
+  const statuses = canManage
+    ? ["draft", "published", "cancelled"]
+    : ["published", "cancelled"];
 
   const { data: sabbath, error } = await db(ctx.supabase)
     .from("sabbaths")
     .select("*")
     .eq("group_id", profile.home_group_id)
     .gte("sabbath_date", today)
-    .in("status", ["published", "draft"])
+    .in("status", statuses)
     .order("sabbath_date", { ascending: true })
     .limit(1)
     .maybeSingle();
@@ -208,21 +218,28 @@ const getSwitzerlandUpcomingByDate = publicProcedure.query(async ({ ctx }) => {
     .select("id, name")
     .in("id", groupIds);
 
-  const groupMap = new Map<string, string>();
+  const groupMap = new Map<string, SabbathGroupInfo>();
   if (groups) {
     for (const g of groups as Array<{ id: string; name: string }>) {
-      groupMap.set(g.id, g.name);
+      groupMap.set(g.id, { id: g.id, name: g.name });
     }
   }
 
-  const dateGroups = new Map<string, Sabbath[]>();
-  for (const s of sabbaths as Sabbath[]) {
-    const key = s.sabbath_date;
+  const itemsWithGroup: SabbathWithGroup[] = (sabbaths as Sabbath[]).map(
+    (s) => ({
+      sabbath: s,
+      group: groupMap.get(s.group_id) ?? { id: s.group_id, name: "Unknown Church" },
+    })
+  );
+
+  const dateGroups = new Map<string, SabbathWithGroup[]>();
+  for (const item of itemsWithGroup) {
+    const key = item.sabbath.sabbath_date;
     const existing = dateGroups.get(key);
     if (existing) {
-      existing.push(s);
+      existing.push(item);
     } else {
-      dateGroups.set(key, [s]);
+      dateGroups.set(key, [item]);
     }
   }
 
@@ -537,7 +554,7 @@ const createDraft = publicProcedure
     return sabbath as Sabbath;
   });
 
-const updateDraft = publicProcedure
+const updateSabbath = publicProcedure
   .input(
     z.object({
       sabbathId: z.string(),
@@ -560,8 +577,8 @@ const updateDraft = publicProcedure
 
     const typedSabbath = sabbath as Sabbath;
 
-    if (typedSabbath.status !== "draft") {
-      throw new Error("Only draft Sabbaths can be updated");
+    if (typedSabbath.status === "cancelled") {
+      throw new Error("Cancelled Sabbaths cannot be updated");
     }
 
     await requireCanManageSabbath(ctx.supabase, user.id, typedSabbath.group_id);
@@ -605,11 +622,16 @@ const updateDraft = publicProcedure
       .single();
 
     if (updateError) {
-      console.error("[sabbaths.updateDraft] Error:", updateError);
+      console.error("[sabbaths.updateSabbath] Error:", updateError);
       throw new Error(updateError.message);
     }
 
-    console.log("[sabbaths.updateDraft] Updated:", input.sabbathId);
+    // TODO: If published Sabbath was updated, trigger notification to assigned users and home church members about the change
+    if (typedSabbath.status === "published") {
+      console.log("[sabbaths.updateSabbath] Published sabbath updated — notification pending:", input.sabbathId);
+    }
+
+    console.log("[sabbaths.updateSabbath] Updated:", input.sabbathId);
     return updated as Sabbath;
   });
 
@@ -654,6 +676,7 @@ const assignRole = publicProcedure
       throw new Error(error.message);
     }
 
+    // TODO: Trigger notification to the assigned member about their new role
     console.log(
       "[sabbaths.assignRole] Assigned user",
       input.userId,
@@ -686,6 +709,15 @@ const reassignRole = publicProcedure
 
     await requireCanManageSabbath(ctx.supabase, user.id, (sabbath as any).group_id);
 
+    const { data: currentAssignment } = await db(ctx.supabase)
+      .from("sabbath_assignments")
+      .select("user_id")
+      .eq("sabbath_id", input.sabbathId)
+      .eq("role", input.role)
+      .single();
+
+    const previousUserId = (currentAssignment as any)?.user_id ?? null;
+
     const { data: assignment, error } = await db(ctx.supabase)
       .from("sabbath_assignments")
       .update({
@@ -704,9 +736,13 @@ const reassignRole = publicProcedure
       throw new Error(error.message);
     }
 
+    // TODO: Trigger notification to the newly assigned member about their role
+    // TODO: Optionally notify the replaced member (previousUserId) that they have been reassigned
     console.log(
       "[sabbaths.reassignRole] Reassigned role",
       input.role,
+      "from user",
+      previousUserId,
       "to user",
       input.newUserId
     );
@@ -736,6 +772,32 @@ const publish = publicProcedure
 
     await requireCanManageSabbath(ctx.supabase, user.id, typedSabbath.group_id);
 
+    const { data: assignmentsRaw, error: assignFetchError } = await db(ctx.supabase)
+      .from("sabbath_assignments")
+      .select("role, user_id")
+      .eq("sabbath_id", input.sabbathId);
+
+    if (assignFetchError) {
+      console.error("[sabbaths.publish] Error fetching assignments:", assignFetchError);
+      throw new Error(assignFetchError.message);
+    }
+
+    const assignmentsList = (assignmentsRaw ?? []) as Array<{ role: string; user_id: string | null }>;
+
+    for (const requiredRole of ALL_ROLES) {
+      const match = assignmentsList.find((a) => a.role === requiredRole);
+      if (!match) {
+        throw new Error(
+          `Cannot publish: missing assignment row for role "${requiredRole}". Please recreate the Sabbath.`
+        );
+      }
+      if (!match.user_id) {
+        throw new Error(
+          `Cannot publish: role "${requiredRole}" has no assigned user. Please assign all roles before publishing.`
+        );
+      }
+    }
+
     const { data: updated, error } = await db(ctx.supabase)
       .from("sabbaths")
       .update({
@@ -753,7 +815,7 @@ const publish = publicProcedure
       throw new Error(error.message);
     }
 
-    // TODO: Trigger notification to assigned users and home church members
+    // TODO: Trigger notification to assigned users and home church members about published Sabbath
     console.log("[sabbaths.publish] Published sabbath:", input.sabbathId);
     return updated as Sabbath;
   });
@@ -902,7 +964,7 @@ const acceptAssignment = publicProcedure
 
     const { data: assignment, error: fetchError } = await db(ctx.supabase)
       .from("sabbath_assignments")
-      .select("*, sabbaths!inner(status)")
+      .select("*, sabbaths!inner(status, group_id)")
       .eq("id", input.assignmentId)
       .single();
 
@@ -936,6 +998,7 @@ const acceptAssignment = publicProcedure
       throw new Error(error.message);
     }
 
+    // TODO: Trigger notification to pastors/admins of the hosting church that assignment was accepted
     console.log("[sabbaths.acceptAssignment] Accepted:", input.assignmentId);
     return updated as SabbathAssignment;
   });
@@ -989,7 +1052,7 @@ const declineAssignment = publicProcedure
       throw new Error(error.message);
     }
 
-    // TODO: Trigger notification to pastors about declined assignment
+    // TODO: Trigger notification to pastors/admins about declined assignment
     console.log("[sabbaths.declineAssignment] Declined:", input.assignmentId);
     return updated as SabbathAssignment;
   });
@@ -1049,7 +1112,7 @@ const suggestReplacement = publicProcedure
       throw new Error(error.message);
     }
 
-    // TODO: Trigger notification to pastors about replacement suggestion
+    // TODO: Trigger notification to pastors/admins about replacement suggestion
     console.log(
       "[sabbaths.suggestReplacement] Suggested replacement for:",
       input.assignmentId
@@ -1065,7 +1128,7 @@ export const sabbathsRouter = createTRPCRouter({
   getSabbathDetail,
   getMyUpcomingResponsibilities,
   createDraft,
-  updateDraft,
+  updateSabbath,
   assignRole,
   reassignRole,
   publish,

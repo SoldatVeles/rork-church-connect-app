@@ -4,6 +4,7 @@ import type {
   SabbathStatus,
   SabbathAssignmentStatus,
   SabbathDateGroup,
+  SabbathWithGroup,
   UpcomingResponsibilityItem,
 } from '@/types/sabbath';
 import {
@@ -73,24 +74,27 @@ export function formatSabbathShortDate(date: string): string {
 
 // --- Grouping / Sorting ---
 
-export function groupSabbathsByDate(sabbaths: Sabbath[]): SabbathDateGroup[] {
-  const sorted = sortSabbathsByDateAscending(sabbaths);
-  const groups = new Map<string, Sabbath[]>();
+export function groupSabbathsByDate(items: SabbathWithGroup[]): SabbathDateGroup[] {
+  const sorted = [...items].sort(
+    (a, b) =>
+      new Date(a.sabbath.sabbath_date).getTime() - new Date(b.sabbath.sabbath_date).getTime()
+  );
+  const groups = new Map<string, SabbathWithGroup[]>();
 
-  for (const sabbath of sorted) {
-    const key = toDateString(new Date(sabbath.sabbath_date));
+  for (const item of sorted) {
+    const key = toDateString(new Date(item.sabbath.sabbath_date));
     const existing = groups.get(key);
     if (existing) {
-      existing.push(sabbath);
+      existing.push(item);
     } else {
-      groups.set(key, [sabbath]);
+      groups.set(key, [item]);
     }
   }
 
-  return Array.from(groups.entries()).map(([dateKey, items]) => ({
+  return Array.from(groups.entries()).map(([dateKey, groupItems]) => ({
     date: dateKey,
     label: formatSabbathDate(dateKey),
-    sabbaths: items,
+    sabbaths: groupItems,
   }));
 }
 

@@ -98,10 +98,15 @@ export interface UpcomingResponsibilityItem {
   is_home_church: boolean;
 }
 
+export interface SabbathWithGroup {
+  sabbath: Sabbath;
+  group: SabbathGroupInfo;
+}
+
 export interface SabbathDateGroup {
   date: string;
   label: string;
-  sabbaths: Sabbath[];
+  sabbaths: SabbathWithGroup[];
 }
 
 // --- Label Mappings ---
