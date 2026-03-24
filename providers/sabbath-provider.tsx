@@ -141,13 +141,28 @@ export const [SabbathProvider, useSabbath] = createContextHook(() => {
   const fetchGroupMembers = useCallback(async (groupId: string) => {
     console.log('[Sabbath] Fetching group members for group:', groupId);
 
-    const { data: homeMembers, error: homeError } = await supabase
-      .from('profiles')
-      .select('id, full_name')
-      .eq('home_group_id', groupId);
+    const memberMap = new Map<string, string>();
 
-    if (homeError) {
-      console.error('[Sabbath] Error fetching home group members:', homeError.message);
+    const { data: groupMembers, error: gmError } = await supabase
+      .from('group_members')
+      .select('user_id')
+      .eq('group_id', groupId);
+
+    if (gmError) {
+      console.error('[Sabbath] Error fetching group_members:', gmError.message);
+    }
+
+    const gmUserIds = (groupMembers || []).map((gm: any) => gm.user_id as string);
+
+    if (gmUserIds.length > 0) {
+      const { data: gmProfiles } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', gmUserIds);
+
+      (gmProfiles || []).forEach((p: any) => {
+        memberMap.set(p.id as string, (p.full_name as string) || 'Unknown');
+      });
     }
 
     const { data: pastors, error: pastorError } = await supabase
@@ -158,12 +173,6 @@ export const [SabbathProvider, useSabbath] = createContextHook(() => {
     if (pastorError) {
       console.error('[Sabbath] Error fetching group pastors:', pastorError.message);
     }
-
-    const memberMap = new Map<string, string>();
-
-    (homeMembers || []).forEach((p: any) => {
-      memberMap.set(p.id as string, (p.full_name as string) || 'Unknown');
-    });
 
     const pastorIds = (pastors || [])
       .map((p: any) => p.user_id as string)
@@ -176,6 +185,23 @@ export const [SabbathProvider, useSabbath] = createContextHook(() => {
         .in('id', pastorIds);
 
       (pastorProfiles || []).forEach((p: any) => {
+        memberMap.set(p.id as string, (p.full_name as string) || 'Unknown');
+      });
+    }
+
+    if (memberMap.size === 0) {
+      console.log('[Sabbath] No group_members or pastors found, falling back to all profiles');
+      const { data: allProfiles, error: allError } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .order('full_name', { ascending: true })
+        .limit(100);
+
+      if (allError) {
+        console.error('[Sabbath] Error fetching all profiles:', allError.message);
+      }
+
+      (allProfiles || []).forEach((p: any) => {
         memberMap.set(p.id as string, (p.full_name as string) || 'Unknown');
       });
     }
