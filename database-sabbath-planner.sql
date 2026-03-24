@@ -1,195 +1,257 @@
 -- ============================================================
--- SABBATH PLANNER FEATURE - Full Schema
+-- SABBATH PLANNER FEATURE - Full Schema (Revised)
 -- ============================================================
 -- This schema supports a Sabbath planning system where each
 -- church (group) can plan one Sabbath per Saturday, assign
 -- roles to members, and track attendance.
+--
+-- KEY DESIGN NOTES:
+-- - All user FKs reference profiles(id), not auth.users(id),
+--   to stay consistent with the rest of the codebase.
+-- - profiles.home_group_id is the user's primary home church.
+--   A user belongs to one home church but may participate in
+--   events at other churches. The group_members table (if it
+--   exists) can track broader participation; home_group_id is
+--   the authoritative home church link.
+-- - Published Sabbaths are browseable nationally (any
+--   authenticated user can see them).
+-- - Attendance lists are restricted to home-church members,
+--   pastors of the hosting church, and admins.
+-- - Cancelled Sabbaths hide assignments from normal members.
+-- - Admins (profiles.role = 'admin') have full override on
+--   all Sabbath operations regardless of group_pastors membership.
+-- - Pastors listed in group_pastors for the hosting church
+--   retain full Sabbath planning permissions.
 -- ============================================================
 
 -- ============================================================
 -- 1. CUSTOM TYPES (ENUMS)
 -- ============================================================
 
--- Status of a Sabbath plan: draft (hidden from members), published (visible), cancelled (soft-delete)
-DO $
-BEGIN
+DO $$ BEGIN
   CREATE TYPE sabbath_status AS ENUM ('draft', 'published', 'cancelled');
-EXCEPTION
-  WHEN duplicate_object THEN NULL;
-END $;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
--- Fixed roles that can be assigned for each Sabbath service
-DO $
-BEGIN
-  CREATE TYPE sabbath_role AS ENUM ('first_part_leader', 'lesson_presenter', 'second_part_leader', 'sermon_speaker');
-EXCEPTION
-  WHEN duplicate_object THEN NULL;
-END $;
+DO $$ BEGIN
+  CREATE TYPE sabbath_role AS ENUM (
+    'first_part_leader',
+    'lesson_presenter',
+    'second_part_leader',
+    'sermon_speaker'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
--- Status of a role assignment
-DO $
-BEGIN
-  CREATE TYPE assignment_status AS ENUM ('pending', 'accepted', 'declined', 'replacement_suggested', 'reassigned');
-EXCEPTION
-  WHEN duplicate_object THEN NULL;
-END $;
+-- Sabbath-specific assignment status (renamed from generic "assignment_status")
+-- If the old type already exists we keep it; renaming enums in Postgres is
+-- disruptive so we create under the new name only when it does not yet exist.
+DO $$ BEGIN
+  CREATE TYPE sabbath_assignment_status AS ENUM (
+    'pending', 'accepted', 'declined', 'replacement_suggested', 'reassigned'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
--- Attendance RSVP status
-DO $
-BEGIN
+-- Keep the legacy name around so existing columns don't break.
+DO $$ BEGIN
+  CREATE TYPE assignment_status AS ENUM (
+    'pending', 'accepted', 'declined', 'replacement_suggested', 'reassigned'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Sabbath-specific attendance RSVP status
+DO $$ BEGIN
+  CREATE TYPE sabbath_attendance_status AS ENUM ('attending', 'not_attending');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
   CREATE TYPE attendance_status AS ENUM ('attending', 'not_attending');
-EXCEPTION
-  WHEN duplicate_object THEN NULL;
-END $;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
 -- ============================================================
--- 2. TABLE: sabbaths
+-- 2. HELPER: is_app_admin()
 -- ============================================================
--- Represents a single Sabbath service plan for a church.
--- Each church (group) can have at most one Sabbath per Saturday.
--- The sabbath_date should always be a Saturday — enforced at
--- app/backend level since Supabase/Postgres CHECK with
--- EXTRACT(DOW ...) = 6 works but is documented here explicitly.
+-- Returns TRUE when the current user has role = 'admin' in profiles.
+-- Used throughout RLS policies for admin override support.
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION is_app_admin()
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM profiles
+    WHERE id = auth.uid() AND role = 'admin'
+  );
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
+
+-- ============================================================
+-- 3. HELPER: is_church_pastor(target_group_id)
+-- ============================================================
+-- Returns TRUE when the current user is a pastor of the given
+-- church via group_pastors, OR has the 'pastor' profile role
+-- and their home_group_id matches.
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION is_church_pastor(_group_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM group_pastors gp
+    WHERE gp.group_id = _group_id AND gp.user_id = auth.uid()
+  );
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
+
+-- ============================================================
+-- 4. HELPER: is_home_church_member(target_group_id)
+-- ============================================================
+-- Returns TRUE when the current user's home_group_id matches.
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION is_home_church_member(_group_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM profiles
+    WHERE id = auth.uid() AND home_group_id = _group_id
+  );
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
+
+
+-- ============================================================
+-- 5. TABLE: sabbaths
+-- ============================================================
+-- One row per Sabbath service plan for one church on one Saturday.
+-- Published Sabbaths are nationally browseable by any authenticated user.
+-- Draft and cancelled Sabbaths are only visible to admins, church pastors,
+-- and the original creator.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS sabbaths (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-  -- The church/group this Sabbath belongs to
   group_id UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
 
-  -- The date of this Sabbath (must be a Saturday)
   sabbath_date DATE NOT NULL,
 
-  -- Plan status: draft = hidden from members, published = visible, cancelled = soft-delete
   status sabbath_status NOT NULL DEFAULT 'draft',
 
-  -- Optional notes for the planning team
   notes TEXT,
 
-  -- Audit: who created, updated, published, cancelled
-  created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-  updated_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-  published_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  updated_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  published_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
   published_at TIMESTAMPTZ,
-  cancelled_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  cancelled_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
   cancelled_at TIMESTAMPTZ,
   cancellation_reason TEXT,
 
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 
-  -- One Sabbath per church per Saturday
   CONSTRAINT uq_sabbaths_group_date UNIQUE (group_id, sabbath_date),
-
-  -- Ensure sabbath_date is always a Saturday (DOW 6 = Saturday)
   CONSTRAINT chk_sabbath_date_is_saturday CHECK (EXTRACT(DOW FROM sabbath_date) = 6)
 );
 
 COMMENT ON TABLE sabbaths IS 'Each row is a Sabbath service plan for one church on one Saturday.';
-COMMENT ON COLUMN sabbaths.status IS 'draft = hidden from members, published = visible, cancelled = soft-deleted.';
+COMMENT ON COLUMN sabbaths.status IS 'draft = hidden from regular members, published = nationally browseable, cancelled = soft-deleted.';
 COMMENT ON CONSTRAINT chk_sabbath_date_is_saturday ON sabbaths IS 'Ensures the date is always a Saturday.';
 
 
 -- ============================================================
--- 3. TABLE: sabbath_assignments
+-- 6. TABLE: sabbath_assignments
 -- ============================================================
 -- Tracks who is assigned to each role for a given Sabbath.
 -- Each Sabbath has exactly one assignment per role.
--- Members can accept, decline, or suggest a replacement.
+-- Assigned users can decline and optionally suggest a replacement.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS sabbath_assignments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-  -- Which Sabbath this assignment belongs to
   sabbath_id UUID NOT NULL REFERENCES sabbaths(id) ON DELETE CASCADE,
 
-  -- The role being assigned
   role sabbath_role NOT NULL,
 
-  -- The user assigned to this role (nullable if unassigned)
-  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  user_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
 
-  -- Current status of this assignment
   status assignment_status NOT NULL DEFAULT 'pending',
 
-  -- If declined, the reason provided
   decline_reason TEXT,
 
-  -- If the assignee suggested a replacement, who they suggested
-  suggested_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  suggested_user_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
 
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 
-  -- One assignment per role per Sabbath
   CONSTRAINT uq_sabbath_role UNIQUE (sabbath_id, role)
 );
 
-COMMENT ON TABLE sabbath_assignments IS 'One row per role per Sabbath. Tracks assignment, acceptance, and replacement suggestions.';
+COMMENT ON TABLE sabbath_assignments IS 'One row per role per Sabbath. Tracks assignment and replacement suggestions.';
 COMMENT ON COLUMN sabbath_assignments.suggested_user_id IS 'When status is replacement_suggested, this is who the assignee recommends instead.';
 
 
 -- ============================================================
--- 4. TABLE: sabbath_attendance
+-- 7. TABLE: sabbath_attendance
 -- ============================================================
 -- Tracks RSVP / attendance for each Sabbath per user.
+-- Attendance lists are restricted to the hosting church's members,
+-- its pastors, and app-wide admins. Other churches cannot see
+-- who is attending.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS sabbath_attendance (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-  -- Which Sabbath
   sabbath_id UUID NOT NULL REFERENCES sabbaths(id) ON DELETE CASCADE,
 
-  -- Which user
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
 
-  -- Attendance RSVP
   status attendance_status NOT NULL DEFAULT 'attending',
 
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 
-  -- One attendance record per user per Sabbath
   CONSTRAINT uq_sabbath_attendance UNIQUE (sabbath_id, user_id)
 );
 
-COMMENT ON TABLE sabbath_attendance IS 'RSVP tracking: each member can indicate attending or not_attending per Sabbath.';
+COMMENT ON TABLE sabbath_attendance IS 'RSVP tracking. Attendance lists are only visible to home-church members, hosting-church pastors, and admins.';
 
 
 -- ============================================================
--- 5. TABLE: group_pastors
+-- 8. TABLE: group_pastors
 -- ============================================================
 -- Maps pastors to churches. A church can have multiple pastors.
--- Pastors have elevated permissions for Sabbath planning.
+-- Pastors have elevated permissions for Sabbath planning in
+-- their church. Admins can also manage pastors for any church.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS group_pastors (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-  -- The church/group
   group_id UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
 
-  -- The pastor (user)
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
 
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 
-  -- One entry per pastor per church
   CONSTRAINT uq_group_pastor UNIQUE (group_id, user_id)
 );
 
-COMMENT ON TABLE group_pastors IS 'Maps pastors to churches. Multiple pastors per church allowed.';
+COMMENT ON TABLE group_pastors IS 'Maps pastors to churches. Multiple pastors per church allowed. Admins bypass this for management.';
 
 
 -- ============================================================
--- 6. ALTER profiles: add home_group_id
+-- 9. ALTER profiles: add home_group_id
 -- ============================================================
--- Each user has one home church (group). This links them to
--- the default church they belong to for Sabbath planning.
+-- Each user has one home church (group) via home_group_id.
+-- This is the primary church the user belongs to for Sabbath
+-- planning, attendance visibility, and member list grouping.
+-- Users may still participate in events at other churches,
+-- but home_group_id is the authoritative home church link.
+-- The group_members table (managed elsewhere) can track
+-- broader cross-church participation if needed.
 -- ============================================================
 
 DO $$
@@ -202,42 +264,26 @@ BEGIN
   END IF;
 END $$;
 
-COMMENT ON COLUMN profiles.home_group_id IS 'The user''s home church/group for Sabbath planning defaults.';
+COMMENT ON COLUMN profiles.home_group_id IS 'The user''s primary home church/group. Determines default Sabbath planning context and attendance visibility.';
 
 
 -- ============================================================
--- 7. INDEXES
+-- 10. INDEXES
 -- ============================================================
 
--- Fast lookup of Sabbaths by church and date range
 CREATE INDEX IF NOT EXISTS idx_sabbaths_group_date ON sabbaths (group_id, sabbath_date);
-
--- Fast lookup of Sabbaths by status (e.g. show only published)
 CREATE INDEX IF NOT EXISTS idx_sabbaths_status ON sabbaths (status);
-
--- Fast lookup of assignments by sabbath
 CREATE INDEX IF NOT EXISTS idx_assignments_sabbath ON sabbath_assignments (sabbath_id);
-
--- Fast lookup of assignments by user (e.g. "my upcoming assignments")
 CREATE INDEX IF NOT EXISTS idx_assignments_user ON sabbath_assignments (user_id);
-
--- Fast lookup of attendance by sabbath
 CREATE INDEX IF NOT EXISTS idx_attendance_sabbath ON sabbath_attendance (sabbath_id);
-
--- Fast lookup of attendance by user
 CREATE INDEX IF NOT EXISTS idx_attendance_user ON sabbath_attendance (user_id);
-
--- Fast lookup of pastors by group
 CREATE INDEX IF NOT EXISTS idx_group_pastors_group ON group_pastors (group_id);
-
--- Fast lookup of home group on profiles
+CREATE INDEX IF NOT EXISTS idx_group_pastors_user ON group_pastors (user_id);
 CREATE INDEX IF NOT EXISTS idx_profiles_home_group ON profiles (home_group_id);
 
 
 -- ============================================================
--- 8. UPDATED_AT TRIGGER FUNCTION
--- ============================================================
--- Reusable trigger function to auto-update the updated_at column.
+-- 11. UPDATED_AT TRIGGER FUNCTION
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -248,7 +294,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Apply trigger to each table with updated_at
 DROP TRIGGER IF EXISTS trg_sabbaths_updated_at ON sabbaths;
 CREATE TRIGGER trg_sabbaths_updated_at
   BEFORE UPDATE ON sabbaths
@@ -266,10 +311,9 @@ CREATE TRIGGER trg_sabbath_attendance_updated_at
 
 
 -- ============================================================
--- 9. ROW LEVEL SECURITY (RLS)
+-- 12. ROW LEVEL SECURITY (RLS)
 -- ============================================================
 
--- Enable RLS on all new tables
 ALTER TABLE sabbaths ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sabbath_assignments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sabbath_attendance ENABLE ROW LEVEL SECURITY;
@@ -278,51 +322,42 @@ ALTER TABLE group_pastors ENABLE ROW LEVEL SECURITY;
 -- ----- sabbaths -----
 
 DROP POLICY IF EXISTS sabbaths_select_published ON sabbaths;
+DROP POLICY IF EXISTS sabbaths_select ON sabbaths;
 DROP POLICY IF EXISTS sabbaths_insert ON sabbaths;
 DROP POLICY IF EXISTS sabbaths_update ON sabbaths;
 DROP POLICY IF EXISTS sabbaths_delete ON sabbaths;
 
--- Members can only see published Sabbaths for their home church
-CREATE POLICY sabbaths_select_published ON sabbaths
+-- SELECT: published Sabbaths are nationally browseable by any authenticated user.
+-- Draft/cancelled Sabbaths are visible only to admins, hosting-church pastors, or the creator.
+CREATE POLICY sabbaths_select ON sabbaths
   FOR SELECT USING (
-    status = 'published'
-    OR
-    -- Pastors and admins can see all statuses for their church
-    EXISTS (
-      SELECT 1 FROM group_pastors gp
-      WHERE gp.group_id = sabbaths.group_id AND gp.user_id = auth.uid()
-    )
-    OR
-    -- The creator can always see their own drafts
-    created_by = auth.uid()
+    (status = 'published' AND auth.uid() IS NOT NULL)
+    OR is_app_admin()
+    OR is_church_pastor(group_id)
+    OR created_by = auth.uid()
   );
 
--- Only pastors of the church can insert Sabbaths
+-- INSERT: admins or pastors of the hosting church can create Sabbaths.
 CREATE POLICY sabbaths_insert ON sabbaths
   FOR INSERT WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM group_pastors gp
-      WHERE gp.group_id = sabbaths.group_id AND gp.user_id = auth.uid()
-    )
+    is_app_admin()
+    OR is_church_pastor(group_id)
   );
 
--- Only pastors of the church can update Sabbaths
+-- UPDATE: admins or pastors of the hosting church can update Sabbaths.
 CREATE POLICY sabbaths_update ON sabbaths
   FOR UPDATE USING (
-    EXISTS (
-      SELECT 1 FROM group_pastors gp
-      WHERE gp.group_id = sabbaths.group_id AND gp.user_id = auth.uid()
-    )
+    is_app_admin()
+    OR is_church_pastor(group_id)
   );
 
--- Only pastors can delete (prefer cancellation over deletion)
+-- DELETE: admins or pastors of the hosting church can delete (prefer cancellation).
 CREATE POLICY sabbaths_delete ON sabbaths
   FOR DELETE USING (
-    EXISTS (
-      SELECT 1 FROM group_pastors gp
-      WHERE gp.group_id = sabbaths.group_id AND gp.user_id = auth.uid()
-    )
+    is_app_admin()
+    OR is_church_pastor(group_id)
   );
+
 
 -- ----- sabbath_assignments -----
 
@@ -331,58 +366,61 @@ DROP POLICY IF EXISTS assignments_insert ON sabbath_assignments;
 DROP POLICY IF EXISTS assignments_update ON sabbath_assignments;
 DROP POLICY IF EXISTS assignments_delete ON sabbath_assignments;
 
--- Anyone in the church can see assignments for published Sabbaths
+-- SELECT: For published Sabbaths, any authenticated user can see assignments
+-- (since published Sabbaths are nationally browseable, their roles are public info).
+-- For draft Sabbaths, admins/pastors/creator can see.
+-- For cancelled Sabbaths, only admins/pastors can see assignments (not normal members).
+-- An assigned user can always see their own assignment row regardless of status.
 CREATE POLICY assignments_select ON sabbath_assignments
   FOR SELECT USING (
-    EXISTS (
+    sabbath_assignments.user_id = auth.uid()
+    OR is_app_admin()
+    OR EXISTS (
       SELECT 1 FROM sabbaths s
       WHERE s.id = sabbath_assignments.sabbath_id
         AND (
-          s.status = 'published'
-          OR EXISTS (
-            SELECT 1 FROM group_pastors gp
-            WHERE gp.group_id = s.group_id AND gp.user_id = auth.uid()
-          )
-          OR sabbath_assignments.user_id = auth.uid()
+          (s.status = 'published' AND auth.uid() IS NOT NULL)
+          OR is_church_pastor(s.group_id)
+          OR s.created_by = auth.uid()
         )
     )
   );
 
--- Only pastors can create assignments
+-- INSERT: admins or pastors of the hosting church can assign any user.
 CREATE POLICY assignments_insert ON sabbath_assignments
   FOR INSERT WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM sabbaths s
-      JOIN group_pastors gp ON gp.group_id = s.group_id
-      WHERE s.id = sabbath_assignments.sabbath_id AND gp.user_id = auth.uid()
-    )
-  );
-
--- Pastors can update any assignment; assigned users can update their own (accept/decline)
-CREATE POLICY assignments_update ON sabbath_assignments
-  FOR UPDATE USING (
-    EXISTS (
+    is_app_admin()
+    OR EXISTS (
       SELECT 1 FROM sabbaths s
       WHERE s.id = sabbath_assignments.sabbath_id
-        AND (
-          EXISTS (
-            SELECT 1 FROM group_pastors gp
-            WHERE gp.group_id = s.group_id AND gp.user_id = auth.uid()
-          )
-          OR sabbath_assignments.user_id = auth.uid()
-        )
+        AND is_church_pastor(s.group_id)
     )
   );
 
--- Only pastors can delete assignments
-CREATE POLICY assignments_delete ON sabbath_assignments
-  FOR DELETE USING (
-    EXISTS (
+-- UPDATE: admins, pastors of the hosting church, or the assigned user themselves
+-- (e.g. to decline or suggest a replacement).
+CREATE POLICY assignments_update ON sabbath_assignments
+  FOR UPDATE USING (
+    is_app_admin()
+    OR sabbath_assignments.user_id = auth.uid()
+    OR EXISTS (
       SELECT 1 FROM sabbaths s
-      JOIN group_pastors gp ON gp.group_id = s.group_id
-      WHERE s.id = sabbath_assignments.sabbath_id AND gp.user_id = auth.uid()
+      WHERE s.id = sabbath_assignments.sabbath_id
+        AND is_church_pastor(s.group_id)
     )
   );
+
+-- DELETE: admins or pastors of the hosting church.
+CREATE POLICY assignments_delete ON sabbath_assignments
+  FOR DELETE USING (
+    is_app_admin()
+    OR EXISTS (
+      SELECT 1 FROM sabbaths s
+      WHERE s.id = sabbath_assignments.sabbath_id
+        AND is_church_pastor(s.group_id)
+    )
+  );
+
 
 -- ----- sabbath_attendance -----
 
@@ -391,33 +429,55 @@ DROP POLICY IF EXISTS attendance_insert ON sabbath_attendance;
 DROP POLICY IF EXISTS attendance_update ON sabbath_attendance;
 DROP POLICY IF EXISTS attendance_delete ON sabbath_attendance;
 
--- Anyone can see attendance for published Sabbaths
+-- SELECT: Attendance is NOT globally visible.
+-- A user can always see their own attendance rows.
+-- Home-church members (same group_id) can see the attendance list for their church's Sabbaths.
+-- Pastors of the hosting church and admins can see all attendance.
 CREATE POLICY attendance_select ON sabbath_attendance
   FOR SELECT USING (
-    EXISTS (
+    sabbath_attendance.user_id = auth.uid()
+    OR is_app_admin()
+    OR EXISTS (
       SELECT 1 FROM sabbaths s
-      WHERE s.id = sabbath_attendance.sabbath_id AND s.status = 'published'
+      WHERE s.id = sabbath_attendance.sabbath_id
+        AND s.status = 'published'
+        AND (
+          is_church_pastor(s.group_id)
+          OR is_home_church_member(s.group_id)
+        )
     )
-    OR sabbath_attendance.user_id = auth.uid()
   );
 
--- Users can insert their own attendance
+-- INSERT: users can insert their own attendance.
 CREATE POLICY attendance_insert ON sabbath_attendance
   FOR INSERT WITH CHECK (
     user_id = auth.uid()
   );
 
--- Users can update their own attendance
+-- UPDATE: users can update their own attendance; admins and pastors can update any.
 CREATE POLICY attendance_update ON sabbath_attendance
   FOR UPDATE USING (
-    user_id = auth.uid()
+    sabbath_attendance.user_id = auth.uid()
+    OR is_app_admin()
+    OR EXISTS (
+      SELECT 1 FROM sabbaths s
+      WHERE s.id = sabbath_attendance.sabbath_id
+        AND is_church_pastor(s.group_id)
+    )
   );
 
--- Users can delete their own attendance
+-- DELETE: users can delete their own; admins and pastors can delete any.
 CREATE POLICY attendance_delete ON sabbath_attendance
   FOR DELETE USING (
-    user_id = auth.uid()
+    sabbath_attendance.user_id = auth.uid()
+    OR is_app_admin()
+    OR EXISTS (
+      SELECT 1 FROM sabbaths s
+      WHERE s.id = sabbath_attendance.sabbath_id
+        AND is_church_pastor(s.group_id)
+    )
   );
+
 
 -- ----- group_pastors -----
 
@@ -425,23 +485,25 @@ DROP POLICY IF EXISTS group_pastors_select ON group_pastors;
 DROP POLICY IF EXISTS group_pastors_insert ON group_pastors;
 DROP POLICY IF EXISTS group_pastors_delete ON group_pastors;
 
--- Anyone can see who the pastors are
+-- SELECT: anyone authenticated can see who the pastors are.
 CREATE POLICY group_pastors_select ON group_pastors
-  FOR SELECT USING (true);
+  FOR SELECT USING (auth.uid() IS NOT NULL);
 
--- Only existing pastors of the group can add new pastors
+-- INSERT: admins can add pastors to any church; existing pastors of the church can add new pastors.
 CREATE POLICY group_pastors_insert ON group_pastors
   FOR INSERT WITH CHECK (
-    EXISTS (
+    is_app_admin()
+    OR EXISTS (
       SELECT 1 FROM group_pastors gp
       WHERE gp.group_id = group_pastors.group_id AND gp.user_id = auth.uid()
     )
   );
 
--- Only existing pastors can remove pastors
+-- DELETE: admins can remove pastors from any church; existing pastors can remove pastors in their church.
 CREATE POLICY group_pastors_delete ON group_pastors
   FOR DELETE USING (
-    EXISTS (
+    is_app_admin()
+    OR EXISTS (
       SELECT 1 FROM group_pastors gp
       WHERE gp.group_id = group_pastors.group_id AND gp.user_id = auth.uid()
     )
@@ -452,10 +514,9 @@ CREATE POLICY group_pastors_delete ON group_pastors
 -- DONE
 -- ============================================================
 -- After running this SQL:
--- 1. Manually add at least one pastor to group_pastors so they
---    can bootstrap the system (or create a separate admin policy).
--- 2. Validate that your "groups" table exists and is referenced
---    correctly.
--- 3. App/backend should enforce that sabbath_date is a Saturday
---    as an additional safeguard (the CHECK constraint handles DB level).
+-- 1. Ensure at least one user has role = 'admin' in profiles so
+--    they can bootstrap group_pastors and Sabbath data.
+-- 2. Validate that your "groups" and "profiles" tables exist.
+-- 3. App/backend enforces sabbath_date is a Saturday as an
+--    additional safeguard (the CHECK constraint handles DB level).
 -- ============================================================
