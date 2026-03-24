@@ -84,12 +84,13 @@ export const [SabbathProvider, useSabbath] = createContextHook(() => {
     if (userIds.length > 0) {
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, full_name')
+        .select('id, full_name, display_name')
         .in('id', userIds);
 
       const nameMap = new Map<string, string>();
       (profiles || []).forEach((p: any) => {
-        nameMap.set(p.id, p.full_name || 'Unknown');
+        const name = (p.full_name as string)?.trim() || (p.display_name as string)?.trim() || 'Unknown';
+        nameMap.set(p.id, name);
       });
 
       return assignments.map((a) => ({
@@ -121,12 +122,13 @@ export const [SabbathProvider, useSabbath] = createContextHook(() => {
     if (userIds.length > 0) {
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, full_name')
+        .select('id, full_name, display_name')
         .in('id', userIds);
 
       const nameMap = new Map<string, string>();
       (profiles || []).forEach((p: any) => {
-        nameMap.set(p.id, p.full_name || 'Unknown');
+        const name = (p.full_name as string)?.trim() || (p.display_name as string)?.trim() || 'Unknown';
+        nameMap.set(p.id, name);
       });
 
       return attendance.map((a) => ({
@@ -157,11 +159,11 @@ export const [SabbathProvider, useSabbath] = createContextHook(() => {
     if (gmUserIds.length > 0) {
       const { data: gmProfiles } = await supabase
         .from('profiles')
-        .select('id, full_name, email')
+        .select('id, full_name, display_name')
         .in('id', gmUserIds);
 
       (gmProfiles || []).forEach((p: any) => {
-        const name = (p.full_name as string)?.trim() || (p.email as string)?.split('@')[0] || 'Unknown';
+        const name = (p.full_name as string)?.trim() || (p.display_name as string)?.trim() || 'Unknown';
         memberMap.set(p.id as string, name);
       });
     }
@@ -182,11 +184,11 @@ export const [SabbathProvider, useSabbath] = createContextHook(() => {
     if (pastorIds.length > 0) {
       const { data: pastorProfiles } = await supabase
         .from('profiles')
-        .select('id, full_name, email')
+        .select('id, full_name, display_name')
         .in('id', pastorIds);
 
       (pastorProfiles || []).forEach((p: any) => {
-        const name = (p.full_name as string)?.trim() || (p.email as string)?.split('@')[0] || 'Unknown';
+        const name = (p.full_name as string)?.trim() || (p.display_name as string)?.trim() || 'Unknown';
         memberMap.set(p.id as string, name);
       });
     }
@@ -195,7 +197,7 @@ export const [SabbathProvider, useSabbath] = createContextHook(() => {
       console.log('[Sabbath] No group_members or pastors found, falling back to all profiles');
       const { data: allProfiles, error: allError } = await supabase
         .from('profiles')
-        .select('id, full_name, email')
+        .select('id, full_name, display_name')
         .order('full_name', { ascending: true })
         .limit(100);
 
@@ -204,7 +206,7 @@ export const [SabbathProvider, useSabbath] = createContextHook(() => {
       }
 
       (allProfiles || []).forEach((p: any) => {
-        const name = (p.full_name as string)?.trim() || (p.email as string)?.split('@')[0] || 'Unknown';
+        const name = (p.full_name as string)?.trim() || (p.display_name as string)?.trim() || 'Unknown';
         memberMap.set(p.id as string, name);
       });
     }
