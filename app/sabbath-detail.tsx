@@ -299,22 +299,6 @@ export default function SabbathDetailScreen() {
     [sabbath, assigningRole, upsertAssignment]
   );
 
-  const handleAcceptAssignment = useCallback(
-    async (assignment: SabbathAssignment) => {
-      try {
-        await respondAssignment({
-          assignment_id: assignment.id,
-          sabbath_id: assignment.sabbath_id,
-          status: 'accepted',
-        });
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch (err: any) {
-        Alert.alert('Error', err.message || 'Failed to accept.');
-      }
-    },
-    [respondAssignment]
-  );
-
   const handleDeclineAssignment = useCallback(async () => {
     if (!decliningAssignment) return;
     try {
@@ -452,22 +436,14 @@ export default function SabbathDetailScreen() {
           </View>
         )}
 
-        {myAssignment && upcoming && myAssignment.status === 'pending' && (
+        {myAssignment && upcoming && myAssignment.status !== 'declined' && (
           <View style={styles.myAssignmentBanner}>
             <View style={styles.bannerHeader}>
               <ClipboardList size={18} color="#1e3a8a" />
-              <Text style={styles.bannerTitle}>You've been assigned</Text>
+              <Text style={styles.bannerTitle}>You're assigned as</Text>
             </View>
             <Text style={styles.bannerRole}>{ROLE_LABELS[myAssignment.role]}</Text>
             <View style={styles.bannerActions}>
-              <TouchableOpacity
-                style={styles.acceptBtn}
-                onPress={() => handleAcceptAssignment(myAssignment)}
-                disabled={isRespondingAssignment}
-              >
-                <Check size={16} color="#fff" />
-                <Text style={styles.acceptBtnText}>Accept</Text>
-              </TouchableOpacity>
               <TouchableOpacity
                 style={styles.declineBtn}
                 onPress={() => {
@@ -477,7 +453,7 @@ export default function SabbathDetailScreen() {
                 disabled={isRespondingAssignment}
               >
                 <X size={16} color="#ef4444" />
-                <Text style={styles.declineBtnText}>Decline</Text>
+                <Text style={styles.declineBtnText}>Can't Attend / Decline</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -720,7 +696,7 @@ export default function SabbathDetailScreen() {
           <View style={[styles.declineModalContainer, { paddingBottom: insets.bottom + 20 }]}>
             <Text style={styles.declineModalTitle}>Decline Assignment</Text>
             <Text style={styles.declineModalSubtitle}>
-              Optionally provide a reason for declining.
+              Let the pastor know why you can't attend. They will be notified and can reassign someone else.
             </Text>
             <TextInput
               style={styles.declineInput}

@@ -145,28 +145,19 @@ export const [SabbathProvider, useSabbath] = createContextHook(() => {
 
     const memberMap = new Map<string, string>();
 
-    const { data: groupMembers, error: gmError } = await supabase
-      .from('group_members')
-      .select('user_id')
-      .eq('group_id', groupId);
+    const { data: groupProfiles, error: gpError } = await supabase
+      .from('profiles')
+      .select('id, full_name, display_name')
+      .eq('home_group_id', groupId);
 
-    if (gmError) {
-      console.error('[Sabbath] Error fetching group_members:', gmError.message);
+    if (gpError) {
+      console.error('[Sabbath] Error fetching profiles by home_group_id:', gpError.message);
     }
 
-    const gmUserIds = (groupMembers || []).map((gm: any) => gm.user_id as string);
-
-    if (gmUserIds.length > 0) {
-      const { data: gmProfiles } = await supabase
-        .from('profiles')
-        .select('id, full_name, display_name')
-        .in('id', gmUserIds);
-
-      (gmProfiles || []).forEach((p: any) => {
-        const name = (p.full_name as string)?.trim() || (p.display_name as string)?.trim() || 'Unknown';
-        memberMap.set(p.id as string, name);
-      });
-    }
+    (groupProfiles || []).forEach((p: any) => {
+      const name = (p.full_name as string)?.trim() || (p.display_name as string)?.trim() || 'Unknown';
+      memberMap.set(p.id as string, name);
+    });
 
     const { data: pastors, error: pastorError } = await supabase
       .from('group_pastors')
@@ -194,7 +185,7 @@ export const [SabbathProvider, useSabbath] = createContextHook(() => {
     }
 
     if (memberMap.size === 0) {
-      console.log('[Sabbath] No group_members or pastors found, falling back to all profiles');
+      console.log('[Sabbath] No members found for group, falling back to all profiles');
       const { data: allProfiles, error: allError } = await supabase
         .from('profiles')
         .select('id, full_name, display_name')
@@ -295,7 +286,7 @@ export const [SabbathProvider, useSabbath] = createContextHook(() => {
             sabbath_id: params.sabbath_id,
             role: params.role,
             user_id: params.user_id,
-            status: 'pending' as AssignmentStatus,
+            status: 'accepted' as AssignmentStatus,
           },
           { onConflict: 'sabbath_id,role' }
         )

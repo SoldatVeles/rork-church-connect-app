@@ -66,7 +66,7 @@ export const STATUS_LABELS: Record<SabbathStatus, string> = {
 
 export const ASSIGNMENT_STATUS_LABELS: Record<AssignmentStatus, string> = {
   pending: 'Pending',
-  accepted: 'Accepted',
+  accepted: 'Assigned',
   declined: 'Declined',
   replacement_suggested: 'Replacement Suggested',
   reassigned: 'Reassigned',
