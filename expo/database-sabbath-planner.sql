@@ -359,15 +359,17 @@ DROP POLICY IF EXISTS assignments_insert ON sabbath_assignments;
 DROP POLICY IF EXISTS assignments_update ON sabbath_assignments;
 DROP POLICY IF EXISTS assignments_delete ON sabbath_assignments;
 
--- SELECT: For published Sabbaths, any authenticated user can see assignments
--- (since published Sabbaths are nationally browseable, their roles are public info).
--- For draft Sabbaths, admins, pastors, and the creator can see.
--- For cancelled Sabbaths, only admins and pastors can see (not normal members or creator).
--- An assigned user can always see their own assignment row regardless of Sabbath status.
+-- SELECT: visibility follows the parent Sabbath's status.
+-- Published Sabbaths: any authenticated user can see assignments (nationally browseable).
+--   This includes the assigned user themselves.
+-- Draft Sabbaths: only admins, hosting-church pastors, and the Sabbath creator.
+--   Assigned users do NOT see draft assignment rows (they should not know about
+--   a Sabbath that has not been published yet).
+-- Cancelled Sabbaths: only admins and hosting-church pastors.
+--   Normal members (including the assigned user and creator) cannot see cancelled assignments.
 CREATE POLICY assignments_select ON sabbath_assignments
   FOR SELECT USING (
-    sabbath_assignments.user_id = auth.uid()
-    OR is_app_admin()
+    is_app_admin()
     OR EXISTS (
       SELECT 1 FROM sabbaths s
       WHERE s.id = sabbath_assignments.sabbath_id
