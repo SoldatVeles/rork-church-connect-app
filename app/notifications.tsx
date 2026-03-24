@@ -1,4 +1,4 @@
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 import React, { useMemo } from 'react';
 import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Bell, Trash2 } from 'lucide-react-native';
@@ -14,8 +14,6 @@ interface AppNotification {
 }
 
 export default function NotificationsScreen() {
-  const router = useRouter();
-
   const query = useQuery<AppNotification[], Error>({
     queryKey: ['notifications', 'all'],
     queryFn: async () => {
@@ -31,7 +29,7 @@ export default function NotificationsScreen() {
 
   const clearAll = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from('notifications').delete().neq('id', '');
+      const { error } = await supabase.from('notifications').delete().not('id', 'is', null);
       if (error) throw new Error(error.message);
     },
     onSuccess: () => query.refetch(),

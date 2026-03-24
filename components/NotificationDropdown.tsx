@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   Dimensions,
   ActivityIndicator,
 } from 'react-native';
-import { Bell, Calendar, Heart, MessageCircle, X, CheckCheck, Trash2 } from 'lucide-react-native';
+import { Bell, Calendar, Heart, MessageCircle, X, Trash2 } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -21,14 +21,6 @@ interface NotificationDropdownProps {
   anchorPosition?: { x: number; y: number };
 }
 
-type AppNotification = {
-  id: string;
-  type: string;
-  title: string;
-  message: string;
-  isRead: boolean;
-  createdAt: Date;
-};
 
 const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   visible,
@@ -59,26 +51,14 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   
   const markReadMutation = useMutation({
     mutationFn: async (data: { id: string }) => {
-      // This would need to be implemented in the database
       console.log('Mark read not implemented yet:', data.id);
     },
     onSuccess: () => {
-      notificationsQuery.refetch();
-    },
-  });
-  
-  const markAllReadMutation = useMutation({
-    mutationFn: async () => {
-      // This would need to be implemented in the database
-      console.log('Mark all read not implemented yet');
-    },
-    onSuccess: () => {
-      notificationsQuery.refetch();
+      void notificationsQuery.refetch();
     },
   });
 
   const notifications = notificationsQuery.data || [];
-  const unreadCount = notifications.filter(n => !n.isRead).length;
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -93,7 +73,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
     }
   };
 
-  const handleNotificationPress = async (notification: any) => {
+  const handleNotificationPress = (notification: { id: string; type: string; isRead: boolean }) => {
     // Mark as read
     if (!notification.isRead) {
       markReadMutation.mutate({ id: notification.id });
@@ -113,10 +93,6 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
     }
     
     onClose();
-  };
-
-  const handleMarkAllRead = async () => {
-    markAllReadMutation.mutate();
   };
 
   const formatTime = (date: Date | string) => {
@@ -148,7 +124,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   const clearAllMutation = useMutation({
     mutationFn: async () => {
       console.log('Clearing all notifications');
-      const { error } = await supabase.from('notifications').delete().neq('id', '');
+      const { error } = await supabase.from('notifications').delete().not('id', 'is', null);
       if (error) throw new Error(error.message);
     },
     onSuccess: () => notificationsQuery.refetch(),

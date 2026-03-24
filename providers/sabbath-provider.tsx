@@ -13,6 +13,7 @@ import type {
   AttendanceStatus,
   GroupPastor,
 } from '@/types/sabbath';
+import { ROLE_LABELS } from '@/types/sabbath';
 
 export const [SabbathProvider, useSabbath] = createContextHook(() => {
   const { user } = useAuth();
@@ -293,10 +294,42 @@ export const [SabbathProvider, useSabbath] = createContextHook(() => {
         .select()
         .single();
       if (error) throw new Error(error.message);
+
+      if (params.user_id) {
+        try {
+          const sabbath = (sabbathsQuery.data || []).find((s) => s.id === params.sabbath_id);
+          const sabbathDate = sabbath
+            ? new Date(sabbath.sabbath_date + 'T00:00:00').toLocaleDateString('en-US', {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
+              })
+            : 'an upcoming Sabbath';
+
+          const roleLabel = ROLE_LABELS[params.role] || params.role;
+
+          const { error: notifError } = await supabase.from('notifications').insert({
+            type: 'sabbath_assignment',
+            title: `You've been assigned: ${roleLabel}`,
+            body: `You have been assigned as ${roleLabel} for the Sabbath on ${sabbathDate}.`,
+            created_by: userId,
+          });
+          if (notifError) {
+            console.warn('[Sabbath] Failed to create assignment notification:', notifError.message);
+          } else {
+            console.log('[Sabbath] Created assignment notification for user:', params.user_id);
+          }
+        } catch (notifErr) {
+          console.warn('[Sabbath] Error creating notification:', notifErr);
+        }
+      }
+
       return data as SabbathAssignment;
     },
     onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({ queryKey: ['sabbath-assignments', variables.sabbath_id] });
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
 
