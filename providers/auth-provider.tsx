@@ -1,7 +1,7 @@
 import createContextHook from '@nkzw/create-context-hook';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { AuthState, User as AppUser, UserRole } from '@/types/user';
 import { supabase } from '@/lib/supabase';
@@ -17,6 +17,15 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const [session, setSession] = useState<Session | null>(null);
   const queryClient = useQueryClient();
 
+  const deriveFullName = (user: SupaUser, existingName?: string | null): string => {
+    if (existingName && existingName.trim() !== '') return existingName.trim();
+    const firstName = ((user.user_metadata?.first_name as string) ?? '').trim();
+    const lastName = ((user.user_metadata?.last_name as string) ?? '').trim();
+    const metaFullName = ((user.user_metadata?.full_name as string) ?? '').trim();
+    const combined = [firstName, lastName].filter(Boolean).join(' ');
+    return combined || metaFullName || user.email?.split('@')[0] || 'User';
+  };
+
   const getOrCreateProfile = async (user: SupaUser): Promise<AppUser> => {
     const { data: profile, error } = await supabase
       .from('profiles')
@@ -25,9 +34,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       .single();
 
     if (error && (error as any).code === 'PGRST116') {
-      const firstName = (user.user_metadata?.first_name as string | undefined) ?? '';
-      const lastName = (user.user_metadata?.last_name as string | undefined) ?? '';
-      const fullName = `${firstName} ${lastName}`.trim() || user.email?.split('@')[0] || 'User';
+      const fullName = deriveFullName(user);
+      console.log('[Auth] Creating new profile with full_name:', fullName);
       
       const { data: newProfile, error: insertError } = await supabase
         .from('profiles')
@@ -35,16 +43,19 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           id: user.id,
           email: user.email!,
           full_name: fullName,
+          display_name: fullName,
           role: 'member',
         })
         .select()
         .single();
       if (insertError) throw new Error(insertError.message);
+      const firstName = ((user.user_metadata?.first_name as string) ?? '').trim();
+      const lastName = ((user.user_metadata?.last_name as string) ?? '').trim();
       return {
         id: newProfile.id,
         email: newProfile.email,
-        firstName: firstName,
-        lastName: lastName,
+        firstName,
+        lastName,
         displayName: newProfile.full_name as string | null,
         role: (newProfile.role as UserRole) || 'member',
         permissions: [],
@@ -55,25 +66,32 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
     if (error) throw new Error((error as any).message ?? 'Failed to load profile');
 
-    const firstName = (user.user_metadata?.first_name as string | undefined) ?? '';
-    const lastName = (user.user_metadata?.last_name as string | undefined) ?? '';
-    const currentFullName = (profile as any).full_name as string | null;
+    const currentFullName = ((profile as any).full_name as string | null) ?? '';
+    const currentDisplayName = ((profile as any).display_name as string | null) ?? '';
+    const needsUpdate = !currentFullName.trim() || !currentDisplayName.trim();
 
-    if (!currentFullName || currentFullName.trim() === '') {
-      const derivedName = `${firstName} ${lastName}`.trim() || user.email?.split('@')[0] || 'User';
-      console.log('[Auth] Profile missing full_name, updating to:', derivedName);
+    if (needsUpdate) {
+      const derivedName = deriveFullName(user, currentFullName);
+      console.log('[Auth] Profile missing full_name/display_name, updating to:', derivedName);
+      const updates: Record<string, string> = {};
+      if (!currentFullName.trim()) updates.full_name = derivedName;
+      if (!currentDisplayName.trim()) updates.display_name = derivedName;
       await supabase
         .from('profiles')
-        .update({ full_name: derivedName })
+        .update(updates)
         .eq('id', user.id);
       (profile as any).full_name = derivedName;
+      (profile as any).display_name = derivedName;
     }
+
+    const firstName = ((user.user_metadata?.first_name as string) ?? '').trim();
+    const lastName = ((user.user_metadata?.last_name as string) ?? '').trim();
 
     return {
       id: (profile as any).id as string,
       email: (profile as any).email as string,
-      firstName: firstName,
-      lastName: lastName,
+      firstName,
+      lastName,
       displayName: (profile as any).full_name as string | null,
       role: ((profile as any).role as UserRole) || 'member',
       permissions: [],
@@ -108,7 +126,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         setAuthState({ user: null, isLoading: false, isAuthenticated: false });
       }
     };
-    bootstrap();
+    void bootstrap();
   }, []);
 
   useEffect(() => {
@@ -254,12 +272,12 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     },
   });
 
-  const hasPermission = (permission: string): boolean => authState.user?.permissions.includes(permission as any) || false;
-  const isRole = (role: string): boolean => authState.user?.role === role;
-  const isAdmin = (): boolean => authState.user?.role === 'admin';
-  const isPastor = (): boolean => authState.user?.role === 'pastor' || authState.user?.role === 'admin';
+  const hasPermission = useCallback((permission: string): boolean => authState.user?.permissions.includes(permission as any) || false, [authState.user]);
+  const isRole = useCallback((role: string): boolean => authState.user?.role === role, [authState.user]);
+  const isAdmin = useCallback((): boolean => authState.user?.role === 'admin', [authState.user]);
+  const isPastor = useCallback((): boolean => authState.user?.role === 'pastor' || authState.user?.role === 'admin', [authState.user]);
 
-  return {
+  return useMemo(() => ({
     ...authState,
     session,
     login: loginMutation.mutate,
@@ -275,5 +293,5 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     isRole,
     isAdmin,
     isPastor,
-  };
+  }), [authState, session, loginMutation, logoutMutation, registerMutation, hasPermission, isRole, isAdmin, isPastor]);
 });
