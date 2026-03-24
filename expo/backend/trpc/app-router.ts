@@ -12,6 +12,7 @@ import createUserProcedure from "./routes/users/create/route";
 import getUserDiagnosticsProcedure from "./routes/users/diagnostics/route";
 import getUserStatsProcedure from "./routes/users/get-stats/route";
 import getTotalCountProcedure from "./routes/users/get-total-count/route";
+import { sabbathsRouter } from "./routes/sabbaths";
 
 export const appRouter = createTRPCRouter({
   example: createTRPCRouter({
@@ -33,6 +34,7 @@ export const appRouter = createTRPCRouter({
     getStats: getUserStatsProcedure,
     getTotalCount: getTotalCountProcedure,
   }),
+  sabbaths: sabbathsRouter,
 });
 
 export type AppRouter = typeof appRouter;
