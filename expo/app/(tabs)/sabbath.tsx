@@ -2,17 +2,10 @@ import { StatusBar } from 'expo-status-bar';
 import {
   Sun,
   Church,
-  Users,
-  CheckCircle,
-  XCircle,
-  AlertTriangle,
-  UserCheck,
-  UserX,
-  UserPlus,
   Calendar,
   MapPin,
-  ChevronRight,
-  RefreshCw,
+  AlertTriangle,
+  XCircle,
 } from 'lucide-react-native';
 import React, { useState, useMemo, useCallback } from 'react';
 import {
@@ -31,125 +24,24 @@ import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/providers/auth-provider';
 import type {
   SabbathAssignment,
-  SabbathAttendance,
-  SabbathRole,
-  SabbathDateGroup,
-  SabbathWithGroup,
+  SabbathDateGroup as SabbathDateGroupType,
   Sabbath,
   SabbathGroupInfo,
   SabbathDetailView,
 } from '@/types/sabbath';
-import { ALL_ROLES } from '@/types/sabbath';
 import {
   formatSabbathDate,
-  getSabbathRoleLabel,
-  getSabbathStatusLabel,
-  getAssignmentStatusLabel,
   isPublishedSabbath,
   isCancelledSabbath,
 } from '@/utils/sabbath';
+import { SabbathCardHeader } from '@/components/sabbath/SabbathCardHeader';
+import { SabbathRoleList } from '@/components/sabbath/SabbathRoleList';
+import { SabbathAttendanceActions } from '@/components/sabbath/SabbathAttendanceActions';
+import { SabbathAttendeesList } from '@/components/sabbath/SabbathAttendeesList';
+import { SabbathAssignmentActions } from '@/components/sabbath/SabbathAssignmentActions';
+import { SabbathDateGroup } from '@/components/sabbath/SabbathDateGroup';
 
 type TabKey = 'myChurch' | 'switzerland';
-
-function StatusBadge({ status }: { status: Sabbath['status'] }) {
-  const label = getSabbathStatusLabel(status);
-  const colorMap = {
-    draft: { bg: '#fef3c7', text: '#92400e', border: '#fde68a' },
-    published: { bg: '#dcfce7', text: '#166534', border: '#bbf7d0' },
-    cancelled: { bg: '#fee2e2', text: '#991b1b', border: '#fecaca' },
-  } as const;
-  const colors = colorMap[status] ?? colorMap.draft;
-
-  return (
-    <View style={[badgeStyles.container, { backgroundColor: colors.bg, borderColor: colors.border }]}>
-      <Text style={[badgeStyles.text, { color: colors.text }]}>{label}</Text>
-    </View>
-  );
-}
-
-const badgeStyles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignSelf: 'flex-start' as const,
-  },
-  text: {
-    fontSize: 11,
-    fontWeight: '600' as const,
-  },
-});
-
-function AssignmentStatusBadge({ status }: { status: SabbathAssignment['status'] }) {
-  const label = getAssignmentStatusLabel(status);
-  const colorMap: Record<string, { bg: string; text: string }> = {
-    pending: { bg: '#fef9c3', text: '#854d0e' },
-    accepted: { bg: '#dcfce7', text: '#166534' },
-    declined: { bg: '#fee2e2', text: '#991b1b' },
-    replacement_suggested: { bg: '#e0e7ff', text: '#3730a3' },
-    reassigned: { bg: '#f3e8ff', text: '#6b21a8' },
-  };
-  const colors = colorMap[status] ?? { bg: '#f1f5f9', text: '#475569' };
-
-  return (
-    <View style={[{ backgroundColor: colors.bg, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 }]}>
-      <Text style={{ fontSize: 10, fontWeight: '500' as const, color: colors.text }}>{label}</Text>
-    </View>
-  );
-}
-
-function RoleRow({ role, assignment }: { role: SabbathRole; assignment?: SabbathAssignment }) {
-  const roleLabel = getSabbathRoleLabel(role);
-  const assigneeName = assignment?.user_name ?? 'Unassigned';
-  const hasAssignee = !!assignment?.user_id;
-
-  return (
-    <View style={roleStyles.row}>
-      <View style={roleStyles.left}>
-        <Text style={roleStyles.roleLabel}>{roleLabel}</Text>
-        <Text style={[roleStyles.assignee, !hasAssignee && roleStyles.unassigned]}>
-          {assigneeName}
-        </Text>
-      </View>
-      {hasAssignee && assignment && (
-        <AssignmentStatusBadge status={assignment.status} />
-      )}
-    </View>
-  );
-}
-
-const roleStyles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e2e8f0',
-  },
-  left: {
-    flex: 1,
-    marginRight: 12,
-  },
-  roleLabel: {
-    fontSize: 12,
-    fontWeight: '600' as const,
-    color: '#64748b',
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  assignee: {
-    fontSize: 15,
-    fontWeight: '500' as const,
-    color: '#1e293b',
-  },
-  unassigned: {
-    color: '#94a3b8',
-    fontStyle: 'italic' as const,
-  },
-});
 
 function EmptyState({ icon, title, message }: { icon: React.ReactNode; title: string; message: string }) {
   return (
@@ -180,26 +72,6 @@ function ErrorState({ message }: { message: string }) {
   );
 }
 
-function SabbathCardHeader({ groupName, status, onViewDetail }: { groupName: string; status: Sabbath['status']; onViewDetail?: () => void }) {
-  return (
-    <TouchableOpacity
-      style={styles.cardHeader}
-      onPress={onViewDetail}
-      disabled={!onViewDetail}
-      activeOpacity={onViewDetail ? 0.7 : 1}
-    >
-      <View style={styles.cardHeaderLeft}>
-        <Church size={18} color="#1e3a8a" />
-        <Text style={styles.churchName}>{groupName}</Text>
-      </View>
-      <View style={styles.cardHeaderRight}>
-        <StatusBadge status={status} />
-        {onViewDetail && <ChevronRight size={18} color="#94a3b8" />}
-      </View>
-    </TouchableOpacity>
-  );
-}
-
 function CancelledBanner({ reason }: { reason?: string | null }) {
   return (
     <View style={styles.cancelledBanner}>
@@ -207,166 +79,6 @@ function CancelledBanner({ reason }: { reason?: string | null }) {
       <Text style={styles.cancelledText}>
         This Sabbath has been cancelled{reason ? `: ${reason}` : '.'}
       </Text>
-    </View>
-  );
-}
-
-function ProgramCard({ assignments }: { assignments: SabbathAssignment[] }) {
-  return (
-    <View style={styles.card}>
-      <Text style={styles.sectionHeading}>Program</Text>
-      {ALL_ROLES.map((role) => {
-        const assignment = assignments.find(a => a.role === role);
-        return <RoleRow key={role} role={role} assignment={assignment} />;
-      })}
-    </View>
-  );
-}
-
-interface AssignmentActionAreaProps {
-  myAssignment: SabbathAssignment;
-  canRespond: boolean;
-  onAccept: (id: string) => void;
-  onDecline: (id: string) => void;
-  onSuggestReplacement: (id: string) => void;
-  isMutating: boolean;
-}
-
-function AssignmentActionArea({ myAssignment, canRespond, onAccept, onDecline, onSuggestReplacement, isMutating }: AssignmentActionAreaProps) {
-  if (!canRespond) return null;
-
-  const canAct = myAssignment.status === 'pending' || myAssignment.status === 'accepted' || myAssignment.status === 'declined';
-
-  return (
-    <View style={styles.card}>
-      <Text style={styles.sectionHeading}>Your Assignment</Text>
-      <Text style={styles.myAssignmentRole}>
-        {getSabbathRoleLabel(myAssignment.role)}
-      </Text>
-      <AssignmentStatusBadge status={myAssignment.status} />
-
-      {myAssignment.status === 'pending' && (
-        <View style={styles.assignmentActions}>
-          <TouchableOpacity
-            testID="accept-assignment"
-            style={styles.acceptButton}
-            onPress={() => onAccept(myAssignment.id)}
-            disabled={isMutating}
-          >
-            <UserCheck size={16} color="#ffffff" />
-            <Text style={styles.acceptButtonText}>Accept</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            testID="decline-assignment"
-            style={styles.declineButton}
-            onPress={() => onDecline(myAssignment.id)}
-            disabled={isMutating}
-          >
-            <UserX size={16} color="#991b1b" />
-            <Text style={styles.declineButtonText}>Decline</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {canAct && (
-        <TouchableOpacity
-          testID="suggest-replacement"
-          style={styles.suggestButton}
-          onPress={() => onSuggestReplacement(myAssignment.id)}
-          disabled={isMutating}
-        >
-          <RefreshCw size={16} color="#1e3a8a" />
-          <Text style={styles.suggestButtonText}>Suggest Replacement</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-}
-
-interface AttendanceControlsProps {
-  sabbathId: string;
-  currentStatus: string | null;
-  onAttend: (sabbathId: string, attending: boolean) => void;
-  isMutating: boolean;
-}
-
-function AttendanceControls({ sabbathId, currentStatus, onAttend, isMutating }: AttendanceControlsProps) {
-  return (
-    <View style={styles.card}>
-      <Text style={styles.sectionHeading}>Your Attendance</Text>
-      <View style={styles.attendanceRow}>
-        <TouchableOpacity
-          testID="attend-button"
-          style={[
-            styles.attendanceButton,
-            currentStatus === 'attending' && styles.attendanceButtonActive,
-          ]}
-          onPress={() => onAttend(sabbathId, true)}
-          disabled={isMutating}
-        >
-          <CheckCircle
-            size={18}
-            color={currentStatus === 'attending' ? '#ffffff' : '#166534'}
-          />
-          <Text
-            style={[
-              styles.attendanceButtonText,
-              currentStatus === 'attending' && styles.attendanceButtonTextActive,
-            ]}
-          >
-            Attending
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          testID="not-attend-button"
-          style={[
-            styles.attendanceButton,
-            currentStatus === 'not_attending' && styles.notAttendingButtonActive,
-          ]}
-          onPress={() => onAttend(sabbathId, false)}
-          disabled={isMutating}
-        >
-          <XCircle
-            size={18}
-            color={currentStatus === 'not_attending' ? '#ffffff' : '#991b1b'}
-          />
-          <Text
-            style={[
-              styles.attendanceButtonText,
-              currentStatus === 'not_attending' && styles.notAttendingButtonTextActive,
-            ]}
-          >
-            Not Attending
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-
-function AttendeesList({ attendance, attendingCount }: { attendance: SabbathAttendance[]; attendingCount: number }) {
-  const attending = attendance.filter(a => a.status === 'attending');
-
-  return (
-    <View style={styles.card}>
-      <View style={styles.attendeesHeader}>
-        <Users size={16} color="#1e3a8a" />
-        <Text style={styles.sectionHeading}>Attendees ({attendingCount})</Text>
-      </View>
-      {attending.length === 0 ? (
-        <Text style={styles.emptyAttendees}>No responses yet.</Text>
-      ) : (
-        attending.map((att) => (
-          <View key={att.id} style={styles.attendeeRow}>
-            <View style={styles.attendeeAvatar}>
-              <Text style={styles.attendeeInitial}>
-                {(att.user_name ?? '?')[0].toUpperCase()}
-              </Text>
-            </View>
-            <Text style={styles.attendeeName}>{att.user_name ?? 'Unknown'}</Text>
-          </View>
-        ))
-      )}
     </View>
   );
 }
@@ -472,11 +184,11 @@ function MyChurchSection({
       </View>
 
       {published && detailData?.shouldShowAssignments && (
-        <ProgramCard assignments={detailData.assignments} />
+        <SabbathRoleList assignments={detailData.assignments} />
       )}
 
       {published && myAssignment && detailData?.canRespondAssignment && (
-        <AssignmentActionArea
+        <SabbathAssignmentActions
           myAssignment={myAssignment}
           canRespond={detailData.canRespondAssignment}
           onAccept={onAccept}
@@ -487,7 +199,7 @@ function MyChurchSection({
       )}
 
       {published && detailData?.canRespondAttendance && (
-        <AttendanceControls
+        <SabbathAttendanceActions
           sabbathId={sabbath.id}
           currentStatus={currentAttendanceStatus}
           onAttend={onAttend}
@@ -496,14 +208,14 @@ function MyChurchSection({
       )}
 
       {published && detailData?.shouldShowAttendees && (
-        <AttendeesList attendance={detailData.attendance} attendingCount={attendingCount} />
+        <SabbathAttendeesList attendance={detailData.attendance} attendingCount={attendingCount} />
       )}
     </View>
   );
 }
 
 interface SwitzerlandSectionProps {
-  dateGroups: SabbathDateGroup[];
+  dateGroups: SabbathDateGroupType[];
   isLoading: boolean;
   error: { message: string } | null;
   onAttend: (sabbathId: string, attending: boolean) => void;
@@ -533,7 +245,7 @@ function SwitzerlandSection({ dateGroups, isLoading, error, onAttend, onViewDeta
   return (
     <View>
       {dateGroups.map((group) => (
-        <DateGroupSection
+        <SabbathDateGroup
           key={group.date}
           group={group}
           onAttend={onAttend}
@@ -541,106 +253,6 @@ function SwitzerlandSection({ dateGroups, isLoading, error, onAttend, onViewDeta
           isMutating={isMutating}
         />
       ))}
-    </View>
-  );
-}
-
-function DateGroupSection({
-  group,
-  onAttend,
-  onViewDetail,
-  isMutating,
-}: {
-  group: SabbathDateGroup;
-  onAttend: (sabbathId: string, attending: boolean) => void;
-  onViewDetail: (sabbathId: string) => void;
-  isMutating: boolean;
-}) {
-  return (
-    <View style={styles.dateGroup}>
-      <View style={styles.dateGroupHeader}>
-        <Calendar size={16} color="#1e3a8a" />
-        <Text style={styles.dateGroupLabel}>{group.label}</Text>
-      </View>
-      {group.sabbaths.map((item) => (
-        <SwitzerlandSabbathCard
-          key={item.sabbath.id}
-          item={item}
-          onAttend={onAttend}
-          onViewDetail={onViewDetail}
-          isMutating={isMutating}
-        />
-      ))}
-    </View>
-  );
-}
-
-function SwitzerlandSabbathCard({
-  item,
-  onAttend,
-  onViewDetail,
-  isMutating,
-}: {
-  item: SabbathWithGroup;
-  onAttend: (sabbathId: string, attending: boolean) => void;
-  onViewDetail: (sabbathId: string) => void;
-  isMutating: boolean;
-}) {
-  const { sabbath, group } = item;
-  const cancelled = isCancelledSabbath(sabbath.status);
-  const published = isPublishedSabbath(sabbath.status);
-
-  const detailQuery = trpc.sabbaths.getSabbathDetail.useQuery(
-    { sabbathId: sabbath.id },
-    { enabled: published }
-  );
-
-  return (
-    <View style={styles.swissCard}>
-      <TouchableOpacity
-        style={styles.swissCardHeader}
-        onPress={() => onViewDetail(sabbath.id)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.swissCardHeaderLeft}>
-          <Church size={16} color="#475569" />
-          <Text style={styles.swissChurchName}>{group.name}</Text>
-        </View>
-        <View style={styles.swissCardHeaderRight}>
-          <StatusBadge status={sabbath.status} />
-          <ChevronRight size={16} color="#94a3b8" />
-        </View>
-      </TouchableOpacity>
-
-      {cancelled && <CancelledBanner />}
-
-      {published && detailQuery.data?.shouldShowAssignments && (
-        <View style={styles.swissRoles}>
-          {ALL_ROLES.map((role) => {
-            const assignment = detailQuery.data?.assignments.find(a => a.role === role);
-            return (
-              <View key={role} style={styles.swissRoleRow}>
-                <Text style={styles.swissRoleLabel}>{getSabbathRoleLabel(role)}</Text>
-                <Text style={styles.swissRoleAssignee}>
-                  {assignment?.user_name ?? 'Unassigned'}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-      )}
-
-      {published && (
-        <TouchableOpacity
-          testID={`attend-swiss-${sabbath.id}`}
-          style={styles.swissAttendButton}
-          onPress={() => onAttend(sabbath.id, true)}
-          disabled={isMutating}
-        >
-          <UserPlus size={16} color="#1e3a8a" />
-          <Text style={styles.swissAttendButtonText}>Attend this Sabbath</Text>
-        </TouchableOpacity>
-      )}
     </View>
   );
 }
@@ -744,7 +356,6 @@ export default function SabbathScreen() {
   }, [declineMutation]);
 
   const handleSuggestReplacement = useCallback((_assignmentId: string) => {
-    // TODO: Replace with a proper user picker UI to select a replacement user
     Alert.alert(
       'Suggest Replacement',
       'This will notify your church leaders that you would like to suggest a replacement for your assignment. A leader will follow up with you.',
@@ -753,8 +364,6 @@ export default function SabbathScreen() {
         {
           text: 'Notify Leaders',
           onPress: () => {
-            // TODO: Open a user picker and pass the selected user ID
-            // For now, show a placeholder message
             Alert.alert(
               'Coming Soon',
               'The replacement suggestion flow with user selection is being built. Please contact your church leader directly for now.'
@@ -924,29 +533,6 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  cardHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
-  },
-  cardHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  churchName: {
-    fontSize: 16,
-    fontWeight: '600' as const,
-    color: '#1e293b',
-    flex: 1,
-  },
   sabbathDate: {
     fontSize: 20,
     fontWeight: '700' as const,
@@ -974,228 +560,5 @@ const styles = StyleSheet.create({
     fontWeight: '500' as const,
     color: '#991b1b',
     flex: 1,
-  },
-  sectionHeading: {
-    fontSize: 15,
-    fontWeight: '700' as const,
-    color: '#334155',
-    marginBottom: 8,
-  },
-  myAssignmentRole: {
-    fontSize: 16,
-    fontWeight: '600' as const,
-    color: '#1e293b',
-    marginBottom: 8,
-  },
-  assignmentActions: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 14,
-  },
-  acceptButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#166534',
-    paddingVertical: 12,
-    borderRadius: 10,
-  },
-  acceptButtonText: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: '#ffffff',
-  },
-  declineButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#fee2e2',
-    paddingVertical: 12,
-    borderRadius: 10,
-  },
-  declineButtonText: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: '#991b1b',
-  },
-  suggestButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: '#1e3a8a',
-    backgroundColor: '#eff6ff',
-    marginTop: 10,
-  },
-  suggestButtonText: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: '#1e3a8a',
-  },
-  attendanceRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  attendanceButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#ffffff',
-  },
-  attendanceButtonActive: {
-    backgroundColor: '#166534',
-    borderColor: '#166534',
-  },
-  notAttendingButtonActive: {
-    backgroundColor: '#991b1b',
-    borderColor: '#991b1b',
-  },
-  attendanceButtonText: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: '#475569',
-  },
-  attendanceButtonTextActive: {
-    color: '#ffffff',
-  },
-  notAttendingButtonTextActive: {
-    color: '#ffffff',
-  },
-  attendeesHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  emptyAttendees: {
-    fontSize: 14,
-    color: '#94a3b8',
-    fontStyle: 'italic' as const,
-    marginTop: 4,
-  },
-  attendeeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 6,
-  },
-  attendeeAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#e0e7ff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  attendeeInitial: {
-    fontSize: 14,
-    fontWeight: '700' as const,
-    color: '#3730a3',
-  },
-  attendeeName: {
-    fontSize: 14,
-    fontWeight: '500' as const,
-    color: '#1e293b',
-  },
-  dateGroup: {
-    marginBottom: 20,
-  },
-  dateGroupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 10,
-    paddingHorizontal: 4,
-  },
-  dateGroupLabel: {
-    fontSize: 16,
-    fontWeight: '700' as const,
-    color: '#1e3a8a',
-  },
-  swissCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  swissCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  swissCardHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flex: 1,
-  },
-  swissCardHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  swissChurchName: {
-    fontSize: 15,
-    fontWeight: '600' as const,
-    color: '#1e293b',
-    flex: 1,
-  },
-  swissRoles: {
-    marginBottom: 12,
-  },
-  swissRoleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 6,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#f1f5f9',
-  },
-  swissRoleLabel: {
-    fontSize: 12,
-    fontWeight: '600' as const,
-    color: '#64748b',
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.3,
-  },
-  swissRoleAssignee: {
-    fontSize: 14,
-    fontWeight: '500' as const,
-    color: '#1e293b',
-  },
-  swissAttendButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: '#1e3a8a',
-    backgroundColor: '#eff6ff',
-  },
-  swissAttendButtonText: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: '#1e3a8a',
   },
 });
