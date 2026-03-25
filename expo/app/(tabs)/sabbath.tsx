@@ -766,7 +766,7 @@ export default function SabbathScreen() {
   }, []);
 
   const handleViewDetail = useCallback((sabbathId: string) => {
-    router.push({ pathname: '/sabbath-detail' as any, params: { sabbathId } });
+    router.push({ pathname: '/sabbath/[id]' as any, params: { id: sabbathId } });
   }, [router]);
 
   const myAssignment = useMemo(() => {
