@@ -377,6 +377,8 @@ export default function SabbathDetailScreen() {
 
   const statusStyle = STATUS_COLORS[sabbath.status];
   const myAssignmentCanRespond = canRespondAssignment && myAssignment && myAssignment.status !== 'declined' && myAssignment.status !== 'replacement_suggested';
+  const isPublishedAndNotCancelled = sabbath.status === 'published';
+  const isHomeChurch = detail?.isHomeChurch ?? false;
 
   return (
     <View style={styles.container}>
@@ -498,18 +500,27 @@ export default function SabbathDetailScreen() {
                   </View>
                 )}
                 <View style={styles.bannerActions}>
-                  {myAssignment!.status === 'pending' && (
+                  {(myAssignment!.status === 'pending' || myAssignment!.status === 'accepted') && (
                     <TouchableOpacity
-                      style={styles.acceptBtn}
+                      style={[
+                        styles.acceptBtn,
+                        myAssignment!.status === 'accepted' && styles.acceptBtnAlreadyAccepted,
+                      ]}
                       onPress={handleAcceptAssignment}
-                      disabled={acceptMutation.isPending}
+                      disabled={acceptMutation.isPending || myAssignment!.status === 'accepted'}
+                      testID="accept-assignment-button"
                     >
                       {acceptMutation.isPending ? (
                         <ActivityIndicator size="small" color="#fff" />
                       ) : (
                         <>
-                          <Check size={16} color="#fff" />
-                          <Text style={styles.acceptBtnText}>Accept</Text>
+                          <Check size={16} color={myAssignment!.status === 'accepted' ? '#065f46' : '#fff'} />
+                          <Text style={[
+                            styles.acceptBtnText,
+                            myAssignment!.status === 'accepted' && styles.acceptBtnTextAccepted,
+                          ]}>
+                            {myAssignment!.status === 'accepted' ? 'Accepted' : 'Accept'}
+                          </Text>
                         </>
                       )}
                     </TouchableOpacity>
@@ -521,6 +532,7 @@ export default function SabbathDetailScreen() {
                       setShowDeclineModal(true);
                     }}
                     disabled={declineMutation.isPending}
+                    testID="decline-assignment-button"
                   >
                     <X size={16} color="#ef4444" />
                     <Text style={styles.declineBtnText}>Decline</Text>
@@ -532,6 +544,7 @@ export default function SabbathDetailScreen() {
                       setShowSuggestModal(true);
                     }}
                     disabled={suggestReplacementMutation.isPending}
+                    testID="suggest-replacement-button"
                   >
                     <RefreshCw size={16} color="#3730a3" />
                     <Text style={styles.suggestBtnText}>Suggest Replacement</Text>
@@ -540,7 +553,7 @@ export default function SabbathDetailScreen() {
               </View>
             )}
 
-            {shouldShowAssignments && (
+            {shouldShowAssignments && !(isCancelledForNormalMember) && (
               <View style={styles.assignmentsSection}>
                 <View style={styles.sectionHeader}>
                   <ClipboardList size={18} color="#0f172a" />
@@ -631,7 +644,7 @@ export default function SabbathDetailScreen() {
               </View>
             ) : null}
 
-            {(shouldShowAttendees || canManage) && attendance.length > 0 && (
+            {(shouldShowAttendees || canManage) && attendance.length > 0 && isPublishedAndNotCancelled && (isHomeChurch || canManage) && (
               <View style={styles.attendanceListSection}>
                 <View style={styles.sectionHeader}>
                   <Users size={18} color="#0f172a" />
@@ -1183,6 +1196,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600' as const,
     color: '#fff',
+  },
+  acceptBtnAlreadyAccepted: {
+    backgroundColor: '#d1fae5',
+    borderWidth: 1.5,
+    borderColor: '#6ee7b7',
+  },
+  acceptBtnTextAccepted: {
+    color: '#065f46',
   },
   declineBtn: {
     flex: 1,
