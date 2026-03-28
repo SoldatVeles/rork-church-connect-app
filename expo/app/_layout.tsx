@@ -6,7 +6,6 @@ import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AuthProvider, useAuth } from "@/providers/auth-provider";
 import { OfflineProvider } from "@/providers/offline-provider";
-import { SabbathProvider } from "@/providers/sabbath-provider";
 import LoadingScreen from "@/components/LoadingScreen";
 import { trpc, trpcClient } from "@/lib/trpc";
 
@@ -63,11 +62,9 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <OfflineProvider>
-            <SabbathProvider>
-              <GestureHandlerRootView style={styles.container}>
-                <RootLayoutNav />
-              </GestureHandlerRootView>
-            </SabbathProvider>
+            <GestureHandlerRootView style={styles.container}>
+              <RootLayoutNav />
+            </GestureHandlerRootView>
           </OfflineProvider>
         </AuthProvider>
       </QueryClientProvider>

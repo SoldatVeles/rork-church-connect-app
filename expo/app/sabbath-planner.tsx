@@ -23,7 +23,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery } from '@tanstack/react-query';
-import { useSabbath } from '@/providers/sabbath-provider';
 import { useAuth } from '@/providers/auth-provider';
 import { trpc } from '@/lib/trpc';
 import { supabase } from '@/lib/supabase';
@@ -86,8 +85,15 @@ type FilterType = 'all' | 'upcoming' | 'past' | 'draft' | 'published' | 'cancell
 export default function SabbathPlannerScreen() {
   const insets = useSafeAreaInsets();
   const { user, isAdmin, isPastor } = useAuth();
-  const { isPastorOfAnyGroup, isPastorOfGroup } = useSabbath();
   const trpcUtils = trpc.useUtils();
+
+  const pastorGroupsQuery = trpc.sabbaths.getMyPastorGroups.useQuery();
+  const pastorGroups = useMemo(() => pastorGroupsQuery.data ?? [], [pastorGroupsQuery.data]);
+  const isPastorOfAnyGroup = pastorGroups.length > 0;
+  const isPastorOfGroup = useCallback(
+    (groupId: string): boolean => pastorGroups.some((gp) => gp.group_id === groupId),
+    [pastorGroups]
+  );
 
   const sabbathsQuery = trpc.sabbaths.getAll.useQuery();
   const sabbaths = useMemo(() => sabbathsQuery.data ?? [], [sabbathsQuery.data]);

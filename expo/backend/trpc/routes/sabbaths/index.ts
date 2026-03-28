@@ -1494,6 +1494,24 @@ const getAllMembersGrouped = publicProcedure
     return sections;
   });
 
+const getMyPastorGroups = publicProcedure.query(async ({ ctx }) => {
+  const user = await getAuthenticatedUser(ctx);
+  console.log("[sabbaths.getMyPastorGroups] Fetching for user:", user.id);
+
+  const { data, error } = await db(ctx.supabase)
+    .from("group_pastors")
+    .select("id, group_id, user_id")
+    .eq("user_id", user.id);
+
+  if (error) {
+    console.error("[sabbaths.getMyPastorGroups] Error:", error.message);
+    return [] as Array<{ id: string; group_id: string; user_id: string }>;
+  }
+
+  console.log("[sabbaths.getMyPastorGroups] Found", (data || []).length, "pastor groups");
+  return (data || []) as Array<{ id: string; group_id: string; user_id: string }>;
+});
+
 // ─── ROUTER ────────────────────────────────────────────────
 
 export const sabbathsRouter = createTRPCRouter({
@@ -1501,6 +1519,7 @@ export const sabbathsRouter = createTRPCRouter({
   getSwitzerlandUpcomingByDate,
   getSabbathDetail,
   getMyUpcomingResponsibilities,
+  getMyPastorGroups,
   createDraft,
   updateSabbath,
   assignRole,

@@ -11,11 +11,11 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { useAuth } from '@/providers/auth-provider';
-import { useSabbath } from '@/providers/sabbath-provider';
 import { router } from 'expo-router';
 import NotificationDropdown from '@/components/NotificationDropdown';
 import { supabase } from '@/lib/supabase';
 import { useQuery } from '@tanstack/react-query';
+import { trpc } from '@/lib/trpc';
 
 const bibleVerses = [
   {
@@ -222,7 +222,8 @@ const bibleVerses = [
 
 export default function HomeScreen() {
   const { user, isAdmin, isPastor } = useAuth();
-  const { isPastorOfAnyGroup } = useSabbath();
+  const pastorGroupsQuery = trpc.sabbaths.getMyPastorGroups.useQuery();
+  const isPastorOfAnyGroup = (pastorGroupsQuery.data ?? []).length > 0;
   const canManageSabbath = isAdmin() || isPastor() || isPastorOfAnyGroup;
   const [showNotifications, setShowNotifications] = useState(false);
   const bellButtonRef = useRef<View>(null);

@@ -23,7 +23,7 @@ import {
 import { useRouter } from 'expo-router';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/providers/auth-provider';
-import { useSabbath } from '@/providers/sabbath-provider';
+
 import type {
   SabbathAssignment,
   SabbathDateGroup as SabbathDateGroupType,
@@ -274,8 +274,9 @@ function SwitzerlandSection({ dateGroups, isLoading, error, onAttend, onViewDeta
 
 export default function SabbathScreen() {
   const { user, isAdmin, isPastor } = useAuth();
-  const { isPastorOfAnyGroup } = useSabbath();
   const router = useRouter();
+  const pastorGroupsQuery = trpc.sabbaths.getMyPastorGroups.useQuery();
+  const isPastorOfAnyGroup = (pastorGroupsQuery.data ?? []).length > 0;
   const [activeTab, setActiveTab] = useState<TabKey>('myChurch');
 
   const canManage = isAdmin() || isPastor() || isPastorOfAnyGroup;
