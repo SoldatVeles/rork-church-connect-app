@@ -135,7 +135,7 @@ export default function ManageSermonsScreen() {
     );
   };
 
-  const canAccess = user?.role === 'admin' || user?.role === 'pastor';
+  const canAccess = user?.role === 'admin' || user?.role === 'church_leader' || user?.role === 'pastor';
 
   if (!canAccess) {
     return (

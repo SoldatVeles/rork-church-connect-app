@@ -5,7 +5,7 @@ export const updateUserRoleProcedure = publicProcedure
   .input(
     z.object({
       userId: z.string(),
-      role: z.enum(["admin", "pastor", "member", "visitor"]),
+      role: z.enum(["admin", "church_leader", "pastor", "member", "visitor"]),
     })
   )
   .mutation(async ({ input, ctx }) => {

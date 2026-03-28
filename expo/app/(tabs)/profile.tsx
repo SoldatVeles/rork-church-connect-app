@@ -56,7 +56,7 @@ export default function ProfileScreen() {
     );
   };
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.role === 'admin' || user?.role === 'church_leader';
 
   const profileStats = [
     { 

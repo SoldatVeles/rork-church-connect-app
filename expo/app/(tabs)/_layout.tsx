@@ -4,7 +4,7 @@ import React from 'react';
 import { useAuth } from '@/providers/auth-provider';
 
 export default function TabLayout() {
-  const { isAuthenticated, isLoading, isAdmin } = useAuth();
+  const { isAuthenticated, isLoading, isAdmin, isChurchLeader } = useAuth();
 
   if (!isLoading && !isAuthenticated) {
     return <Redirect href="/(auth)/login" />;
@@ -71,7 +71,7 @@ export default function TabLayout() {
         options={{
           title: 'Admin',
           tabBarIcon: ({ color, size }) => <Shield size={size} color={color} />,
-          href: isAdmin() ? '/(tabs)/admin' : null,
+          href: isAdmin() || isChurchLeader() ? '/(tabs)/admin' : null,
         }}
       />
     </Tabs>

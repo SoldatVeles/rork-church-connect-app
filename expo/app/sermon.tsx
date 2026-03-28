@@ -32,7 +32,7 @@ export default function SermonScreen() {
   const featuredSermon = sermons.find(s => s.is_featured) || sermons[0];
   const otherSermons = sermons.filter(s => s.id !== featuredSermon?.id);
   
-  const canManageSermons = user?.role === 'admin' || user?.role === 'pastor';
+  const canManageSermons = user?.role === 'admin' || user?.role === 'church_leader' || user?.role === 'pastor';
   
   const handlePlaySermon = (sermon: Sermon) => {
     if (sermon.youtube_url) {

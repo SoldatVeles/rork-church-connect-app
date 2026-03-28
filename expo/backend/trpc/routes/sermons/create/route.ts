@@ -43,8 +43,8 @@ export const createSermonProcedure = publicProcedure
       throw new Error("Profile not found");
     }
 
-    if (profile.role !== "admin" && profile.role !== "pastor") {
-      throw new Error("Only admins and pastors can create sermons");
+    if (profile.role !== "admin" && profile.role !== "church_leader" && profile.role !== "pastor") {
+      throw new Error("Only admins, church leaders, and pastors can create sermons");
     }
 
     const { data, error } = await supabase

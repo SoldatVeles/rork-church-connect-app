@@ -35,7 +35,7 @@ export type Database = {
           display_name: string | null;
           avatar_url: string | null;
           phone: string | null;
-          role: 'member' | 'pastor' | 'admin' | 'visitor';
+          role: 'member' | 'pastor' | 'church_leader' | 'admin' | 'visitor';
           is_blocked: boolean | null;
           created_at: string;
           updated_at: string;
@@ -47,7 +47,7 @@ export type Database = {
           display_name?: string | null;
           avatar_url?: string | null;
           phone?: string | null;
-          role?: 'member' | 'pastor' | 'admin' | 'visitor';
+          role?: 'member' | 'pastor' | 'church_leader' | 'admin' | 'visitor';
           is_blocked?: boolean | null;
           created_at?: string;
           updated_at?: string;
@@ -59,7 +59,7 @@ export type Database = {
           display_name?: string | null;
           avatar_url?: string | null;
           phone?: string | null;
-          role?: 'member' | 'pastor' | 'admin' | 'visitor';
+          role?: 'member' | 'pastor' | 'church_leader' | 'admin' | 'visitor';
           is_blocked?: boolean | null;
           created_at?: string;
           updated_at?: string;

@@ -304,7 +304,7 @@ export default function PrayersScreen() {
   const canUpdateStatus = (prayer: PrayerRequest) => {
     if (!user) return false;
     const isRequester = prayer.requestedBy === user.id;
-    const isAdmin = user.role === 'admin' || user.role === 'pastor';
+    const isAdmin = user.role === 'admin' || user.role === 'church_leader' || user.role === 'pastor';
     return isRequester || isAdmin;
   };
 

@@ -12,7 +12,7 @@ export interface User {
   createdAt?: string;
 }
 
-export type UserRole = 'admin' | 'pastor' | 'member' | 'visitor';
+export type UserRole = 'admin' | 'church_leader' | 'pastor' | 'member' | 'visitor';
 
 export type Permission = 
   | 'manage_users'

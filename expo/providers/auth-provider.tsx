@@ -275,7 +275,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const hasPermission = useCallback((permission: string): boolean => authState.user?.permissions.includes(permission as any) || false, [authState.user]);
   const isRole = useCallback((role: string): boolean => authState.user?.role === role, [authState.user]);
   const isAdmin = useCallback((): boolean => authState.user?.role === 'admin', [authState.user]);
-  const isPastor = useCallback((): boolean => authState.user?.role === 'pastor' || authState.user?.role === 'admin', [authState.user]);
+  const isChurchLeader = useCallback((): boolean => authState.user?.role === 'church_leader' || authState.user?.role === 'admin', [authState.user]);
+  const isPastor = useCallback((): boolean => authState.user?.role === 'pastor' || authState.user?.role === 'church_leader' || authState.user?.role === 'admin', [authState.user]);
 
   return useMemo(() => ({
     ...authState,
@@ -292,6 +293,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     hasPermission,
     isRole,
     isAdmin,
+    isChurchLeader,
     isPastor,
-  }), [authState, session, loginMutation, logoutMutation, registerMutation, hasPermission, isRole, isAdmin, isPastor]);
+  }), [authState, session, loginMutation, logoutMutation, registerMutation, hasPermission, isRole, isAdmin, isChurchLeader, isPastor]);
 });

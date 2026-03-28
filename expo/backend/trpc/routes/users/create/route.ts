@@ -1,7 +1,7 @@
 import { publicProcedure } from "../../../create-context";
 import { z } from "zod";
 
-const roles = ["admin", "pastor", "member", "visitor"] as const;
+const roles = ["admin", "church_leader", "pastor", "member", "visitor"] as const;
 
 export const createUserProcedure = publicProcedure
   .input(

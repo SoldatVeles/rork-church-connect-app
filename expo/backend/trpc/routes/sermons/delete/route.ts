@@ -35,8 +35,8 @@ export const deleteSermonProcedure = publicProcedure
       throw new Error("Profile not found");
     }
 
-    if (profile.role !== "admin" && profile.role !== "pastor") {
-      throw new Error("Only admins and pastors can delete sermons");
+    if (profile.role !== "admin" && profile.role !== "church_leader" && profile.role !== "pastor") {
+      throw new Error("Only admins, church leaders, and pastors can delete sermons");
     }
 
     const { error } = await supabase

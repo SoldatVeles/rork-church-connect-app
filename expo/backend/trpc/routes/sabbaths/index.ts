@@ -71,9 +71,9 @@ async function getUserProfile(supabase: SupabaseAny, userId: string) {
   };
 }
 
-async function checkIsAdmin(supabase: SupabaseAny, userId: string): Promise<boolean> {
+async function checkIsChurchLeaderOrAbove(supabase: SupabaseAny, userId: string): Promise<boolean> {
   const profile = await getUserProfile(supabase, userId);
-  return profile.role === "admin";
+  return profile.role === "admin" || profile.role === "church_leader";
 }
 
 async function checkIsChurchPastor(
@@ -96,8 +96,8 @@ async function checkCanManageSabbath(
   userId: string,
   groupId: string
 ): Promise<boolean> {
-  const isAdmin = await checkIsAdmin(supabase, userId);
-  if (isAdmin) return true;
+  const isAdminOrLeader = await checkIsChurchLeaderOrAbove(supabase, userId);
+  if (isAdminOrLeader) return true;
   return checkIsChurchPastor(supabase, userId, groupId);
 }
 
@@ -392,7 +392,7 @@ const getSabbathDetail = publicProcedure
       ? { id: group.id, name: group.name }
       : { id: typedSabbath.group_id, name: "Unknown Church" };
 
-    const isAdmin = profile.role === "admin";
+    const isAdminOrLeader = profile.role === "admin" || profile.role === "church_leader";
     const isPastor = await checkIsChurchPastor(
       ctx.supabase,
       user.id,
@@ -404,7 +404,7 @@ const getSabbathDetail = publicProcedure
       profile.home_group_id
     );
     const isHomeChurch = effectiveGroupId === typedSabbath.group_id;
-    const canManage = isAdmin || isPastor;
+    const canManage = isAdminOrLeader || isPastor;
 
     const { data: assignmentsRaw } = await db(ctx.supabase)
       .from("sabbath_assignments")

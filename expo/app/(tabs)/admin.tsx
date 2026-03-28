@@ -9,7 +9,7 @@ import { trpc } from '@/lib/trpc';
 import type { Sermon } from '@/types/sermon';
 import { LinearGradient } from 'expo-linear-gradient';
 
-type Role = 'admin' | 'pastor' | 'member' | 'visitor';
+type Role = 'admin' | 'church_leader' | 'pastor' | 'member' | 'visitor';
 
 interface Group {
   id: string;
@@ -21,7 +21,7 @@ interface Group {
 type AdminTab = 'users' | 'sermons' | 'groups';
 
 export default function AdminTabScreen() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isChurchLeader } = useAuth();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<AdminTab>('users');
   
@@ -434,11 +434,12 @@ export default function AdminTabScreen() {
     );
   };
 
-  const roles: Role[] = ['visitor', 'member', 'pastor', 'admin'];
+  const roles: Role[] = ['visitor', 'member', 'pastor', 'church_leader', 'admin'];
 
   const getRoleDisplayName = (role: Role): string => {
     switch (role) {
       case 'admin': return 'Admin';
+      case 'church_leader': return 'Church Leader';
       case 'pastor': return 'Pastor';
       case 'member': return 'Member';
       case 'visitor': return 'Visitor';
@@ -476,7 +477,7 @@ export default function AdminTabScreen() {
     );
   };
 
-  if (!isAdmin()) {
+  if (!isAdmin() && !isChurchLeader()) {
     return (
       <View style={styles.container}>
         <Stack.Screen options={{ headerShown: false }} />
