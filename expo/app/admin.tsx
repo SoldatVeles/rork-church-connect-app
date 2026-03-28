@@ -195,6 +195,27 @@ export default function AdminScreen() {
         );
       
       if (error) throw new Error(error.message);
+
+      for (const userId of data.userIds) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('home_group_id')
+          .eq('id', userId)
+          .single();
+
+        if (profile && !profile.home_group_id) {
+          const { error: updateError } = await supabase
+            .from('profiles')
+            .update({ home_group_id: data.groupId })
+            .eq('id', userId);
+
+          if (updateError) {
+            console.warn('[Admin] Failed to sync home_group_id for user:', userId, updateError.message);
+          } else {
+            console.log('[Admin] Synced home_group_id for user:', userId, '\u2192', data.groupId);
+          }
+        }
+      }
     },
     onSuccess: () => {
       Alert.alert('Success', 'Members added to group');
