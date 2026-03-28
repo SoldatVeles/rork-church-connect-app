@@ -125,15 +125,72 @@ function getTodayDateString(): string {
   return toDateString(new Date());
 }
 
+async function resolveEffectiveHomeChurch(
+  supabase: SupabaseAny,
+  userId: string,
+  profileHomeGroupId: string | null
+): Promise<string | null> {
+  if (profileHomeGroupId) {
+    console.log(
+      "[sabbaths.resolveEffectiveHomeChurch] Using profile.home_group_id:",
+      profileHomeGroupId
+    );
+    return profileHomeGroupId;
+  }
+
+  console.log(
+    "[sabbaths.resolveEffectiveHomeChurch] home_group_id is missing for user:",
+    userId,
+    "— falling back to group_members lookup"
+  );
+
+  const { data: memberships, error } = await db(supabase)
+    .from("group_members")
+    .select("group_id, joined_at")
+    .eq("user_id", userId)
+    .order("joined_at", { ascending: true })
+    .limit(1);
+
+  if (error) {
+    console.error(
+      "[sabbaths.resolveEffectiveHomeChurch] Error querying group_members:",
+      error
+    );
+    return null;
+  }
+
+  if (!memberships || memberships.length === 0) {
+    console.log(
+      "[sabbaths.resolveEffectiveHomeChurch] No group_members entry found for user:",
+      userId
+    );
+    return null;
+  }
+
+  const resolvedGroupId = (memberships[0] as any).group_id as string;
+  console.log(
+    "[sabbaths.resolveEffectiveHomeChurch] Resolved church from group_members:",
+    resolvedGroupId,
+    "(earliest membership)"
+  );
+  return resolvedGroupId;
+}
+
 // ─── QUERIES ───────────────────────────────────────────────
 
 const getMyChurchUpcoming = publicProcedure.query(async ({ ctx }) => {
   const user = await getAuthenticatedUser(ctx);
   const profile = await getUserProfile(ctx.supabase, user.id);
 
-  if (!profile.home_group_id) {
+  const effectiveGroupId = await resolveEffectiveHomeChurch(
+    ctx.supabase,
+    user.id,
+    profile.home_group_id
+  );
+
+  if (!effectiveGroupId) {
     console.log(
-      "[sabbaths.getMyChurchUpcoming] User has no home church assigned"
+      "[sabbaths.getMyChurchUpcoming] User has no home church (neither profile nor group_members)"
     );
     return null;
   }
@@ -142,7 +199,7 @@ const getMyChurchUpcoming = publicProcedure.query(async ({ ctx }) => {
   const canManage = await checkCanManageSabbath(
     ctx.supabase,
     user.id,
-    profile.home_group_id
+    effectiveGroupId
   );
 
   const statuses = canManage
@@ -152,7 +209,7 @@ const getMyChurchUpcoming = publicProcedure.query(async ({ ctx }) => {
   const { data: sabbath, error } = await db(ctx.supabase)
     .from("sabbaths")
     .select("*")
-    .eq("group_id", profile.home_group_id)
+    .eq("group_id", effectiveGroupId)
     .gte("sabbath_date", today)
     .in("status", statuses)
     .order("sabbath_date", { ascending: true })
@@ -165,19 +222,19 @@ const getMyChurchUpcoming = publicProcedure.query(async ({ ctx }) => {
   }
 
   if (!sabbath) {
-    console.log("[sabbaths.getMyChurchUpcoming] No upcoming Sabbath found");
+    console.log("[sabbaths.getMyChurchUpcoming] No upcoming Sabbath found for group:", effectiveGroupId);
     return null;
   }
 
   const { data: group } = await db(ctx.supabase)
     .from("groups")
     .select("id, name")
-    .eq("id", profile.home_group_id)
+    .eq("id", effectiveGroupId)
     .single();
 
   const groupInfo: SabbathGroupInfo = group
     ? { id: group.id, name: group.name }
-    : { id: profile.home_group_id, name: "Unknown Church" };
+    : { id: effectiveGroupId, name: "Unknown Church" };
 
   return {
     sabbath: sabbath as Sabbath,
@@ -296,7 +353,12 @@ const getSabbathDetail = publicProcedure
       user.id,
       typedSabbath.group_id
     );
-    const isHomeChurch = profile.home_group_id === typedSabbath.group_id;
+    const effectiveGroupId = await resolveEffectiveHomeChurch(
+      ctx.supabase,
+      user.id,
+      profile.home_group_id
+    );
+    const isHomeChurch = effectiveGroupId === typedSabbath.group_id;
     const canManage = isAdmin || isPastor;
 
     const { data: assignmentsRaw } = await db(ctx.supabase)
@@ -410,6 +472,11 @@ const getSabbathDetail = publicProcedure
 const getMyUpcomingResponsibilities = publicProcedure.query(async ({ ctx }) => {
   const user = await getAuthenticatedUser(ctx);
   const profile = await getUserProfile(ctx.supabase, user.id);
+  const effectiveGroupId = await resolveEffectiveHomeChurch(
+    ctx.supabase,
+    user.id,
+    profile.home_group_id
+  );
   const today = getTodayDateString();
 
   console.log(
@@ -459,7 +526,7 @@ const getMyUpcomingResponsibilities = publicProcedure.query(async ({ ctx }) => {
       group_name: groupMap.get(a.sabbaths.group_id) ?? "Unknown Church",
       role: a.role as SabbathRole,
       assignment_status: a.status as SabbathAssignmentStatus,
-      is_home_church: profile.home_group_id === a.sabbaths.group_id,
+      is_home_church: effectiveGroupId === a.sabbaths.group_id,
     })
   );
 
@@ -898,7 +965,12 @@ const respondAttendance = publicProcedure
       throw new Error("Can only respond to published Sabbaths");
     }
 
-    const isHomeChurch = profile.home_group_id === typedSabbath.group_id;
+    const effectiveGroupId = await resolveEffectiveHomeChurch(
+      ctx.supabase,
+      user.id,
+      profile.home_group_id
+    );
+    const isHomeChurch = effectiveGroupId === typedSabbath.group_id;
 
     if (!isHomeChurch && input.status === "not_attending") {
       throw new Error(
