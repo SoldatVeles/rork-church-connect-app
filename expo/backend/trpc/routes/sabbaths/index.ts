@@ -125,55 +125,87 @@ function getTodayDateString(): string {
   return toDateString(new Date());
 }
 
-async function resolveEffectiveHomeChurch(
+async function resolveEffectiveHomeChurchId(
   supabase: SupabaseAny,
   userId: string,
   profileHomeGroupId: string | null
 ): Promise<string | null> {
+  // 1. Preferred: use profiles.home_group_id if set
   if (profileHomeGroupId) {
-    console.log(
-      "[sabbaths.resolveEffectiveHomeChurch] Using profile.home_group_id:",
-      profileHomeGroupId
+    const { data: groupExists } = await db(supabase)
+      .from("groups")
+      .select("id")
+      .eq("id", profileHomeGroupId)
+      .maybeSingle();
+
+    if (groupExists) {
+      console.log(
+        "[resolveEffectiveHomeChurchId] Resolved from profile.home_group_id:",
+        profileHomeGroupId
+      );
+      return profileHomeGroupId;
+    }
+
+    console.warn(
+      "[resolveEffectiveHomeChurchId] profile.home_group_id points to non-existent group:",
+      profileHomeGroupId,
+      "— falling through to group_members"
     );
-    return profileHomeGroupId;
+  } else {
+    console.log(
+      "[resolveEffectiveHomeChurchId] home_group_id is null for user:",
+      userId,
+      "— falling back to group_members"
+    );
   }
 
-  console.log(
-    "[sabbaths.resolveEffectiveHomeChurch] home_group_id is missing for user:",
-    userId,
-    "— falling back to group_members lookup"
-  );
-
-  const { data: memberships, error } = await db(supabase)
+  // 2. Fallback: look up the user's earliest membership in group_members
+  const { data: memberships, error: memberError } = await db(supabase)
     .from("group_members")
-    .select("group_id, joined_at")
+    .select("group_id, created_at")
     .eq("user_id", userId)
-    .order("joined_at", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (memberError) {
+    console.error(
+      "[resolveEffectiveHomeChurchId] Error querying group_members:",
+      memberError
+    );
+    return null;
+  }
+
+  if (memberships && memberships.length > 0) {
+    const resolvedGroupId = (memberships[0] as any).group_id as string;
+    console.log(
+      "[resolveEffectiveHomeChurchId] Resolved from group_members fallback:",
+      resolvedGroupId,
+      `(earliest of ${memberships.length} membership(s))`
+    );
+    return resolvedGroupId;
+  }
+
+  // 3. Last resort: check if user is a pastor of any group
+  const { data: pastorEntries, error: pastorError } = await db(supabase)
+    .from("group_pastors")
+    .select("group_id")
+    .eq("user_id", userId)
     .limit(1);
 
-  if (error) {
-    console.error(
-      "[sabbaths.resolveEffectiveHomeChurch] Error querying group_members:",
-      error
-    );
-    return null;
-  }
-
-  if (!memberships || memberships.length === 0) {
+  if (!pastorError && pastorEntries && pastorEntries.length > 0) {
+    const resolvedGroupId = (pastorEntries[0] as any).group_id as string;
     console.log(
-      "[sabbaths.resolveEffectiveHomeChurch] No group_members entry found for user:",
-      userId
+      "[resolveEffectiveHomeChurchId] Resolved from group_pastors fallback:",
+      resolvedGroupId
     );
-    return null;
+    return resolvedGroupId;
   }
 
-  const resolvedGroupId = (memberships[0] as any).group_id as string;
   console.log(
-    "[sabbaths.resolveEffectiveHomeChurch] Resolved church from group_members:",
-    resolvedGroupId,
-    "(earliest membership)"
+    "[resolveEffectiveHomeChurchId] No church found for user:",
+    userId,
+    "(checked profile, group_members, group_pastors)"
   );
-  return resolvedGroupId;
+  return null;
 }
 
 // ─── QUERIES ───────────────────────────────────────────────
@@ -182,7 +214,7 @@ const getMyChurchUpcoming = publicProcedure.query(async ({ ctx }) => {
   const user = await getAuthenticatedUser(ctx);
   const profile = await getUserProfile(ctx.supabase, user.id);
 
-  const effectiveGroupId = await resolveEffectiveHomeChurch(
+  const effectiveGroupId = await resolveEffectiveHomeChurchId(
     ctx.supabase,
     user.id,
     profile.home_group_id
@@ -190,10 +222,18 @@ const getMyChurchUpcoming = publicProcedure.query(async ({ ctx }) => {
 
   if (!effectiveGroupId) {
     console.log(
-      "[sabbaths.getMyChurchUpcoming] User has no home church (neither profile nor group_members)"
+      "[sabbaths.getMyChurchUpcoming] No home church resolved for user:",
+      user.id
     );
     return null;
   }
+
+  console.log(
+    "[sabbaths.getMyChurchUpcoming] Resolved effective church:",
+    effectiveGroupId,
+    "for user:",
+    user.id
+  );
 
   const today = getTodayDateString();
   const canManage = await checkCanManageSabbath(
@@ -217,12 +257,15 @@ const getMyChurchUpcoming = publicProcedure.query(async ({ ctx }) => {
     .maybeSingle();
 
   if (error) {
-    console.error("[sabbaths.getMyChurchUpcoming] Error:", error);
+    console.error("[sabbaths.getMyChurchUpcoming] Query error:", error);
     throw new Error(error.message);
   }
 
   if (!sabbath) {
-    console.log("[sabbaths.getMyChurchUpcoming] No upcoming Sabbath found for group:", effectiveGroupId);
+    console.log(
+      "[sabbaths.getMyChurchUpcoming] No upcoming Sabbath for group:",
+      effectiveGroupId
+    );
     return null;
   }
 
@@ -353,7 +396,7 @@ const getSabbathDetail = publicProcedure
       user.id,
       typedSabbath.group_id
     );
-    const effectiveGroupId = await resolveEffectiveHomeChurch(
+    const effectiveGroupId = await resolveEffectiveHomeChurchId(
       ctx.supabase,
       user.id,
       profile.home_group_id
@@ -472,7 +515,7 @@ const getSabbathDetail = publicProcedure
 const getMyUpcomingResponsibilities = publicProcedure.query(async ({ ctx }) => {
   const user = await getAuthenticatedUser(ctx);
   const profile = await getUserProfile(ctx.supabase, user.id);
-  const effectiveGroupId = await resolveEffectiveHomeChurch(
+  const effectiveGroupId = await resolveEffectiveHomeChurchId(
     ctx.supabase,
     user.id,
     profile.home_group_id
@@ -965,7 +1008,7 @@ const respondAttendance = publicProcedure
       throw new Error("Can only respond to published Sabbaths");
     }
 
-    const effectiveGroupId = await resolveEffectiveHomeChurch(
+    const effectiveGroupId = await resolveEffectiveHomeChurchId(
       ctx.supabase,
       user.id,
       profile.home_group_id
