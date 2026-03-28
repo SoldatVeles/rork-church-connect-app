@@ -220,6 +220,15 @@ const getMyChurchUpcoming = publicProcedure.query(async ({ ctx }) => {
     profile.home_group_id
   );
 
+  console.log(
+    "[sabbaths.getMyChurchUpcoming] DEBUG — userId:",
+    user.id,
+    "| profile.home_group_id:",
+    profile.home_group_id,
+    "| effectiveGroupId:",
+    effectiveGroupId
+  );
+
   if (!effectiveGroupId) {
     console.log(
       "[sabbaths.getMyChurchUpcoming] No home church resolved for user:",
@@ -227,13 +236,6 @@ const getMyChurchUpcoming = publicProcedure.query(async ({ ctx }) => {
     );
     return null;
   }
-
-  console.log(
-    "[sabbaths.getMyChurchUpcoming] Resolved effective church:",
-    effectiveGroupId,
-    "for user:",
-    user.id
-  );
 
   const today = getTodayDateString();
   const canManage = await checkCanManageSabbath(
