@@ -27,6 +27,7 @@ import {
   MessageSquare,
   RotateCcw,
   Trash2,
+  RefreshCw,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -88,6 +89,10 @@ export default function SabbathDetailScreen() {
   const assignments = useMemo(() => detail?.assignments ?? [], [detail?.assignments]);
   const attendance = useMemo(() => detail?.attendance ?? [], [detail?.attendance]);
   const canManage = detail?.canManage ?? false;
+  const shouldShowAttendees = detail?.shouldShowAttendees ?? false;
+  const shouldShowAssignments = detail?.shouldShowAssignments ?? false;
+  const canRespondAttendance = detail?.canRespondAttendance ?? false;
+  const canRespondAssignment = detail?.canRespondAssignment ?? false;
 
   const upcoming = sabbath ? isUpcoming(sabbath.sabbath_date) : false;
 
@@ -105,8 +110,10 @@ export default function SabbathDetailScreen() {
   const revertMutation = trpc.sabbaths.revertToDraft.useMutation({ onSuccess: invalidateAll });
   const deleteMutation = trpc.sabbaths.deleteSabbath.useMutation({ onSuccess: invalidateAll });
   const assignRoleMutation = trpc.sabbaths.assignRole.useMutation({ onSuccess: invalidateAll });
+  const acceptMutation = trpc.sabbaths.acceptAssignment.useMutation({ onSuccess: invalidateAll });
   const declineMutation = trpc.sabbaths.declineAssignment.useMutation({ onSuccess: invalidateAll });
   const attendanceMutation = trpc.sabbaths.respondAttendance.useMutation({ onSuccess: invalidateAll });
+  const suggestReplacementMutation = trpc.sabbaths.suggestReplacement.useMutation({ onSuccess: invalidateAll });
 
   const isStatusUpdating = publishMutation.isPending || cancelMutation.isPending || revertMutation.isPending;
 
@@ -118,8 +125,16 @@ export default function SabbathDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showSuggestModal, setShowSuggestModal] = useState(false);
+  const [suggestingAssignment, setSuggestingAssignment] = useState<SabbathAssignment | null>(null);
 
   const groupedMembers = useMemo(() => groupedMembersQuery.data ?? [], [groupedMembersQuery.data]);
+
+  const suggestGroupedMembersQuery = trpc.sabbaths.getAllMembersGrouped.useQuery(
+    { primaryGroupId: sabbath?.group_id ?? '' },
+    { enabled: !!sabbath?.group_id && showSuggestModal }
+  );
+  const suggestGroupedMembers = useMemo(() => suggestGroupedMembersQuery.data ?? [], [suggestGroupedMembersQuery.data]);
 
   const myAttendance = useMemo(
     () => attendance.find((a) => a.user_id === user?.id),
@@ -272,6 +287,20 @@ export default function SabbathDetailScreen() {
     [sabbath, assigningRole, assignRoleMutation]
   );
 
+  const handleAcceptAssignment = useCallback(() => {
+    if (!myAssignment) return;
+    acceptMutation.mutate(
+      { assignmentId: myAssignment.id },
+      {
+        onSuccess: () => {
+          console.log('[SabbathDetail] Accepted assignment:', myAssignment.id);
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        },
+        onError: (err) => Alert.alert('Error', err.message || 'Failed to accept assignment.'),
+      }
+    );
+  }, [myAssignment, acceptMutation]);
+
   const handleDeclineAssignment = useCallback(() => {
     if (!decliningAssignment) return;
     declineMutation.mutate(
@@ -289,6 +318,26 @@ export default function SabbathDetailScreen() {
     );
   }, [decliningAssignment, declineReason, declineMutation]);
 
+  const handleSuggestReplacement = useCallback(
+    (suggestedUserId: string) => {
+      if (!suggestingAssignment) return;
+      suggestReplacementMutation.mutate(
+        { assignmentId: suggestingAssignment.id, suggestedUserId },
+        {
+          onSuccess: () => {
+            console.log('[SabbathDetail] Suggested replacement for:', suggestingAssignment.id, 'with user:', suggestedUserId);
+            setShowSuggestModal(false);
+            setSuggestingAssignment(null);
+            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            Alert.alert('Replacement Suggested', 'The pastor has been notified of your suggestion.');
+          },
+          onError: (err) => Alert.alert('Error', err.message || 'Failed to suggest replacement.'),
+        }
+      );
+    },
+    [suggestingAssignment, suggestReplacementMutation]
+  );
+
   const handleAttendance = useCallback(
     (status: SabbathAttendanceStatus) => {
       if (!sabbath) return;
@@ -305,6 +354,8 @@ export default function SabbathDetailScreen() {
     },
     [sabbath, attendanceMutation]
   );
+
+  const isCancelledForNormalMember = sabbath?.status === 'cancelled' && !canManage;
 
   if (!sabbath) {
     return (
@@ -325,6 +376,7 @@ export default function SabbathDetailScreen() {
   }
 
   const statusStyle = STATUS_COLORS[sabbath.status];
+  const myAssignmentCanRespond = canRespondAssignment && myAssignment && myAssignment.status !== 'declined' && myAssignment.status !== 'replacement_suggested';
 
   return (
     <View style={styles.container}>
@@ -366,263 +418,314 @@ export default function SabbathDetailScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1e3a8a" />
         }
       >
-        {upcoming && sabbath.status === 'published' && (
-          <View style={styles.attendanceSection}>
-            <View style={styles.sectionHeader}>
-              <UserCheck size={18} color="#0f172a" />
-              <Text style={styles.sectionTitle}>Your Attendance</Text>
-            </View>
-            <View style={styles.attendanceRow}>
-              <TouchableOpacity
-                style={[
-                  styles.attendanceBtn,
-                  myAttendance?.status === 'attending' && styles.attendanceBtnActive,
-                ]}
-                onPress={() => handleAttendance('attending')}
-                disabled={attendanceMutation.isPending}
-              >
-                <Check size={18} color={myAttendance?.status === 'attending' ? '#fff' : '#10b981'} />
-                <Text
-                  style={[
-                    styles.attendanceBtnText,
-                    myAttendance?.status === 'attending' && styles.attendanceBtnTextActive,
-                  ]}
-                >
-                  Attending
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.attendanceBtn,
-                  styles.attendanceBtnDecline,
-                  myAttendance?.status === 'not_attending' && styles.attendanceBtnDeclineActive,
-                ]}
-                onPress={() => handleAttendance('not_attending')}
-                disabled={attendanceMutation.isPending}
-              >
-                <X size={18} color={myAttendance?.status === 'not_attending' ? '#fff' : '#ef4444'} />
-                <Text
-                  style={[
-                    styles.attendanceBtnText,
-                    styles.attendanceBtnDeclineText,
-                    myAttendance?.status === 'not_attending' && styles.attendanceBtnTextActive,
-                  ]}
-                >
-                  Not Attending
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.attendanceSummary}>
-              {attendingCount} {attendingCount === 1 ? 'person' : 'people'} attending
-            </Text>
+        {isCancelledForNormalMember && (
+          <View style={styles.cancelledBanner}>
+            <Ban size={20} color="#991b1b" />
+            <Text style={styles.cancelledBannerText}>This Sabbath has been cancelled.</Text>
+            {sabbath.cancellation_reason ? (
+              <View style={styles.cancelReasonCard}>
+                <Text style={styles.cancelReasonText}>{sabbath.cancellation_reason}</Text>
+              </View>
+            ) : null}
           </View>
         )}
 
-        {myAssignment && upcoming && myAssignment.status !== 'declined' && (
-          <View style={styles.myAssignmentBanner}>
-            <View style={styles.bannerHeader}>
-              <ClipboardList size={18} color="#1e3a8a" />
-              <Text style={styles.bannerTitle}>You're assigned as</Text>
-            </View>
-            <Text style={styles.bannerRole}>{ROLE_LABELS[myAssignment.role]}</Text>
-            <View style={styles.bannerActions}>
-              <TouchableOpacity
-                style={styles.declineBtn}
-                onPress={() => {
-                  setDecliningAssignment(myAssignment);
-                  setShowDeclineModal(true);
-                }}
-                disabled={declineMutation.isPending}
-              >
-                <X size={16} color="#ef4444" />
-                <Text style={styles.declineBtnText}>Can't Attend / Decline</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        <View style={styles.assignmentsSection}>
-          <View style={styles.sectionHeader}>
-            <ClipboardList size={18} color="#0f172a" />
-            <Text style={styles.sectionTitle}>Assignments</Text>
-          </View>
-          {ALL_ROLES.map((role) => {
-            const assignment = assignmentMap.get(role);
-            const aStatusStyle = assignment ? ASSIGNMENT_COLORS[assignment.status] : null;
-            return (
-              <View key={role} style={styles.roleCard}>
-                <View style={styles.roleHeader}>
-                  <Text style={styles.roleLabel}>{ROLE_LABELS[role]}</Text>
-                  {assignment && aStatusStyle && (
-                    <View style={[styles.assignmentStatusBadge, { backgroundColor: aStatusStyle.bg }]}>
-                      <Text style={[styles.assignmentStatusText, { color: aStatusStyle.text }]}>
-                        {ASSIGNMENT_STATUS_LABELS[assignment.status]}
-                      </Text>
-                    </View>
-                  )}
+        {!isCancelledForNormalMember && (
+          <>
+            {upcoming && canRespondAttendance && (
+              <View style={styles.attendanceSection}>
+                <View style={styles.sectionHeader}>
+                  <UserCheck size={18} color="#0f172a" />
+                  <Text style={styles.sectionTitle}>Your Attendance</Text>
                 </View>
-                {assignment?.user_name ? (
-                  <View style={styles.assignedUser}>
-                    <View style={styles.avatarCircle}>
-                      <Text style={styles.avatarText}>
-                        {assignment.user_name.charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                    <Text style={styles.assignedName}>{assignment.user_name}</Text>
-                  </View>
-                ) : (
-                  <Text style={styles.unassignedText}>Unassigned</Text>
-                )}
-                {assignment?.status === 'declined' && assignment.decline_reason && (
-                  <View style={styles.declineReasonBox}>
-                    <MessageSquare size={12} color="#991b1b" />
-                    <Text style={styles.declineReasonText}>{assignment.decline_reason}</Text>
-                  </View>
-                )}
-                {assignment?.status === 'replacement_suggested' && assignment.suggested_user_name && (
-                  <View style={styles.suggestedBox}>
-                    <UserPlus size={12} color="#3730a3" />
-                    <Text style={styles.suggestedText}>
-                      Suggested: {assignment.suggested_user_name}
-                    </Text>
-                  </View>
-                )}
-                {canManage && upcoming && sabbath.status !== 'cancelled' && (
+                <View style={styles.attendanceRow}>
                   <TouchableOpacity
-                    style={styles.assignBtn}
-                    onPress={() => {
-                      setAssigningRole(role);
-                      setShowAssignModal(true);
-                    }}
+                    style={[
+                      styles.attendanceBtn,
+                      myAttendance?.status === 'attending' && styles.attendanceBtnActive,
+                    ]}
+                    onPress={() => handleAttendance('attending')}
+                    disabled={attendanceMutation.isPending}
                   >
-                    <UserPlus size={14} color="#1e3a8a" />
-                    <Text style={styles.assignBtnText}>
-                      {assignment?.user_id ? 'Reassign' : 'Assign'}
+                    <Check size={18} color={myAttendance?.status === 'attending' ? '#fff' : '#10b981'} />
+                    <Text
+                      style={[
+                        styles.attendanceBtnText,
+                        myAttendance?.status === 'attending' && styles.attendanceBtnTextActive,
+                      ]}
+                    >
+                      Attending
                     </Text>
                   </TouchableOpacity>
-                )}
+                  <TouchableOpacity
+                    style={[
+                      styles.attendanceBtn,
+                      styles.attendanceBtnDecline,
+                      myAttendance?.status === 'not_attending' && styles.attendanceBtnDeclineActive,
+                    ]}
+                    onPress={() => handleAttendance('not_attending')}
+                    disabled={attendanceMutation.isPending}
+                  >
+                    <X size={18} color={myAttendance?.status === 'not_attending' ? '#fff' : '#ef4444'} />
+                    <Text
+                      style={[
+                        styles.attendanceBtnText,
+                        styles.attendanceBtnDeclineText,
+                        myAttendance?.status === 'not_attending' && styles.attendanceBtnTextActive,
+                      ]}
+                    >
+                      Not Attending
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.attendanceSummary}>
+                  {attendingCount} {attendingCount === 1 ? 'person' : 'people'} attending
+                </Text>
               </View>
-            );
-          })}
-        </View>
+            )}
 
-        {sabbath.notes ? (
-          <View style={styles.notesSection}>
-            <View style={styles.sectionHeader}>
-              <MessageSquare size={18} color="#0f172a" />
-              <Text style={styles.sectionTitle}>Notes</Text>
-            </View>
-            <View style={styles.notesCard}>
-              <Text style={styles.notesText}>{sabbath.notes}</Text>
-            </View>
-          </View>
-        ) : null}
+            {myAssignmentCanRespond && upcoming && (
+              <View style={styles.myAssignmentBanner}>
+                <View style={styles.bannerHeader}>
+                  <ClipboardList size={18} color="#1e3a8a" />
+                  <Text style={styles.bannerTitle}>You're assigned as</Text>
+                </View>
+                <Text style={styles.bannerRole}>{ROLE_LABELS[myAssignment!.role]}</Text>
+                {myAssignment!.status === 'accepted' && (
+                  <View style={styles.acceptedBadgeRow}>
+                    <Check size={14} color="#065f46" />
+                    <Text style={styles.acceptedBadgeText}>You accepted this assignment</Text>
+                  </View>
+                )}
+                <View style={styles.bannerActions}>
+                  {myAssignment!.status === 'pending' && (
+                    <TouchableOpacity
+                      style={styles.acceptBtn}
+                      onPress={handleAcceptAssignment}
+                      disabled={acceptMutation.isPending}
+                    >
+                      {acceptMutation.isPending ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <>
+                          <Check size={16} color="#fff" />
+                          <Text style={styles.acceptBtnText}>Accept</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    style={styles.declineBtn}
+                    onPress={() => {
+                      setDecliningAssignment(myAssignment!);
+                      setShowDeclineModal(true);
+                    }}
+                    disabled={declineMutation.isPending}
+                  >
+                    <X size={16} color="#ef4444" />
+                    <Text style={styles.declineBtnText}>Decline</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.suggestBtn}
+                    onPress={() => {
+                      setSuggestingAssignment(myAssignment!);
+                      setShowSuggestModal(true);
+                    }}
+                    disabled={suggestReplacementMutation.isPending}
+                  >
+                    <RefreshCw size={16} color="#3730a3" />
+                    <Text style={styles.suggestBtnText}>Suggest Replacement</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
 
-        {sabbath.status === 'cancelled' && sabbath.cancellation_reason ? (
-          <View style={styles.cancelReasonSection}>
-            <View style={styles.sectionHeader}>
-              <Ban size={18} color="#991b1b" />
-              <Text style={[styles.sectionTitle, { color: '#991b1b' }]}>Cancellation Reason</Text>
-            </View>
-            <View style={styles.cancelReasonCard}>
-              <Text style={styles.cancelReasonText}>{sabbath.cancellation_reason}</Text>
-            </View>
-          </View>
-        ) : null}
+            {shouldShowAssignments && (
+              <View style={styles.assignmentsSection}>
+                <View style={styles.sectionHeader}>
+                  <ClipboardList size={18} color="#0f172a" />
+                  <Text style={styles.sectionTitle}>Assignments</Text>
+                </View>
+                {ALL_ROLES.map((role) => {
+                  const assignment = assignmentMap.get(role);
+                  const aStatusStyle = assignment ? ASSIGNMENT_COLORS[assignment.status] : null;
+                  return (
+                    <View key={role} style={styles.roleCard}>
+                      <View style={styles.roleHeader}>
+                        <Text style={styles.roleLabel}>{ROLE_LABELS[role]}</Text>
+                        {assignment && aStatusStyle && (
+                          <View style={[styles.assignmentStatusBadge, { backgroundColor: aStatusStyle.bg }]}>
+                            <Text style={[styles.assignmentStatusText, { color: aStatusStyle.text }]}>
+                              {ASSIGNMENT_STATUS_LABELS[assignment.status]}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      {assignment?.user_name ? (
+                        <View style={styles.assignedUser}>
+                          <View style={styles.avatarCircle}>
+                            <Text style={styles.avatarText}>
+                              {assignment.user_name.charAt(0).toUpperCase()}
+                            </Text>
+                          </View>
+                          <Text style={styles.assignedName}>{assignment.user_name}</Text>
+                        </View>
+                      ) : (
+                        <Text style={styles.unassignedText}>Unassigned</Text>
+                      )}
+                      {canManage && assignment?.status === 'declined' && assignment.decline_reason && (
+                        <View style={styles.declineReasonBox}>
+                          <MessageSquare size={12} color="#991b1b" />
+                          <Text style={styles.declineReasonText}>{assignment.decline_reason}</Text>
+                        </View>
+                      )}
+                      {assignment?.status === 'replacement_suggested' && assignment.suggested_user_name && (
+                        <View style={styles.suggestedBox}>
+                          <UserPlus size={12} color="#3730a3" />
+                          <Text style={styles.suggestedText}>
+                            Suggested: {assignment.suggested_user_name}
+                          </Text>
+                        </View>
+                      )}
+                      {canManage && upcoming && sabbath.status !== 'cancelled' && (
+                        <TouchableOpacity
+                          style={styles.assignBtn}
+                          onPress={() => {
+                            setAssigningRole(role);
+                            setShowAssignModal(true);
+                          }}
+                        >
+                          <UserPlus size={14} color="#1e3a8a" />
+                          <Text style={styles.assignBtnText}>
+                            {assignment?.user_id ? 'Reassign' : 'Assign'}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            )}
 
-        {attendance.length > 0 && (
-          <View style={styles.attendanceListSection}>
-            <View style={styles.sectionHeader}>
-              <Users size={18} color="#0f172a" />
-              <Text style={styles.sectionTitle}>
-                Attendance ({attendingCount}/{attendance.length})
-              </Text>
-            </View>
-            {attendance.map((a) => (
-              <View key={a.id} style={styles.attendeeRow}>
-                <View style={styles.attendeeAvatar}>
-                  <Text style={styles.attendeeAvatarText}>
-                    {(a.user_name || '?').charAt(0).toUpperCase()}
+            {sabbath.notes ? (
+              <View style={styles.notesSection}>
+                <View style={styles.sectionHeader}>
+                  <MessageSquare size={18} color="#0f172a" />
+                  <Text style={styles.sectionTitle}>Notes</Text>
+                </View>
+                <View style={styles.notesCard}>
+                  <Text style={styles.notesText}>{sabbath.notes}</Text>
+                </View>
+              </View>
+            ) : null}
+
+            {sabbath.status === 'cancelled' && sabbath.cancellation_reason && canManage ? (
+              <View style={styles.cancelReasonSection}>
+                <View style={styles.sectionHeader}>
+                  <Ban size={18} color="#991b1b" />
+                  <Text style={[styles.sectionTitle, { color: '#991b1b' }]}>Cancellation Reason</Text>
+                </View>
+                <View style={styles.cancelReasonCard}>
+                  <Text style={styles.cancelReasonText}>{sabbath.cancellation_reason}</Text>
+                </View>
+              </View>
+            ) : null}
+
+            {(shouldShowAttendees || canManage) && attendance.length > 0 && (
+              <View style={styles.attendanceListSection}>
+                <View style={styles.sectionHeader}>
+                  <Users size={18} color="#0f172a" />
+                  <Text style={styles.sectionTitle}>
+                    Attendance ({attendingCount}/{attendance.length})
                   </Text>
                 </View>
-                <Text style={styles.attendeeName}>{a.user_name || 'Unknown'}</Text>
-                <View
-                  style={[
-                    styles.attendeeStatus,
-                    a.status === 'attending' ? styles.attendeeAttending : styles.attendeeNotAttending,
-                  ]}
-                >
-                  {a.status === 'attending' ? (
-                    <Check size={12} color="#065f46" />
-                  ) : (
-                    <X size={12} color="#991b1b" />
+                {attendance.map((a) => (
+                  <View key={a.id} style={styles.attendeeRow}>
+                    <View style={styles.attendeeAvatar}>
+                      <Text style={styles.attendeeAvatarText}>
+                        {(a.user_name || '?').charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <Text style={styles.attendeeName}>{a.user_name || 'Unknown'}</Text>
+                    <View
+                      style={[
+                        styles.attendeeStatus,
+                        a.status === 'attending' ? styles.attendeeAttending : styles.attendeeNotAttending,
+                      ]}
+                    >
+                      {a.status === 'attending' ? (
+                        <Check size={12} color="#065f46" />
+                      ) : (
+                        <X size={12} color="#991b1b" />
+                      )}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {canManage && upcoming && sabbath.status !== 'cancelled' && (
+              <View style={styles.manageSection}>
+                <Text style={styles.manageSectionTitle}>Manage</Text>
+                <View style={styles.manageActions}>
+                  {sabbath.status === 'draft' && (
+                    <TouchableOpacity
+                      style={styles.publishBtn}
+                      onPress={handlePublish}
+                      disabled={isStatusUpdating}
+                    >
+                      {isStatusUpdating ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <>
+                          <Eye size={18} color="#fff" />
+                          <Text style={styles.publishBtnText}>Publish to Members</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
                   )}
+                  {sabbath.status === 'published' && (
+                    <TouchableOpacity
+                      style={styles.revertBtn}
+                      onPress={handleRevertToDraft}
+                      disabled={isStatusUpdating}
+                    >
+                      <RotateCcw size={16} color="#475569" />
+                      <Text style={styles.revertBtnText}>Revert to Draft</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    style={styles.cancelSabbathBtn}
+                    onPress={handleCancel}
+                    disabled={isStatusUpdating}
+                  >
+                    <Ban size={16} color="#ef4444" />
+                    <Text style={styles.cancelSabbathBtnText}>Cancel Sabbath</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
-            ))}
-          </View>
-        )}
+            )}
 
-        {canManage && upcoming && sabbath.status !== 'cancelled' && (
-          <View style={styles.manageSection}>
-            <Text style={styles.manageSectionTitle}>Manage</Text>
-            <View style={styles.manageActions}>
-              {sabbath.status === 'draft' && (
+            {canManage && (
+              <View style={styles.dangerSection}>
                 <TouchableOpacity
-                  style={styles.publishBtn}
-                  onPress={handlePublish}
-                  disabled={isStatusUpdating}
+                  style={styles.deleteBtn}
+                  onPress={handleDelete}
+                  disabled={deleteMutation.isPending}
+                  testID="delete-sabbath-button"
                 >
-                  {isStatusUpdating ? (
+                  {deleteMutation.isPending ? (
                     <ActivityIndicator size="small" color="#fff" />
                   ) : (
                     <>
-                      <Eye size={18} color="#fff" />
-                      <Text style={styles.publishBtnText}>Publish to Members</Text>
+                      <Trash2 size={16} color="#fff" />
+                      <Text style={styles.deleteBtnText}>Delete Sabbath Permanently</Text>
                     </>
                   )}
                 </TouchableOpacity>
-              )}
-              {sabbath.status === 'published' && (
-                <TouchableOpacity
-                  style={styles.revertBtn}
-                  onPress={handleRevertToDraft}
-                  disabled={isStatusUpdating}
-                >
-                  <RotateCcw size={16} color="#475569" />
-                  <Text style={styles.revertBtnText}>Revert to Draft</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={styles.cancelSabbathBtn}
-                onPress={handleCancel}
-                disabled={isStatusUpdating}
-              >
-                <Ban size={16} color="#ef4444" />
-                <Text style={styles.cancelSabbathBtnText}>Cancel Sabbath</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {canManage && (
-          <View style={styles.dangerSection}>
-            <TouchableOpacity
-              style={styles.deleteBtn}
-              onPress={handleDelete}
-              disabled={deleteMutation.isPending}
-              testID="delete-sabbath-button"
-            >
-              {deleteMutation.isPending ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <>
-                  <Trash2 size={16} color="#fff" />
-                  <Text style={styles.deleteBtnText}>Delete Sabbath Permanently</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
+              </View>
+            )}
+          </>
         )}
 
         <View style={{ height: insets.bottom + 40 }} />
@@ -780,6 +883,76 @@ export default function SabbathDetailScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal visible={showSuggestModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, { paddingBottom: insets.bottom + 20 }]}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Suggest Replacement</Text>
+            <Text style={styles.suggestModalSubtitle}>
+              Select a member to suggest as your replacement for {suggestingAssignment ? ROLE_LABELS[suggestingAssignment.role] : ''}.
+            </Text>
+            <ScrollView style={styles.membersList} showsVerticalScrollIndicator={false}>
+              {suggestGroupedMembers.length === 0 ? (
+                <View style={styles.emptyMembers}>
+                  {suggestGroupedMembersQuery.isLoading ? (
+                    <ActivityIndicator size="large" color="#1e3a8a" />
+                  ) : (
+                    <>
+                      <Users size={32} color="#cbd5e1" />
+                      <Text style={styles.emptyMembersText}>No members found</Text>
+                    </>
+                  )}
+                </View>
+              ) : (
+                suggestGroupedMembers.map((section) => (
+                  <View key={section.groupId}>
+                    <View style={styles.groupSectionHeader}>
+                      <View style={[
+                        styles.groupSectionDot,
+                        section.groupId === sabbath?.group_id && styles.groupSectionDotPrimary,
+                      ]} />
+                      <Text style={[
+                        styles.groupSectionTitle,
+                        section.groupId === sabbath?.group_id && styles.groupSectionTitlePrimary,
+                      ]}>
+                        {section.groupName}
+                      </Text>
+                    </View>
+                    {section.members
+                      .filter((m) => m.id !== user?.id)
+                      .map((m) => (
+                        <TouchableOpacity
+                          key={m.id}
+                          style={styles.memberItem}
+                          onPress={() => handleSuggestReplacement(m.id)}
+                          disabled={suggestReplacementMutation.isPending}
+                        >
+                          <View style={styles.memberAvatar}>
+                            <Text style={styles.memberAvatarText}>
+                              {m.name.charAt(0).toUpperCase()}
+                            </Text>
+                          </View>
+                          <Text style={styles.memberName}>{m.name}</Text>
+                          <ChevronDown size={16} color="#94a3b8" style={{ transform: [{ rotate: '-90deg' }] }} />
+                        </TouchableOpacity>
+                      ))}
+                  </View>
+                ))
+              )}
+            </ScrollView>
+            <TouchableOpacity
+              style={styles.modalCloseBtn}
+              onPress={() => {
+                setShowSuggestModal(false);
+                setSuggestingAssignment(null);
+              }}
+            >
+              <Text style={styles.modalCloseBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -864,6 +1037,22 @@ const styles = StyleSheet.create({
   },
   contentInner: {
     padding: 16,
+  },
+  cancelledBanner: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 14,
+    borderWidth: 1.5,
+    borderColor: '#fecaca',
+    alignItems: 'center' as const,
+    gap: 10,
+  },
+  cancelledBannerText: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: '#991b1b',
+    textAlign: 'center' as const,
   },
   attendanceSection: {
     backgroundColor: '#fff',
@@ -955,11 +1144,29 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800' as const,
     color: '#0f172a',
-    marginBottom: 14,
+    marginBottom: 10,
+  },
+  acceptedBadgeRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    marginBottom: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#d1fae5',
+    borderRadius: 8,
+    alignSelf: 'flex-start' as const,
+  },
+  acceptedBadgeText: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: '#065f46',
   },
   bannerActions: {
     flexDirection: 'row' as const,
-    gap: 10,
+    gap: 8,
+    flexWrap: 'wrap' as const,
+    marginTop: 4,
   },
   acceptBtn: {
     flex: 1,
@@ -970,6 +1177,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     backgroundColor: '#10b981',
+    minWidth: 100,
   },
   acceptBtnText: {
     fontSize: 14,
@@ -987,11 +1195,35 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderWidth: 1.5,
     borderColor: '#fecaca',
+    minWidth: 100,
   },
   declineBtnText: {
     fontSize: 14,
     fontWeight: '600' as const,
     color: '#ef4444',
+  },
+  suggestBtn: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#eef2ff',
+    borderWidth: 1.5,
+    borderColor: '#c7d2fe',
+    width: '100%' as const,
+  },
+  suggestBtnText: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: '#3730a3',
+  },
+  suggestModalSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+    marginBottom: 16,
   },
   assignmentsSection: {
     backgroundColor: '#fff',
