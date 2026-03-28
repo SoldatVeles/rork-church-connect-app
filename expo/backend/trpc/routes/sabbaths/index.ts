@@ -1237,6 +1237,263 @@ const suggestReplacement = publicProcedure
     return updated as SabbathAssignment;
   });
 
+const getAll = publicProcedure.query(async ({ ctx }) => {
+  await getAuthenticatedUser(ctx);
+  console.log("[sabbaths.getAll] Fetching all sabbaths");
+  const { data, error } = await db(ctx.supabase)
+    .from("sabbaths")
+    .select("*")
+    .order("sabbath_date", { ascending: false });
+  if (error) {
+    console.error("[sabbaths.getAll] Error:", error);
+    throw new Error(error.message);
+  }
+  console.log("[sabbaths.getAll] Returning", (data || []).length, "sabbaths");
+  return (data || []) as Sabbath[];
+});
+
+const deleteSabbath = publicProcedure
+  .input(z.object({ sabbathId: z.string() }))
+  .mutation(async ({ input, ctx }) => {
+    const user = await getAuthenticatedUser(ctx);
+    const { data: sabbath } = await db(ctx.supabase)
+      .from("sabbaths")
+      .select("group_id")
+      .eq("id", input.sabbathId)
+      .single();
+    if (!sabbath) throw new Error("Sabbath not found");
+    await requireCanManageSabbath(ctx.supabase, user.id, (sabbath as any).group_id);
+
+    const { error: attErr } = await db(ctx.supabase)
+      .from("sabbath_attendance")
+      .delete()
+      .eq("sabbath_id", input.sabbathId);
+    if (attErr) console.warn("[sabbaths.deleteSabbath] Attendance cleanup error:", attErr.message);
+
+    const { error: assErr } = await db(ctx.supabase)
+      .from("sabbath_assignments")
+      .delete()
+      .eq("sabbath_id", input.sabbathId);
+    if (assErr) console.warn("[sabbaths.deleteSabbath] Assignment cleanup error:", assErr.message);
+
+    const { error } = await db(ctx.supabase)
+      .from("sabbaths")
+      .delete()
+      .eq("id", input.sabbathId);
+    if (error) throw new Error(error.message);
+
+    console.log("[sabbaths.deleteSabbath] Deleted:", input.sabbathId);
+    return { success: true };
+  });
+
+const revertToDraft = publicProcedure
+  .input(z.object({ sabbathId: z.string() }))
+  .mutation(async ({ input, ctx }) => {
+    const user = await getAuthenticatedUser(ctx);
+    const { data: sabbath } = await db(ctx.supabase)
+      .from("sabbaths")
+      .select("*")
+      .eq("id", input.sabbathId)
+      .single();
+    if (!sabbath) throw new Error("Sabbath not found");
+    const typed = sabbath as Sabbath;
+    if (typed.status !== "published") {
+      throw new Error("Only published Sabbaths can be reverted to draft");
+    }
+    await requireCanManageSabbath(ctx.supabase, user.id, typed.group_id);
+    const { data: updated, error } = await db(ctx.supabase)
+      .from("sabbaths")
+      .update({ status: "draft", updated_by: user.id })
+      .eq("id", input.sabbathId)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    console.log("[sabbaths.revertToDraft] Reverted:", input.sabbathId);
+    return updated as Sabbath;
+  });
+
+const getGroupMembers = publicProcedure
+  .input(z.object({ groupId: z.string() }))
+  .query(async ({ input, ctx }) => {
+    await getAuthenticatedUser(ctx);
+    console.log("[sabbaths.getGroupMembers] Fetching for group:", input.groupId);
+
+    const memberMap = new Map<string, string>();
+
+    const { data: groupProfiles, error: gpError } = await db(ctx.supabase)
+      .from("profiles")
+      .select("id, full_name, display_name")
+      .eq("home_group_id", input.groupId);
+
+    if (gpError) {
+      console.error("[sabbaths.getGroupMembers] Error fetching profiles:", gpError.message);
+    }
+
+    (groupProfiles || []).forEach((p: any) => {
+      const name = (p.full_name as string)?.trim() || (p.display_name as string)?.trim() || "Unknown";
+      memberMap.set(p.id as string, name);
+    });
+
+    const { data: pastors, error: pastorError } = await db(ctx.supabase)
+      .from("group_pastors")
+      .select("user_id")
+      .eq("group_id", input.groupId);
+
+    if (pastorError) {
+      console.error("[sabbaths.getGroupMembers] Error fetching pastors:", pastorError.message);
+    }
+
+    const pastorIds = (pastors || [])
+      .map((p: any) => p.user_id as string)
+      .filter((id: string) => !memberMap.has(id));
+
+    if (pastorIds.length > 0) {
+      const { data: pastorProfiles } = await db(ctx.supabase)
+        .from("profiles")
+        .select("id, full_name, display_name")
+        .in("id", pastorIds);
+
+      (pastorProfiles || []).forEach((p: any) => {
+        const name = (p.full_name as string)?.trim() || (p.display_name as string)?.trim() || "Unknown";
+        memberMap.set(p.id as string, name);
+      });
+    }
+
+    if (memberMap.size === 0) {
+      console.log("[sabbaths.getGroupMembers] No members found, falling back to all profiles");
+      const { data: allProfiles } = await db(ctx.supabase)
+        .from("profiles")
+        .select("id, full_name, display_name")
+        .order("full_name", { ascending: true })
+        .limit(100);
+
+      (allProfiles || []).forEach((p: any) => {
+        const name = (p.full_name as string)?.trim() || (p.display_name as string)?.trim() || "Unknown";
+        memberMap.set(p.id as string, name);
+      });
+    }
+
+    const results = Array.from(memberMap.entries()).map(([id, name]) => ({ id, name }));
+    console.log("[sabbaths.getGroupMembers] Found", results.length, "members");
+    return results;
+  });
+
+const getAllMembersGrouped = publicProcedure
+  .input(z.object({ primaryGroupId: z.string() }))
+  .query(async ({ input, ctx }) => {
+    await getAuthenticatedUser(ctx);
+    console.log("[sabbaths.getAllMembersGrouped] Primary:", input.primaryGroupId);
+
+    const { data: allGroups, error: groupsError } = await db(ctx.supabase)
+      .from("groups")
+      .select("id, name")
+      .order("name", { ascending: true });
+
+    if (groupsError) {
+      console.error("[sabbaths.getAllMembersGrouped] Error fetching groups:", groupsError.message);
+      return [] as Array<{ groupId: string; groupName: string; members: Array<{ id: string; name: string }> }>;
+    }
+
+    const groupNameMap = new Map<string, string>();
+    (allGroups || []).forEach((g: any) => {
+      groupNameMap.set(g.id as string, g.name as string);
+    });
+
+    const { data: allProfiles, error: profilesError } = await db(ctx.supabase)
+      .from("profiles")
+      .select("id, full_name, display_name, home_group_id")
+      .order("full_name", { ascending: true });
+
+    if (profilesError) {
+      console.error("[sabbaths.getAllMembersGrouped] Error fetching profiles:", profilesError.message);
+      return [] as Array<{ groupId: string; groupName: string; members: Array<{ id: string; name: string }> }>;
+    }
+
+    const { data: allPastors, error: pastorsError } = await db(ctx.supabase)
+      .from("group_pastors")
+      .select("user_id, group_id");
+
+    if (pastorsError) {
+      console.error("[sabbaths.getAllMembersGrouped] Error fetching pastors:", pastorsError.message);
+    }
+
+    const pastorGroupMap = new Map<string, Set<string>>();
+    (allPastors || []).forEach((p: any) => {
+      const uid = p.user_id as string;
+      const gid = p.group_id as string;
+      if (!pastorGroupMap.has(uid)) pastorGroupMap.set(uid, new Set());
+      pastorGroupMap.get(uid)!.add(gid);
+    });
+
+    type GroupedSection = {
+      groupId: string;
+      groupName: string;
+      members: { id: string; name: string }[];
+    };
+
+    const sectionMap = new Map<string, GroupedSection>();
+
+    const getOrCreateSection = (gId: string): GroupedSection => {
+      if (!sectionMap.has(gId)) {
+        sectionMap.set(gId, {
+          groupId: gId,
+          groupName: groupNameMap.get(gId) || "Unknown Church",
+          members: [],
+        });
+      }
+      return sectionMap.get(gId)!;
+    };
+
+    const addedToGroup = new Map<string, Set<string>>();
+
+    const addMember = (gId: string, memberId: string, memberName: string) => {
+      if (!addedToGroup.has(gId)) addedToGroup.set(gId, new Set());
+      if (addedToGroup.get(gId)!.has(memberId)) return;
+      addedToGroup.get(gId)!.add(memberId);
+      const section = getOrCreateSection(gId);
+      section.members.push({ id: memberId, name: memberName });
+    };
+
+    (allProfiles || []).forEach((p: any) => {
+      const name = (p.full_name as string)?.trim() || (p.display_name as string)?.trim() || "Unknown";
+      const homeGroup = p.home_group_id as string | null;
+      if (homeGroup && groupNameMap.has(homeGroup)) {
+        addMember(homeGroup, p.id as string, name);
+      }
+      const pastorGroups = pastorGroupMap.get(p.id as string);
+      if (pastorGroups) {
+        pastorGroups.forEach((gId) => {
+          if (groupNameMap.has(gId)) {
+            addMember(gId, p.id as string, name);
+          }
+        });
+      }
+      if (!homeGroup && !pastorGroups) {
+        addMember("__unassigned__", p.id as string, name);
+      }
+    });
+
+    if (sectionMap.has("__unassigned__")) {
+      sectionMap.get("__unassigned__")!.groupName = "Unassigned Members";
+    }
+
+    const sections = Array.from(sectionMap.values());
+    sections.sort((a, b) => {
+      if (a.groupId === input.primaryGroupId) return -1;
+      if (b.groupId === input.primaryGroupId) return 1;
+      if (a.groupId === "__unassigned__") return 1;
+      if (b.groupId === "__unassigned__") return -1;
+      return a.groupName.localeCompare(b.groupName);
+    });
+
+    sections.forEach((s) => {
+      s.members.sort((a, b) => a.name.localeCompare(b.name));
+    });
+
+    console.log("[sabbaths.getAllMembersGrouped] Grouped into", sections.length, "sections");
+    return sections;
+  });
+
 // ─── ROUTER ────────────────────────────────────────────────
 
 export const sabbathsRouter = createTRPCRouter({
@@ -1254,6 +1511,11 @@ export const sabbathsRouter = createTRPCRouter({
   acceptAssignment,
   declineAssignment,
   suggestReplacement,
+  getAll,
+  deleteSabbath,
+  revertToDraft,
+  getGroupMembers,
+  getAllMembersGrouped,
 });
 
 export default sabbathsRouter;

@@ -25,6 +25,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery } from '@tanstack/react-query';
 import { useSabbath } from '@/providers/sabbath-provider';
 import { useAuth } from '@/providers/auth-provider';
+import { trpc } from '@/lib/trpc';
 import { supabase } from '@/lib/supabase';
 import type { Sabbath, SabbathStatus } from '@/types/sabbath';
 import { STATUS_LABELS } from '@/types/sabbath';
@@ -85,15 +86,20 @@ type FilterType = 'all' | 'upcoming' | 'past' | 'draft' | 'published' | 'cancell
 export default function SabbathPlannerScreen() {
   const insets = useSafeAreaInsets();
   const { user, isAdmin, isPastor } = useAuth();
-  const {
-    sabbaths,
-    isLoading,
-    refetchSabbaths,
-    isPastorOfAnyGroup,
-    isPastorOfGroup,
-    createSabbath,
-    isCreatingSabbath,
-  } = useSabbath();
+  const { isPastorOfAnyGroup, isPastorOfGroup } = useSabbath();
+  const trpcUtils = trpc.useUtils();
+
+  const sabbathsQuery = trpc.sabbaths.getAll.useQuery();
+  const sabbaths = useMemo(() => sabbathsQuery.data ?? [], [sabbathsQuery.data]);
+  const isLoading = sabbathsQuery.isLoading;
+
+  const createSabbathMutation = trpc.sabbaths.createDraft.useMutation({
+    onSuccess: () => {
+      console.log('[SabbathPlanner] tRPC createDraft success, invalidating');
+      void trpcUtils.sabbaths.invalidate();
+    },
+  });
+  const isCreatingSabbath = createSabbathMutation.isPending;
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -157,9 +163,9 @@ export default function SabbathPlannerScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refetchSabbaths();
+    await sabbathsQuery.refetch();
     setRefreshing(false);
-  }, [refetchSabbaths]);
+  }, [sabbathsQuery]);
 
   const handleCreate = useCallback(async () => {
     if (!selectedDate) {
@@ -174,10 +180,10 @@ export default function SabbathPlannerScreen() {
     }
 
     try {
-      const result = await createSabbath({
-        group_id: groupId,
-        sabbath_date: selectedDate,
-        notes: notes.trim() || undefined,
+      const result = await createSabbathMutation.mutateAsync({
+        groupId: groupId,
+        sabbathDate: selectedDate,
+        notes: notes.trim() || null,
       });
       console.log('[SabbathPlanner] Created sabbath:', result.id);
       setShowCreateModal(false);
@@ -189,7 +195,7 @@ export default function SabbathPlannerScreen() {
       console.error('[SabbathPlanner] Create error:', err);
       Alert.alert('Error', err.message || 'Failed to create Sabbath plan.');
     }
-  }, [selectedDate, selectedGroupId, availableGroups, notes, createSabbath]);
+  }, [selectedDate, selectedGroupId, availableGroups, notes, createSabbathMutation]);
 
   const upcomingSaturdays = useMemo(() => getUpcomingSaturdays(8), []);
 

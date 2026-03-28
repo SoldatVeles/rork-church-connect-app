@@ -30,17 +30,15 @@ import {
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useQuery } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
-import { useSabbath } from '@/providers/sabbath-provider';
+import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/providers/auth-provider';
-import { supabase } from '@/lib/supabase';
 import type {
   SabbathAssignment,
   SabbathRole,
   SabbathStatus,
-  AssignmentStatus,
-  AttendanceStatus,
+  SabbathAssignmentStatus,
+  SabbathAttendanceStatus,
 } from '@/types/sabbath';
 import { ROLE_LABELS, ALL_ROLES, STATUS_LABELS, ASSIGNMENT_STATUS_LABELS } from '@/types/sabbath';
 
@@ -50,7 +48,7 @@ const STATUS_COLORS: Record<SabbathStatus, { bg: string; text: string; accent: s
   cancelled: { bg: '#fee2e2', text: '#991b1b', accent: '#ef4444' },
 };
 
-const ASSIGNMENT_COLORS: Record<AssignmentStatus, { bg: string; text: string }> = {
+const ASSIGNMENT_COLORS: Record<SabbathAssignmentStatus, { bg: string; text: string }> = {
   pending: { bg: '#fef3c7', text: '#92400e' },
   accepted: { bg: '#d1fae5', text: '#065f46' },
   declined: { bg: '#fee2e2', text: '#991b1b' },
@@ -77,75 +75,40 @@ function isUpcoming(dateStr: string): boolean {
 export default function SabbathDetailScreen() {
   const { sabbathId } = useLocalSearchParams<{ sabbathId: string }>();
   const insets = useSafeAreaInsets();
-  const { user, isAdmin, isPastor } = useAuth();
-  const {
-    sabbaths,
-    isPastorOfGroup,
-    updateSabbath,
-    isUpdatingSabbath,
-    deleteSabbath,
-    isDeletingSabbath,
-    upsertAssignment,
-    isUpsertingAssignment,
-    respondAssignment,
-    isRespondingAssignment,
-    upsertAttendance,
-    isUpsertingAttendance,
-    fetchAssignments,
-    fetchAttendance,
-    fetchGroupMembers,
-    fetchAllMembersGrouped,
-  } = useSabbath();
+  const { user } = useAuth();
+  const trpcUtils = trpc.useUtils();
 
-  const sabbath = useMemo(
-    () => sabbaths.find((s) => s.id === sabbathId) || null,
-    [sabbaths, sabbathId]
+  const detailQuery = trpc.sabbaths.getSabbathDetail.useQuery(
+    { sabbathId: sabbathId! },
+    { enabled: !!sabbathId }
   );
 
-  const canManage = useMemo(() => {
-    if (!sabbath) return false;
-    return isAdmin() || isPastor() || isPastorOfGroup(sabbath.group_id);
-  }, [sabbath, isAdmin, isPastor, isPastorOfGroup]);
+  const detail = detailQuery.data;
+  const sabbath = detail?.sabbath ?? null;
+  const assignments = useMemo(() => detail?.assignments ?? [], [detail?.assignments]);
+  const attendance = useMemo(() => detail?.attendance ?? [], [detail?.attendance]);
+  const canManage = detail?.canManage ?? false;
 
   const upcoming = sabbath ? isUpcoming(sabbath.sabbath_date) : false;
 
-  const assignmentsQuery = useQuery({
-    queryKey: ['sabbath-assignments', sabbathId],
-    queryFn: () => fetchAssignments(sabbathId!),
-    enabled: !!sabbathId,
-  });
+  const groupedMembersQuery = trpc.sabbaths.getAllMembersGrouped.useQuery(
+    { primaryGroupId: sabbath?.group_id ?? '' },
+    { enabled: !!sabbath?.group_id && canManage }
+  );
 
-  const attendanceQuery = useQuery({
-    queryKey: ['sabbath-attendance', sabbathId],
-    queryFn: () => fetchAttendance(sabbathId!),
-    enabled: !!sabbathId,
-  });
+  const invalidateAll = useCallback(() => {
+    void trpcUtils.sabbaths.invalidate();
+  }, [trpcUtils]);
 
-  const groupMembersQuery = useQuery({
-    queryKey: ['group-members', sabbath?.group_id],
-    queryFn: () => fetchGroupMembers(sabbath!.group_id),
-    enabled: !!sabbath?.group_id && canManage,
-  });
+  const publishMutation = trpc.sabbaths.publish.useMutation({ onSuccess: invalidateAll });
+  const cancelMutation = trpc.sabbaths.cancel.useMutation({ onSuccess: invalidateAll });
+  const revertMutation = trpc.sabbaths.revertToDraft.useMutation({ onSuccess: invalidateAll });
+  const deleteMutation = trpc.sabbaths.deleteSabbath.useMutation({ onSuccess: invalidateAll });
+  const assignRoleMutation = trpc.sabbaths.assignRole.useMutation({ onSuccess: invalidateAll });
+  const declineMutation = trpc.sabbaths.declineAssignment.useMutation({ onSuccess: invalidateAll });
+  const attendanceMutation = trpc.sabbaths.respondAttendance.useMutation({ onSuccess: invalidateAll });
 
-  const groupedMembersQuery = useQuery({
-    queryKey: ['grouped-members', sabbath?.group_id],
-    queryFn: () => fetchAllMembersGrouped(sabbath!.group_id),
-    enabled: !!sabbath?.group_id && canManage,
-  });
-
-  const groupQuery = useQuery({
-    queryKey: ['group-name', sabbath?.group_id],
-    queryFn: async () => {
-      if (!sabbath?.group_id) return null;
-      const { data } = await supabase
-        .from('groups')
-        .select('name')
-        .eq('id', sabbath.group_id)
-        .single();
-      return data as { name: string } | null;
-    },
-    enabled: !!sabbath?.group_id,
-  });
+  const isStatusUpdating = publishMutation.isPending || cancelMutation.isPending || revertMutation.isPending;
 
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assigningRole, setAssigningRole] = useState<SabbathRole | null>(null);
@@ -156,10 +119,7 @@ export default function SabbathDetailScreen() {
   const [cancelReason, setCancelReason] = useState('');
   const [showCancelModal, setShowCancelModal] = useState(false);
 
-  const assignments = useMemo(() => assignmentsQuery.data || [], [assignmentsQuery.data]);
-  const attendance = useMemo(() => attendanceQuery.data || [], [attendanceQuery.data]);
-  const _members = groupMembersQuery.data || [];
-  const groupedMembers = groupedMembersQuery.data || [];
+  const groupedMembers = useMemo(() => groupedMembersQuery.data ?? [], [groupedMembersQuery.data]);
 
   const myAttendance = useMemo(
     () => attendance.find((a) => a.user_id === user?.id),
@@ -184,14 +144,11 @@ export default function SabbathDetailScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([
-      assignmentsQuery.refetch(),
-      attendanceQuery.refetch(),
-    ]);
+    await detailQuery.refetch();
     setRefreshing(false);
-  }, [assignmentsQuery, attendanceQuery]);
+  }, [detailQuery]);
 
-  const handlePublish = useCallback(async () => {
+  const handlePublish = useCallback(() => {
     if (!sabbath) return;
     Alert.alert(
       'Publish Sabbath',
@@ -201,42 +158,44 @@ export default function SabbathDetailScreen() {
         {
           text: 'Publish',
           onPress: () => {
-            void (async () => {
-              try {
-                await updateSabbath({ id: sabbath.id, status: 'published' });
-                void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              } catch (err: any) {
-                Alert.alert('Error', err.message || 'Failed to publish.');
+            publishMutation.mutate(
+              { sabbathId: sabbath.id },
+              {
+                onSuccess: () => {
+                  console.log('[SabbathDetail] Published:', sabbath.id);
+                  void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                },
+                onError: (err) => Alert.alert('Error', err.message || 'Failed to publish.'),
               }
-            })();
+            );
           },
         },
       ]
     );
-  }, [sabbath, updateSabbath]);
+  }, [sabbath, publishMutation]);
 
   const handleCancel = useCallback(() => {
     if (!sabbath) return;
     setShowCancelModal(true);
   }, [sabbath]);
 
-  const confirmCancel = useCallback(async () => {
+  const confirmCancel = useCallback(() => {
     if (!sabbath) return;
-    try {
-      await updateSabbath({
-        id: sabbath.id,
-        status: 'cancelled',
-        cancellation_reason: cancelReason.trim() || undefined,
-      });
-      setCancelReason('');
-      setShowCancelModal(false);
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to cancel.');
-    }
-  }, [sabbath, updateSabbath, cancelReason]);
+    cancelMutation.mutate(
+      { sabbathId: sabbath.id, cancellationReason: cancelReason.trim() || null },
+      {
+        onSuccess: () => {
+          console.log('[SabbathDetail] Cancelled:', sabbath.id);
+          setCancelReason('');
+          setShowCancelModal(false);
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        },
+        onError: (err) => Alert.alert('Error', err.message || 'Failed to cancel.'),
+      }
+    );
+  }, [sabbath, cancelMutation, cancelReason]);
 
-  const handleDelete = useCallback(async () => {
+  const handleDelete = useCallback(() => {
     if (!sabbath) return;
     Alert.alert(
       'Delete Sabbath',
@@ -247,23 +206,27 @@ export default function SabbathDetailScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            void (async () => {
-              try {
-                await deleteSabbath(sabbath.id);
-                void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                router.back();
-              } catch (err: any) {
-                console.error('[SabbathDetail] Delete error:', err);
-                Alert.alert('Error', err.message || 'Failed to delete Sabbath.');
+            deleteMutation.mutate(
+              { sabbathId: sabbath.id },
+              {
+                onSuccess: () => {
+                  console.log('[SabbathDetail] Deleted:', sabbath.id);
+                  void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  router.back();
+                },
+                onError: (err) => {
+                  console.error('[SabbathDetail] Delete error:', err);
+                  Alert.alert('Error', err.message || 'Failed to delete Sabbath.');
+                },
               }
-            })();
+            );
           },
         },
       ]
     );
-  }, [sabbath, deleteSabbath]);
+  }, [sabbath, deleteMutation]);
 
-  const handleRevertToDraft = useCallback(async () => {
+  const handleRevertToDraft = useCallback(() => {
     if (!sabbath) return;
     Alert.alert(
       'Revert to Draft',
@@ -274,68 +237,73 @@ export default function SabbathDetailScreen() {
           text: 'Revert',
           style: 'destructive',
           onPress: () => {
-            void (async () => {
-              try {
-                await updateSabbath({ id: sabbath.id, status: 'draft' });
-                void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              } catch (err: any) {
-                Alert.alert('Error', err.message || 'Failed to revert.');
+            revertMutation.mutate(
+              { sabbathId: sabbath.id },
+              {
+                onSuccess: () => {
+                  console.log('[SabbathDetail] Reverted to draft:', sabbath.id);
+                  void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                },
+                onError: (err) => Alert.alert('Error', err.message || 'Failed to revert.'),
               }
-            })();
+            );
           },
         },
       ]
     );
-  }, [sabbath, updateSabbath]);
+  }, [sabbath, revertMutation]);
 
   const handleAssign = useCallback(
-    async (memberId: string) => {
+    (memberId: string) => {
       if (!sabbath || !assigningRole) return;
-      try {
-        await upsertAssignment({
-          sabbath_id: sabbath.id,
-          role: assigningRole,
-          user_id: memberId,
-        });
-        setShowAssignModal(false);
-        setAssigningRole(null);
-        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      } catch (err: any) {
-        Alert.alert('Error', err.message || 'Failed to assign role.');
-      }
+      assignRoleMutation.mutate(
+        { sabbathId: sabbath.id, role: assigningRole, userId: memberId },
+        {
+          onSuccess: () => {
+            console.log('[SabbathDetail] Assigned:', assigningRole, 'to:', memberId);
+            setShowAssignModal(false);
+            setAssigningRole(null);
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          },
+          onError: (err) => Alert.alert('Error', err.message || 'Failed to assign role.'),
+        }
+      );
     },
-    [sabbath, assigningRole, upsertAssignment]
+    [sabbath, assigningRole, assignRoleMutation]
   );
 
-  const handleDeclineAssignment = useCallback(async () => {
+  const handleDeclineAssignment = useCallback(() => {
     if (!decliningAssignment) return;
-    try {
-      await respondAssignment({
-        assignment_id: decliningAssignment.id,
-        sabbath_id: decliningAssignment.sabbath_id,
-        status: 'declined',
-        decline_reason: declineReason.trim() || undefined,
-      });
-      setShowDeclineModal(false);
-      setDecliningAssignment(null);
-      setDeclineReason('');
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to decline.');
-    }
-  }, [decliningAssignment, declineReason, respondAssignment]);
+    declineMutation.mutate(
+      { assignmentId: decliningAssignment.id, reason: declineReason.trim() || null },
+      {
+        onSuccess: () => {
+          console.log('[SabbathDetail] Declined:', decliningAssignment.id);
+          setShowDeclineModal(false);
+          setDecliningAssignment(null);
+          setDeclineReason('');
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        },
+        onError: (err) => Alert.alert('Error', err.message || 'Failed to decline.'),
+      }
+    );
+  }, [decliningAssignment, declineReason, declineMutation]);
 
   const handleAttendance = useCallback(
-    async (status: AttendanceStatus) => {
+    (status: SabbathAttendanceStatus) => {
       if (!sabbath) return;
-      try {
-        await upsertAttendance({ sabbath_id: sabbath.id, status });
-        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      } catch (err: any) {
-        Alert.alert('Error', err.message || 'Failed to update attendance.');
-      }
+      attendanceMutation.mutate(
+        { sabbathId: sabbath.id, status },
+        {
+          onSuccess: () => {
+            console.log('[SabbathDetail] Attendance:', status);
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          },
+          onError: (err) => Alert.alert('Error', err.message || 'Failed to update attendance.'),
+        }
+      );
     },
-    [sabbath, upsertAttendance]
+    [sabbath, attendanceMutation]
   );
 
   if (!sabbath) {
@@ -343,8 +311,14 @@ export default function SabbathDetailScreen() {
       <View style={styles.container}>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={[styles.centered, { paddingTop: insets.top + 60 }]}>
-          <ActivityIndicator size="large" color="#1e3a8a" />
-          <Text style={styles.loadingText}>Loading...</Text>
+          {detailQuery.error ? (
+            <Text style={styles.loadingText}>{detailQuery.error.message}</Text>
+          ) : (
+            <>
+              <ActivityIndicator size="large" color="#1e3a8a" />
+              <Text style={styles.loadingText}>Loading...</Text>
+            </>
+          )}
         </View>
       </View>
     );
@@ -380,7 +354,7 @@ export default function SabbathDetailScreen() {
               {STATUS_LABELS[sabbath.status]}
             </Text>
           </View>
-          <Text style={styles.churchName}>{groupQuery.data?.name || 'Loading...'}</Text>
+          <Text style={styles.churchName}>{detail?.group?.name || 'Loading...'}</Text>
         </View>
       </LinearGradient>
 
@@ -405,7 +379,7 @@ export default function SabbathDetailScreen() {
                   myAttendance?.status === 'attending' && styles.attendanceBtnActive,
                 ]}
                 onPress={() => handleAttendance('attending')}
-                disabled={isUpsertingAttendance}
+                disabled={attendanceMutation.isPending}
               >
                 <Check size={18} color={myAttendance?.status === 'attending' ? '#fff' : '#10b981'} />
                 <Text
@@ -424,7 +398,7 @@ export default function SabbathDetailScreen() {
                   myAttendance?.status === 'not_attending' && styles.attendanceBtnDeclineActive,
                 ]}
                 onPress={() => handleAttendance('not_attending')}
-                disabled={isUpsertingAttendance}
+                disabled={attendanceMutation.isPending}
               >
                 <X size={18} color={myAttendance?.status === 'not_attending' ? '#fff' : '#ef4444'} />
                 <Text
@@ -458,7 +432,7 @@ export default function SabbathDetailScreen() {
                   setDecliningAssignment(myAssignment);
                   setShowDeclineModal(true);
                 }}
-                disabled={isRespondingAssignment}
+                disabled={declineMutation.isPending}
               >
                 <X size={16} color="#ef4444" />
                 <Text style={styles.declineBtnText}>Can't Attend / Decline</Text>
@@ -597,9 +571,9 @@ export default function SabbathDetailScreen() {
                 <TouchableOpacity
                   style={styles.publishBtn}
                   onPress={handlePublish}
-                  disabled={isUpdatingSabbath}
+                  disabled={isStatusUpdating}
                 >
-                  {isUpdatingSabbath ? (
+                  {isStatusUpdating ? (
                     <ActivityIndicator size="small" color="#fff" />
                   ) : (
                     <>
@@ -613,7 +587,7 @@ export default function SabbathDetailScreen() {
                 <TouchableOpacity
                   style={styles.revertBtn}
                   onPress={handleRevertToDraft}
-                  disabled={isUpdatingSabbath}
+                  disabled={isStatusUpdating}
                 >
                   <RotateCcw size={16} color="#475569" />
                   <Text style={styles.revertBtnText}>Revert to Draft</Text>
@@ -622,7 +596,7 @@ export default function SabbathDetailScreen() {
               <TouchableOpacity
                 style={styles.cancelSabbathBtn}
                 onPress={handleCancel}
-                disabled={isUpdatingSabbath}
+                disabled={isStatusUpdating}
               >
                 <Ban size={16} color="#ef4444" />
                 <Text style={styles.cancelSabbathBtnText}>Cancel Sabbath</Text>
@@ -636,10 +610,10 @@ export default function SabbathDetailScreen() {
             <TouchableOpacity
               style={styles.deleteBtn}
               onPress={handleDelete}
-              disabled={isDeletingSabbath}
+              disabled={deleteMutation.isPending}
               testID="delete-sabbath-button"
             >
-              {isDeletingSabbath ? (
+              {deleteMutation.isPending ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <>
@@ -692,7 +666,7 @@ export default function SabbathDetailScreen() {
                         key={m.id}
                         style={styles.memberItem}
                         onPress={() => handleAssign(m.id)}
-                        disabled={isUpsertingAssignment}
+                        disabled={assignRoleMutation.isPending}
                       >
                         <View style={styles.memberAvatar}>
                           <Text style={styles.memberAvatarText}>
@@ -751,9 +725,9 @@ export default function SabbathDetailScreen() {
               <TouchableOpacity
                 style={styles.declineModalConfirm}
                 onPress={handleDeclineAssignment}
-                disabled={isRespondingAssignment}
+                disabled={declineMutation.isPending}
               >
-                {isRespondingAssignment ? (
+                {declineMutation.isPending ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <Text style={styles.declineModalConfirmText}>Decline</Text>
@@ -794,9 +768,9 @@ export default function SabbathDetailScreen() {
               <TouchableOpacity
                 style={[styles.declineModalConfirm, { backgroundColor: '#ef4444' }]}
                 onPress={confirmCancel}
-                disabled={isUpdatingSabbath}
+                disabled={cancelMutation.isPending}
               >
-                {isUpdatingSabbath ? (
+                {cancelMutation.isPending ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <Text style={styles.declineModalConfirmText}>Cancel Sabbath</Text>
