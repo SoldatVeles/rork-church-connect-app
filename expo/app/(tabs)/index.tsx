@@ -11,6 +11,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { useAuth } from '@/providers/auth-provider';
+import { useSabbath } from '@/providers/sabbath-provider';
 import { router } from 'expo-router';
 import NotificationDropdown from '@/components/NotificationDropdown';
 import { supabase } from '@/lib/supabase';
@@ -220,7 +221,9 @@ const bibleVerses = [
 ];
 
 export default function HomeScreen() {
-  const { user } = useAuth();
+  const { user, isAdmin, isPastor } = useAuth();
+  const { isPastorOfAnyGroup } = useSabbath();
+  const canManageSabbath = isAdmin() || isPastor() || isPastorOfAnyGroup;
   const [showNotifications, setShowNotifications] = useState(false);
   const bellButtonRef = useRef<View>(null);
   const [bellPosition, setBellPosition] = useState({ x: 0, y: 0 });
@@ -328,14 +331,14 @@ export default function HomeScreen() {
       color: '#8b5cf6',
       onPress: () => router.push('/groups'),
     },
-    {
+    ...(canManageSabbath ? [{
       icon: Sun,
-      title: 'Sabbath Planner',
+      title: 'Plan Sabbath',
       subtitle: 'Plan & manage services',
       color: '#0f172a',
       onPress: () => router.push('/sabbath-planner' as any),
-    },
-  ], [totalEventsCount, activeRequestsCount, membersCount]);
+    }] : []),
+  ], [totalEventsCount, activeRequestsCount, membersCount, canManageSabbath]);
 
   const announcements = [
     {

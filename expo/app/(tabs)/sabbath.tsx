@@ -295,11 +295,17 @@ export default function SabbathScreen() {
     }
   );
 
+  const trpcUtils = trpc.useUtils();
+
   const respondAttendanceMutation = trpc.sabbaths.respondAttendance.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       console.log('[Sabbath] Attendance response saved');
       void myChurchQuery.refetch();
       void sabbathDetailQuery.refetch();
+      void trpcUtils.sabbaths.getSabbathDetail.invalidate({ sabbathId: variables.sabbathId });
+      if (variables.status === 'attending') {
+        Alert.alert('Confirmed', "You're now marked as attending this Sabbath.");
+      }
     },
     onError: (err) => {
       console.error('[Sabbath] Attendance error:', err);

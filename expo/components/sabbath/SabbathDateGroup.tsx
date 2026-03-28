@@ -1,9 +1,10 @@
-import React from 'react';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
-import { Calendar, Church, ChevronRight, UserPlus, XCircle } from 'lucide-react-native';
+import React, { useMemo } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, Alert } from 'react-native';
+import { Calendar, Church, ChevronRight, UserPlus, CheckCircle, XCircle } from 'lucide-react-native';
 import type { SabbathDateGroup as SabbathDateGroupType, SabbathWithGroup } from '@/types/sabbath';
 import { isPublishedSabbath, isCancelledSabbath } from '@/utils/sabbath';
 import { trpc } from '@/lib/trpc';
+import { useAuth } from '@/providers/auth-provider';
 import { SabbathStatusBadge } from './SabbathStatusBadge';
 import { SabbathRoleList } from './SabbathRoleList';
 
@@ -43,6 +44,7 @@ interface SwitzerlandSabbathCardProps {
 
 function SwitzerlandSabbathCard({ item, onAttend, onViewDetail, isMutating }: SwitzerlandSabbathCardProps) {
   const { sabbath, group } = item;
+  const { user } = useAuth();
   const cancelled = isCancelledSabbath(sabbath.status);
   const published = isPublishedSabbath(sabbath.status);
 
@@ -50,6 +52,28 @@ function SwitzerlandSabbathCard({ item, onAttend, onViewDetail, isMutating }: Sw
     { sabbathId: sabbath.id },
     { enabled: published }
   );
+
+  const isAttending = useMemo(() => {
+    if (!detailQuery.data || !user?.id) return false;
+    return detailQuery.data.attendance.some(
+      (a) => a.user_id === user.id && a.status === 'attending'
+    );
+  }, [detailQuery.data, user?.id]);
+
+  const handleAttendPress = () => {
+    if (isAttending) return;
+    Alert.alert(
+      'Attend Sabbath',
+      `Would you like to attend this Sabbath at ${group.name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Attend',
+          onPress: () => onAttend(sabbath.id, true),
+        },
+      ]
+    );
+  };
 
   return (
     <View style={styles.swissCard}>
@@ -80,15 +104,25 @@ function SwitzerlandSabbathCard({ item, onAttend, onViewDetail, isMutating }: Sw
       )}
 
       {published && (
-        <TouchableOpacity
-          testID={`attend-swiss-${sabbath.id}`}
-          style={styles.swissAttendButton}
-          onPress={() => onAttend(sabbath.id, true)}
-          disabled={isMutating}
-        >
-          <UserPlus size={16} color="#1e3a8a" />
-          <Text style={styles.swissAttendButtonText}>Attend this Sabbath</Text>
-        </TouchableOpacity>
+        isAttending ? (
+          <View
+            testID={`attending-swiss-${sabbath.id}`}
+            style={styles.swissAttendingBadge}
+          >
+            <CheckCircle size={16} color="#15803d" />
+            <Text style={styles.swissAttendingText}>You're attending</Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            testID={`attend-swiss-${sabbath.id}`}
+            style={styles.swissAttendButton}
+            onPress={handleAttendPress}
+            disabled={isMutating}
+          >
+            <UserPlus size={16} color="#1e3a8a" />
+            <Text style={styles.swissAttendButtonText}>Attend this Sabbath</Text>
+          </TouchableOpacity>
+        )
       )}
     </View>
   );
@@ -175,5 +209,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600' as const,
     color: '#1e3a8a',
+  },
+  swissAttendingBadge: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 8,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1.5,
+    borderColor: '#bbf7d0',
+  },
+  swissAttendingText: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: '#15803d',
   },
 });
