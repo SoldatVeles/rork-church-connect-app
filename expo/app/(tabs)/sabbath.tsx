@@ -6,6 +6,7 @@ import {
   MapPin,
   AlertTriangle,
   XCircle,
+  Plus,
 } from 'lucide-react-native';
 import React, { useState, useMemo, useCallback } from 'react';
 import {
@@ -22,6 +23,7 @@ import {
 import { useRouter } from 'expo-router';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/providers/auth-provider';
+import { useSabbath } from '@/providers/sabbath-provider';
 import type {
   SabbathAssignment,
   SabbathDateGroup as SabbathDateGroupType,
@@ -83,12 +85,25 @@ function CancelledBanner({ reason }: { reason?: string | null }) {
   );
 }
 
-function TabSwitcher({ activeTab, onSwitch }: { activeTab: TabKey; onSwitch: (tab: TabKey) => void }) {
+function TabSwitcher({ activeTab, onSwitch, canManage, onPlanSabbath }: { activeTab: TabKey; onSwitch: (tab: TabKey) => void; canManage: boolean; onPlanSabbath: () => void }) {
   return (
     <View style={styles.header}>
       <View style={styles.headerRow}>
-        <Sun size={22} color="#1e3a8a" />
-        <Text style={styles.headerTitle}>Sabbath Planner</Text>
+        <View style={styles.headerLeft}>
+          <Sun size={22} color="#1e3a8a" />
+          <Text style={styles.headerTitle}>Sabbath</Text>
+        </View>
+        {canManage && (
+          <TouchableOpacity
+            style={styles.planButton}
+            onPress={onPlanSabbath}
+            activeOpacity={0.7}
+            testID="plan-sabbath-button"
+          >
+            <Plus size={16} color="#ffffff" />
+            <Text style={styles.planButtonText}>Plan Sabbath</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.segmentContainer}>
@@ -258,9 +273,12 @@ function SwitzerlandSection({ dateGroups, isLoading, error, onAttend, onViewDeta
 }
 
 export default function SabbathScreen() {
-  const { user } = useAuth();
+  const { user, isAdmin, isPastor } = useAuth();
+  const { isPastorOfAnyGroup } = useSabbath();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabKey>('myChurch');
+
+  const canManage = isAdmin() || isPastor() || isPastorOfAnyGroup;
 
   const myChurchQuery = trpc.sabbaths.getMyChurchUpcoming.useQuery(undefined, {
     enabled: activeTab === 'myChurch',
@@ -375,7 +393,11 @@ export default function SabbathScreen() {
   }, []);
 
   const handleViewDetail = useCallback((sabbathId: string) => {
-    router.push({ pathname: '/sabbath/[id]' as any, params: { id: sabbathId } });
+    router.push({ pathname: '/sabbath-detail' as any, params: { sabbathId } });
+  }, [router]);
+
+  const handleOpenPlanner = useCallback(() => {
+    router.push('/sabbath-planner' as any);
   }, [router]);
 
   const myAssignment = useMemo(() => {
@@ -400,7 +422,7 @@ export default function SabbathScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
 
-      <TabSwitcher activeTab={activeTab} onSwitch={setActiveTab} />
+      <TabSwitcher activeTab={activeTab} onSwitch={setActiveTab} canManage={canManage} onPlanSabbath={handleOpenPlanner} />
 
       <ScrollView
         style={styles.scroll}
@@ -459,13 +481,32 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'space-between',
     marginBottom: 16,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   headerTitle: {
     fontSize: 22,
     fontWeight: '700' as const,
     color: '#0f172a',
+  },
+  planButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#1e3a8a',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  planButtonText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: '#ffffff',
   },
   segmentContainer: {
     flexDirection: 'row',
