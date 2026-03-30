@@ -153,6 +153,8 @@ export type Database = {
           category: string;
           is_anonymous: boolean;
           is_answered: boolean;
+          group_id: string | null;
+          is_shared_all_churches: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -164,6 +166,8 @@ export type Database = {
           category?: string;
           is_anonymous?: boolean;
           is_answered?: boolean;
+          group_id?: string | null;
+          is_shared_all_churches?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -175,6 +179,8 @@ export type Database = {
           category?: string;
           is_anonymous?: boolean;
           is_answered?: boolean;
+          group_id?: string | null;
+          is_shared_all_churches?: boolean;
           created_at?: string;
           updated_at?: string;
         };

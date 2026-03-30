@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { Heart, Plus, Clock, User, AlertCircle, CheckCircle, MessageSquarePlus, ChevronDown, ChevronUp, Sparkles } from 'lucide-react-native';
+import { Heart, Plus, Clock, User, AlertCircle, CheckCircle, MessageSquarePlus, ChevronDown, ChevronUp, Sparkles, Globe, Church } from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
 import {
   StyleSheet,
@@ -15,13 +15,15 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useAuth } from '@/providers/auth-provider';
-import { isPastorLevel } from '@/utils/permissions';
+import { useChurch } from '@/providers/church-provider';
+import { isPastorLevel, isAdmin } from '@/utils/permissions';
 import type { PrayerRequest, PrayerStatus, PrayerUpdate } from '@/types/prayer';
 import { supabase } from '@/lib/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export default function PrayersScreen() {
   const { user } = useAuth();
+  const { currentChurch } = useChurch();
   const [selectedFilter, setSelectedFilter] = useState<PrayerStatus | 'all'>('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [newPrayer, setNewPrayer] = useState({
@@ -29,6 +31,7 @@ export default function PrayersScreen() {
     description: '',
     isAnonymous: false,
     isUrgent: false,
+    isSharedAllChurches: false,
   });
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [selectedPrayerForUpdate, setSelectedPrayerForUpdate] = useState<PrayerRequest | null>(null);
@@ -37,18 +40,21 @@ export default function PrayersScreen() {
   const [expandedPrayers, setExpandedPrayers] = useState<Set<string>>(new Set());
 
   const queryClient = useQueryClient();
-  
-  // Single query for all prayers, then filter on client side for better performance
+  const currentChurchId = currentChurch?.id ?? null;
+  const userIsAdmin = isAdmin(user);
+
   const allPrayersQuery = useQuery({
-    queryKey: ['prayers'],
+    queryKey: ['prayers', currentChurchId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('prayers')
         .select('*')
         .order('created_at', { ascending: false });
-      
+
+      const { data, error } = await query;
+
       if (error) throw new Error(error.message);
-      
+
       return (data || []).map(prayer => ({
         id: prayer.id,
         title: prayer.title,
@@ -58,14 +64,15 @@ export default function PrayersScreen() {
         status: prayer.is_answered ? 'answered' as PrayerStatus : 'active' as PrayerStatus,
         isAnonymous: prayer.is_anonymous || false,
         isUrgent: false,
-        prayedBy: [],
+        prayedBy: [] as string[],
         createdAt: new Date(prayer.created_at),
         answeredAt: prayer.updated_at && prayer.is_answered ? new Date(prayer.updated_at) : undefined,
+        groupId: prayer.group_id ?? null,
+        isSharedAllChurches: prayer.is_shared_all_churches ?? false,
       }));
     },
   });
 
-  // Fetch who is praying per prayer (via join table). If the table doesn't exist, we fail soft.
   const prayingQuery = useQuery({
     queryKey: ['prayer_prayers'],
     queryFn: async () => {
@@ -133,6 +140,16 @@ export default function PrayersScreen() {
       updates: updateMap.get(p.id) ?? [],
     }));
   }, [allPrayersQuery.data, prayingQuery.data, updatesQuery.data]);
+
+  const visiblePrayers: PrayerRequest[] = useMemo(() => {
+    if (userIsAdmin) return mergedPrayers;
+    if (!currentChurchId) return mergedPrayers.filter(p => p.isSharedAllChurches);
+    return mergedPrayers.filter(p =>
+      p.groupId === currentChurchId ||
+      p.isSharedAllChurches ||
+      p.groupId === null
+    );
+  }, [mergedPrayers, currentChurchId, userIsAdmin]);
   
   const createPrayerMutation = useMutation({
     mutationFn: async (prayerData: {
@@ -142,6 +159,7 @@ export default function PrayersScreen() {
       isUrgent: boolean;
       requestedBy: string;
       requestedByName: string;
+      isSharedAllChurches: boolean;
     }) => {
       const { data, error } = await supabase
         .from('prayers')
@@ -152,6 +170,8 @@ export default function PrayersScreen() {
           is_anonymous: prayerData.isAnonymous,
           is_answered: false,
           category: 'personal',
+          group_id: currentChurchId,
+          is_shared_all_churches: prayerData.isSharedAllChurches,
         })
         .select()
         .single();
@@ -160,12 +180,13 @@ export default function PrayersScreen() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['prayers'] });
+      void queryClient.invalidateQueries({ queryKey: ['prayers'] });
       setNewPrayer({
         title: '',
         description: '',
         isAnonymous: false,
         isUrgent: false,
+        isSharedAllChurches: false,
       });
       setShowAddModal(false);
       Alert.alert('Success', 'Your prayer request has been submitted');
@@ -194,8 +215,8 @@ export default function PrayersScreen() {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['prayers'] });
-      queryClient.invalidateQueries({ queryKey: ['prayer_updates'] });
+      void queryClient.invalidateQueries({ queryKey: ['prayers'] });
+      void queryClient.invalidateQueries({ queryKey: ['prayer_updates'] });
       Alert.alert('Success', 'Prayer status updated');
     },
     onError: (error: Error) => {
@@ -231,8 +252,8 @@ export default function PrayersScreen() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['prayers'] });
-      queryClient.invalidateQueries({ queryKey: ['prayer_updates'] });
+      void queryClient.invalidateQueries({ queryKey: ['prayers'] });
+      void queryClient.invalidateQueries({ queryKey: ['prayer_updates'] });
       setShowUpdateModal(false);
       setSelectedPrayerForUpdate(null);
       setUpdateContent('');
@@ -281,9 +302,8 @@ export default function PrayersScreen() {
     });
   };
 
-  const allPrayers = mergedPrayers || [];
+  const allPrayers = visiblePrayers;
   
-  // Filter prayers based on selected filter
   const prayers = selectedFilter === 'all' 
     ? allPrayers 
     : allPrayers.filter((prayer: PrayerRequest) => prayer.status === selectedFilter);
@@ -311,7 +331,6 @@ export default function PrayersScreen() {
 
   const togglePrayMutation = useMutation({
     mutationFn: async (payload: { prayerId: string; willPray: boolean; userId: string }) => {
-      // Try using a join table: prayer_prayers(prayer_id uuid, user_id uuid)
       if (payload.willPray) {
         const { error } = await supabase.from('prayer_prayers').upsert({
           prayer_id: payload.prayerId,
@@ -321,7 +340,6 @@ export default function PrayersScreen() {
           ignoreDuplicates: true
         });
         if (error) {
-          // Check if it's a table not found error
           if (error.message.includes('relation') && error.message.includes('does not exist')) {
             throw new Error('Prayer tracking table not configured. Please run the database setup SQL.');
           }
@@ -334,7 +352,6 @@ export default function PrayersScreen() {
           .eq('prayer_id', payload.prayerId)
           .eq('user_id', payload.userId);
         if (error) {
-          // Ignore error if table doesn't exist when trying to delete
           if (!error.message.includes('relation') || !error.message.includes('does not exist')) {
             throw new Error(error.message);
           }
@@ -345,7 +362,7 @@ export default function PrayersScreen() {
       await queryClient.cancelQueries({ queryKey: ['prayers'] });
       await queryClient.cancelQueries({ queryKey: ['prayer_prayers'] });
 
-      const prevPrayers = queryClient.getQueryData<PrayerRequest[]>(['prayers']);
+      const prevPrayers = queryClient.getQueryData<PrayerRequest[]>(['prayers', currentChurchId]);
       const prevLinks = queryClient.getQueryData<{ prayer_id: string; user_id: string }[]>(['prayer_prayers']);
 
       if (prevPrayers) {
@@ -354,7 +371,7 @@ export default function PrayersScreen() {
             ? { ...p, prayedBy: willPray ? [...(p.prayedBy ?? []), userId] : (p.prayedBy ?? []).filter(id => id !== userId) }
             : p,
         );
-        queryClient.setQueryData(['prayers'], next);
+        queryClient.setQueryData(['prayers', currentChurchId], next);
       }
 
       if (prevLinks) {
@@ -368,10 +385,9 @@ export default function PrayersScreen() {
     },
     onError: (err: Error, _vars, ctx) => {
       console.error('[Prayers] Toggle pray failed:', err);
-      if (ctx?.prevPrayers) queryClient.setQueryData(['prayers'], ctx.prevPrayers);
+      if (ctx?.prevPrayers) queryClient.setQueryData(['prayers', currentChurchId], ctx.prevPrayers);
       if (ctx?.prevLinks) queryClient.setQueryData(['prayer_prayers'], ctx.prevLinks);
       
-      // Provide helpful error message
       if (err.message.includes('Prayer tracking table not configured')) {
         Alert.alert(
           'Database Setup Required', 
@@ -383,8 +399,8 @@ export default function PrayersScreen() {
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['prayers'] });
-      queryClient.invalidateQueries({ queryKey: ['prayer_prayers'] });
+      void queryClient.invalidateQueries({ queryKey: ['prayers'] });
+      void queryClient.invalidateQueries({ queryKey: ['prayer_prayers'] });
     },
   });
 
@@ -441,8 +457,10 @@ export default function PrayersScreen() {
       description: newPrayer.description.trim(),
       isAnonymous: newPrayer.isAnonymous,
       isUrgent: newPrayer.isUrgent,
+      isSharedAllChurches: newPrayer.isSharedAllChurches,
       requestedBy: user.id,
       requestedByName: `${user.firstName} ${user.lastName}`,
+      groupId: currentChurchId,
     });
     
     createPrayerMutation.mutate({
@@ -452,10 +470,10 @@ export default function PrayersScreen() {
       isUrgent: newPrayer.isUrgent,
       requestedBy: user.id,
       requestedByName: `${user.firstName} ${user.lastName}`,
+      isSharedAllChurches: newPrayer.isSharedAllChurches,
     });
   };
 
-  // Calculate counts for filter buttons
   const activePrayers = allPrayers.filter((p: PrayerRequest) => p.status === 'active');
   const answeredPrayers = allPrayers.filter((p: PrayerRequest) => p.status === 'answered');
 
@@ -464,6 +482,12 @@ export default function PrayersScreen() {
     { key: 'active', label: 'Active', count: activePrayers.length },
     { key: 'answered', label: 'Answered', count: answeredPrayers.length },
   ];
+
+  const getScopeBadge = (prayer: PrayerRequest) => {
+    if (prayer.isSharedAllChurches) return 'shared';
+    if (prayer.groupId && prayer.groupId !== currentChurchId) return 'other';
+    return 'local';
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -524,7 +548,9 @@ export default function PrayersScreen() {
             <Text style={styles.emptySubtext}>Be the first to share a prayer request</Text>
           </View>
         ) : (
-          prayers.map((prayer: PrayerRequest) => (
+          prayers.map((prayer: PrayerRequest) => {
+          const scopeBadge = getScopeBadge(prayer);
+          return (
           <View key={prayer.id} style={styles.prayerCard}>
             <View style={styles.prayerHeader}>
               <View style={styles.prayerBadges}>
@@ -545,6 +571,18 @@ export default function PrayersScreen() {
                     {prayer.status.charAt(0).toUpperCase() + prayer.status.slice(1)}
                   </Text>
                 </View>
+                {scopeBadge === 'shared' && (
+                  <View style={styles.sharedBadge}>
+                    <Globe size={11} color="#2563eb" />
+                    <Text style={styles.sharedBadgeText}>All Churches</Text>
+                  </View>
+                )}
+                {scopeBadge === 'local' && prayer.groupId && (
+                  <View style={styles.localBadge}>
+                    <Church size={11} color="#6b7280" />
+                    <Text style={styles.localBadgeText}>My Church</Text>
+                  </View>
+                )}
               </View>
               
               <Text style={styles.prayerTitle}>{prayer.title}</Text>
@@ -637,7 +675,6 @@ export default function PrayersScreen() {
               </View>
             </View>
 
-            {/* Updates Section */}
             {((prayer.updates && prayer.updates.length > 0) || canUpdateStatus(prayer)) && (
               <View style={styles.updatesSection}>
                 {prayer.updates && prayer.updates.length > 0 && (
@@ -684,7 +721,8 @@ export default function PrayersScreen() {
               </View>
             )}
           </View>
-          ))
+          );
+          })
         )}
 
         <View style={styles.spacer} />
@@ -721,6 +759,15 @@ export default function PrayersScreen() {
           </View>
 
           <ScrollView style={styles.modalContent}>
+            {currentChurch && (
+              <View style={styles.churchContextBanner}>
+                <Church size={14} color="#1e3a8a" />
+                <Text style={styles.churchContextText}>
+                  Posting to: {currentChurch.name}
+                </Text>
+              </View>
+            )}
+
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Title</Text>
               <TextInput
@@ -775,12 +822,32 @@ export default function PrayersScreen() {
                   testID="prayer-urgent-switch"
                 />
               </View>
+
+              <View style={styles.divider} />
+
+              <View style={styles.switchRow}>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.shareLabelRow}>
+                    <Globe size={16} color="#2563eb" />
+                    <Text style={styles.switchLabel}>Share with all churches</Text>
+                  </View>
+                  <Text style={styles.switchDescription}>
+                    Visible to members of all church groups
+                  </Text>
+                </View>
+                <Switch
+                  value={newPrayer.isSharedAllChurches}
+                  onValueChange={(value) => setNewPrayer(prev => ({ ...prev, isSharedAllChurches: value }))}
+                  trackColor={{ false: '#e2e8f0', true: '#2563eb' }}
+                  thumbColor={newPrayer.isSharedAllChurches ? 'white' : '#f4f4f5'}
+                  testID="prayer-shared-switch"
+                />
+              </View>
             </View>
           </ScrollView>
         </SafeAreaView>
       </Modal>
 
-      {/* Update Modal */}
       <Modal
         visible={showUpdateModal}
         animationType="slide"
@@ -869,7 +936,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
+    fontWeight: 'bold' as const,
     color: '#1e293b',
   },
   addButton: {
@@ -898,7 +965,7 @@ const styles = StyleSheet.create({
   },
   filterButtonText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '500' as const,
     color: '#64748b',
   },
   filterButtonTextActive: {
@@ -927,6 +994,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     marginBottom: 8,
+    flexWrap: 'wrap',
   },
   urgentBadge: {
     flexDirection: 'row',
@@ -941,7 +1009,7 @@ const styles = StyleSheet.create({
   },
   urgentBadgeText: {
     fontSize: 10,
-    fontWeight: 'bold',
+    fontWeight: 'bold' as const,
     color: '#dc2626',
   },
   statusBadge: {
@@ -955,15 +1023,45 @@ const styles = StyleSheet.create({
   },
   statusBadgeText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     color: '#64748b',
   },
   answeredBadgeText: {
     color: '#16a34a',
   },
+  sharedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  sharedBadgeText: {
+    fontSize: 10,
+    fontWeight: '600' as const,
+    color: '#2563eb',
+  },
+  localBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#f3f4f6',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  localBadgeText: {
+    fontSize: 10,
+    fontWeight: '600' as const,
+    color: '#6b7280',
+  },
   prayerTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: 'bold' as const,
     color: '#1e293b',
     marginBottom: 8,
   },
@@ -1016,7 +1114,7 @@ const styles = StyleSheet.create({
   },
   prayButtonText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     color: 'white',
   },
   prayedButtonText: {
@@ -1044,24 +1142,41 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     color: '#1e293b',
   },
   modalSubmitText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     color: '#ef4444',
   },
   modalContent: {
     flex: 1,
     padding: 24,
   },
+  churchContextBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  churchContextText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: '#1e3a8a',
+  },
   inputGroup: {
     marginBottom: 24,
   },
   inputLabel: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     color: '#1e293b',
     marginBottom: 8,
   },
@@ -1089,13 +1204,24 @@ const styles = StyleSheet.create({
   },
   switchLabel: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '500' as const,
     color: '#1e293b',
   },
   switchDescription: {
     fontSize: 14,
     color: '#64748b',
     marginTop: 2,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#e2e8f0',
+    marginVertical: 4,
+  },
+  shareLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
   },
   loadingContainer: {
     flex: 1,
@@ -1116,7 +1242,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     color: '#1e293b',
     marginBottom: 8,
   },
@@ -1142,7 +1268,7 @@ const styles = StyleSheet.create({
   },
   statusButtonText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     color: 'white',
   },
   updatesSection: {
@@ -1159,7 +1285,7 @@ const styles = StyleSheet.create({
   },
   updatesToggleText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     color: '#1e3a8a',
     flex: 1,
   },
@@ -1184,7 +1310,7 @@ const styles = StyleSheet.create({
   },
   answeredUpdateBadgeText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '700' as const,
     color: '#16a34a',
   },
   updateContent: {
@@ -1211,7 +1337,7 @@ const styles = StyleSheet.create({
   },
   addUpdateButtonText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     color: '#1e3a8a',
   },
   updatePrayerContext: {
@@ -1231,7 +1357,7 @@ const styles = StyleSheet.create({
   },
   updatePrayerContextTitle: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     color: '#1e293b',
   },
 });

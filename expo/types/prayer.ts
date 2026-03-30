@@ -21,6 +21,8 @@ export interface PrayerRequest {
   prayedBy: string[];
   answeredAt?: Date;
   updates?: PrayerUpdate[];
+  groupId: string | null;
+  isSharedAllChurches: boolean;
 }
 
 export type PrayerStatus = 'active' | 'answered' | 'archived';
