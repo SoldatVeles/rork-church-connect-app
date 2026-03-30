@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { router, Stack } from 'expo-router';
 import { useAuth } from '@/providers/auth-provider';
+import { isPastorLevel } from '@/utils/permissions';
 import { trpc } from '@/lib/trpc';
 import { YouTubePlayer } from '@/components/YouTubePlayer';
 import type { Sermon } from '@/types/sermon';
@@ -32,7 +33,7 @@ export default function SermonScreen() {
   const featuredSermon = sermons.find(s => s.is_featured) || sermons[0];
   const otherSermons = sermons.filter(s => s.id !== featuredSermon?.id);
   
-  const canManageSermons = user?.role === 'admin' || user?.role === 'church_leader' || user?.role === 'pastor';
+  const canManageSermons = isPastorLevel(user);
   
   const handlePlaySermon = (sermon: Sermon) => {
     if (sermon.youtube_url) {

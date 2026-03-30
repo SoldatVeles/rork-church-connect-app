@@ -21,6 +21,7 @@ import {
   Alert,
 } from 'react-native';
 import { useAuth } from '@/providers/auth-provider';
+import { isChurchLeaderLevel as checkIsChurchLeader } from '@/utils/permissions';
 import { router } from 'expo-router';
 import { trpc } from '@/lib/trpc';
 
@@ -34,7 +35,7 @@ export default function ProfileScreen() {
 
   const { data: totalCount, isLoading: isTotalCountLoading } = trpc.users.getTotalCount.useQuery(
     undefined,
-    { enabled: user?.role === 'admin' }
+    { enabled: checkIsChurchLeader(user) }
   );
 
   const handleLogout = () => {
@@ -56,7 +57,7 @@ export default function ProfileScreen() {
     );
   };
 
-  const isAdmin = user?.role === 'admin' || user?.role === 'church_leader';
+  const isLeaderOrAdmin = checkIsChurchLeader(user);
 
   const profileStats = [
     { 
@@ -72,8 +73,8 @@ export default function ProfileScreen() {
       color: '#ef4444' 
     },
     { 
-      label: isAdmin ? 'Total Users' : 'Church Members', 
-      value: isAdmin 
+      label: isLeaderOrAdmin ? 'Total Users' : 'Church Members', 
+      value: isLeaderOrAdmin 
         ? (isTotalCountLoading ? '...' : String(totalCount?.totalUsers ?? 0))
         : (isStatsLoading ? '...' : String(userStats?.membersCount ?? 0)), 
       icon: Users, 
@@ -100,7 +101,7 @@ export default function ProfileScreen() {
       icon: Settings, 
       onPress: () => {} 
     },
-    ...(user?.role === 'admin' ? [{
+    ...(checkIsChurchLeader(user) ? [{
       title: 'Admin Dashboard',
       subtitle: 'Manage users, sermons, and groups',
       icon: Shield,

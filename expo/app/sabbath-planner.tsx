@@ -24,6 +24,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/providers/auth-provider';
+import { canManageAnySabbath, canManageSabbathForGroup, buildChurchScope } from '@/utils/church-scope';
+import { isAdmin as checkIsAdmin } from '@/utils/permissions';
 import { trpc } from '@/lib/trpc';
 import { supabase } from '@/lib/supabase';
 import type { Sabbath, SabbathStatus } from '@/types/sabbath';
@@ -84,16 +86,13 @@ type FilterType = 'all' | 'upcoming' | 'past' | 'draft' | 'published' | 'cancell
 
 export default function SabbathPlannerScreen() {
   const insets = useSafeAreaInsets();
-  const { user, isAdmin, isPastor } = useAuth();
+  const { user } = useAuth();
   const trpcUtils = trpc.useUtils();
 
   const pastorGroupsQuery = trpc.sabbaths.getMyPastorGroups.useQuery();
   const pastorGroups = useMemo(() => pastorGroupsQuery.data ?? [], [pastorGroupsQuery.data]);
-  const isPastorOfAnyGroup = pastorGroups.length > 0;
-  const isPastorOfGroup = useCallback(
-    (groupId: string): boolean => pastorGroups.some((gp) => gp.group_id === groupId),
-    [pastorGroups]
-  );
+  const pastorGroupIds = useMemo(() => pastorGroups.map((gp) => gp.group_id as string), [pastorGroups]);
+  const churchScope = useMemo(() => buildChurchScope(user, null, pastorGroupIds), [user, pastorGroupIds]);
 
   const sabbathsQuery = trpc.sabbaths.getAll.useQuery();
   const sabbaths = useMemo(() => sabbathsQuery.data ?? [], [sabbathsQuery.data]);
@@ -113,7 +112,7 @@ export default function SabbathPlannerScreen() {
   const [activeFilter, setActiveFilter] = useState<FilterType>('upcoming');
   const [refreshing, setRefreshing] = useState(false);
 
-  const canManage = isAdmin() || isPastor() || isPastorOfAnyGroup;
+  const canManage = canManageAnySabbath(churchScope);
 
   const groupsQuery = useQuery({
     queryKey: ['user-groups-for-sabbath', user?.id],
@@ -135,9 +134,9 @@ export default function SabbathPlannerScreen() {
 
   const availableGroups = useMemo(() => {
     const groups = groupsQuery.data || [];
-    if (isAdmin()) return groups;
-    return groups.filter((g) => isPastorOfGroup(g.id));
-  }, [groupsQuery.data, isPastorOfGroup, isAdmin]);
+    if (checkIsAdmin(user)) return groups;
+    return groups.filter((g) => canManageSabbathForGroup(churchScope, g.id));
+  }, [groupsQuery.data, churchScope, user]);
 
   const groupNameMap = useMemo(() => {
     const map = new Map<string, string>();

@@ -4,6 +4,7 @@ import { Stack } from 'expo-router';
 import { Users, Shield, Plus, Check, UserPlus, Church, BookOpen, Youtube, Edit, Trash2, Ban, RefreshCw, ChevronDown, ChevronUp, X } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
+import { canAccessAdminPanel } from '@/utils/permissions';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '@/lib/trpc';
 import type { Sermon } from '@/types/sermon';
@@ -21,7 +22,7 @@ interface Group {
 type AdminTab = 'users' | 'sermons' | 'groups';
 
 export default function AdminTabScreen() {
-  const { user, isAdmin, isChurchLeader } = useAuth();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<AdminTab>('users');
   
@@ -477,7 +478,7 @@ export default function AdminTabScreen() {
     );
   };
 
-  if (!isAdmin() && !isChurchLeader()) {
+  if (!canAccessAdminPanel(user)) {
     return (
       <View style={styles.container}>
         <Stack.Screen options={{ headerShown: false }} />

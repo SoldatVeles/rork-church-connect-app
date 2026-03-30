@@ -4,12 +4,13 @@ import { StatusBar } from 'expo-status-bar';
 import { Users, Shield, Plus, Check, UserPlus, Church, BookOpen, Settings, Youtube, Edit, Trash2, ArrowLeft, Ban } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
+import { isAdmin as checkIsAdminRole } from '@/utils/permissions';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '@/lib/trpc';
 import type { Sermon } from '@/types/sermon';
 import { router } from 'expo-router';
 
-type Role = 'admin' | 'pastor' | 'member' | 'visitor';
+type Role = 'admin' | 'church_leader' | 'pastor' | 'member' | 'visitor';
 
 interface Group {
   id: string;
@@ -359,7 +360,7 @@ export default function AdminScreen() {
     );
   };
 
-  const canAccess = user?.role === 'admin';
+  const canAccess = checkIsAdminRole(user);
   if (!canAccess) {
     return (
       <SafeAreaView style={styles.container}>

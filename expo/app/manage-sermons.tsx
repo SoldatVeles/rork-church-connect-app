@@ -15,6 +15,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { BookOpen, Plus, Edit, Trash2, Youtube } from 'lucide-react-native';
 import { useAuth } from '@/providers/auth-provider';
+import { isPastorLevel } from '@/utils/permissions';
 import { router } from 'expo-router';
 import { trpc } from '@/lib/trpc';
 import type { Sermon } from '@/types/sermon';
@@ -135,7 +136,7 @@ export default function ManageSermonsScreen() {
     );
   };
 
-  const canAccess = user?.role === 'admin' || user?.role === 'church_leader' || user?.role === 'pastor';
+  const canAccess = isPastorLevel(user);
 
   if (!canAccess) {
     return (

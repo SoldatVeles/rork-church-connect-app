@@ -2,9 +2,10 @@ import { Tabs, Redirect } from 'expo-router';
 import { Home, Calendar, Heart, User, Shield, Sun } from 'lucide-react-native';
 import React from 'react';
 import { useAuth } from '@/providers/auth-provider';
+import { canAccessAdminPanel } from '@/utils/permissions';
 
 export default function TabLayout() {
-  const { isAuthenticated, isLoading, isAdmin, isChurchLeader } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
 
   if (!isLoading && !isAuthenticated) {
     return <Redirect href="/(auth)/login" />;
@@ -71,7 +72,7 @@ export default function TabLayout() {
         options={{
           title: 'Admin',
           tabBarIcon: ({ color, size }) => <Shield size={size} color={color} />,
-          href: isAdmin() || isChurchLeader() ? '/(tabs)/admin' : null,
+          href: canAccessAdminPanel(user) ? '/(tabs)/admin' : null,
         }}
       />
     </Tabs>

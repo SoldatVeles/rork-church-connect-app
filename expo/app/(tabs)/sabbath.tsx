@@ -23,6 +23,7 @@ import {
 import { useRouter } from 'expo-router';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/providers/auth-provider';
+import { canManageAnySabbath, buildChurchScope } from '@/utils/church-scope';
 
 import type {
   SabbathAssignment,
@@ -273,13 +274,14 @@ function SwitzerlandSection({ dateGroups, isLoading, error, onAttend, onViewDeta
 }
 
 export default function SabbathScreen() {
-  const { user, isAdmin, isPastor } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
   const pastorGroupsQuery = trpc.sabbaths.getMyPastorGroups.useQuery();
-  const isPastorOfAnyGroup = (pastorGroupsQuery.data ?? []).length > 0;
+  const pastorGroupIds = useMemo(() => (pastorGroupsQuery.data ?? []).map((g: any) => g.group_id as string), [pastorGroupsQuery.data]);
   const [activeTab, setActiveTab] = useState<TabKey>('myChurch');
 
-  const canManage = isAdmin() || isPastor() || isPastorOfAnyGroup;
+  const churchScope = buildChurchScope(user, null, pastorGroupIds);
+  const canManage = canManageAnySabbath(churchScope);
 
   const myChurchQuery = trpc.sabbaths.getMyChurchUpcoming.useQuery(undefined, {
     enabled: activeTab === 'myChurch',

@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useAuth } from '@/providers/auth-provider';
+import { isPastorLevel } from '@/utils/permissions';
 import type { PrayerRequest, PrayerStatus, PrayerUpdate } from '@/types/prayer';
 import { supabase } from '@/lib/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -304,8 +305,8 @@ export default function PrayersScreen() {
   const canUpdateStatus = (prayer: PrayerRequest) => {
     if (!user) return false;
     const isRequester = prayer.requestedBy === user.id;
-    const isAdmin = user.role === 'admin' || user.role === 'church_leader' || user.role === 'pastor';
-    return isRequester || isAdmin;
+    const canManageContent = isPastorLevel(user);
+    return isRequester || canManageContent;
   };
 
   const togglePrayMutation = useMutation({
@@ -611,7 +612,7 @@ export default function PrayersScreen() {
                     Alert.alert('Login required', 'Please log in to mark that you are praying.');
                     return;
                   }
-                  if (!(user.role === 'member' || user.role === 'pastor' || user.role === 'admin')) {
+                  if (!(user.role === 'member' || user.role === 'pastor' || user.role === 'church_leader' || user.role === 'admin')) {
                     Alert.alert('Not allowed', 'Only members and priests can use this action.');
                     return;
                   }
