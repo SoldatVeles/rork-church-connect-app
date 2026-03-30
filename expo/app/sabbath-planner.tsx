@@ -144,6 +144,8 @@ export default function SabbathPlannerScreen() {
     return map;
   }, [groupsQuery.data]);
 
+  const effectiveGroupId = selectedGroupId || (availableGroups.length > 0 ? availableGroups[0]?.id : null);
+
   const filteredSabbaths = useMemo(() => {
     let filtered = [...sabbaths];
     switch (activeFilter) {
@@ -178,15 +180,14 @@ export default function SabbathPlannerScreen() {
       return;
     }
 
-    const groupId = selectedGroupId || (availableGroups.length > 0 ? availableGroups[0].id : null);
-    if (!groupId) {
+    if (!effectiveGroupId) {
       Alert.alert('No Group', 'You must be a pastor of a church group to create a Sabbath plan.');
       return;
     }
 
     try {
       const result = await createSabbathMutation.mutateAsync({
-        groupId: groupId,
+        groupId: effectiveGroupId,
         sabbathDate: selectedDate,
         notes: notes.trim() || null,
       });
@@ -200,13 +201,18 @@ export default function SabbathPlannerScreen() {
       console.error('[SabbathPlanner] Create error:', err);
       Alert.alert('Error', err.message || 'Failed to create Sabbath plan.');
     }
-  }, [selectedDate, selectedGroupId, availableGroups, notes, createSabbathMutation]);
+  }, [selectedDate, effectiveGroupId, notes, createSabbathMutation]);
 
   const upcomingSaturdays = useMemo(() => getUpcomingSaturdays(8), []);
 
   const existingDates = useMemo(() => {
-    return new Set(sabbaths.map((s) => s.sabbath_date));
-  }, [sabbaths]);
+    if (!effectiveGroupId) return new Set<string>();
+    return new Set(
+      sabbaths
+        .filter((s) => s.group_id === effectiveGroupId)
+        .map((s) => s.sabbath_date)
+    );
+  }, [sabbaths, effectiveGroupId]);
 
   const filters: { key: FilterType; label: string }[] = [
     { key: 'upcoming', label: 'Upcoming' },
@@ -360,7 +366,10 @@ export default function SabbathPlannerScreen() {
                         styles.groupChip,
                         (selectedGroupId || availableGroups[0]?.id) === g.id && styles.groupChipActive,
                       ]}
-                      onPress={() => setSelectedGroupId(g.id)}
+                      onPress={() => {
+                        setSelectedGroupId(g.id);
+                        setSelectedDate(null);
+                      }}
                     >
                       <Text
                         style={[
