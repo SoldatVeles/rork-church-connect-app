@@ -23,10 +23,9 @@ import { supabase } from '@/lib/supabase';
 import { addEventToCalendar } from '@/utils/calendar-sync';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
-const allowedEventTypes: EventType[] = ['sabbath', 'bible_study', 'youth', 'special', 'conference'];
+const allowedEventTypes: EventType[] = ['bible_study', 'youth', 'special', 'conference'];
 
 const eventTypeColors: Record<EventType, string> = {
-  sabbath: '#3b82f6',
   bible_study: '#10b981',
   youth: '#f59e0b',
   special: '#8b5cf6',
@@ -34,19 +33,21 @@ const eventTypeColors: Record<EventType, string> = {
 };
 
 const eventTypeLabels: Record<EventType, string> = {
-  sabbath: 'Sabbath',
   bible_study: 'Bible Study',
   youth: 'Youth',
   special: 'Special',
   conference: 'Conference',
 };
 
-const normalizeEventType = (value: unknown): EventType => {
-  const normalized = allowedEventTypes.includes(value as EventType) ? (value as EventType) : 'sabbath';
-  if (normalized === 'sabbath' && value !== 'sabbath') {
-    console.log('[Events] Normalized unexpected event type to sabbath:', value);
+const normalizeEventType = (value: unknown): EventType | null => {
+  if (value === 'sabbath') {
+    return null;
   }
-  return normalized;
+  if (allowedEventTypes.includes(value as EventType)) {
+    return value as EventType;
+  }
+  console.log('[Events] Normalized unexpected event type to bible_study:', value);
+  return 'bible_study';
 };
 
 const fallbackEventImage = 'https://images.unsplash.com/photo-1530023367847-a683933f4177?w=1200&q=80&auto=format&fit=crop' as const;
@@ -77,7 +78,7 @@ export default function EventsScreen() {
     endDate: new Date(),
     endTime: new Date(),
     location: '',
-    type: 'sabbath',
+    type: 'bible_study',
     maxAttendees: '',
   });
 
@@ -107,6 +108,7 @@ export default function EventsScreen() {
       const { data, error } = await supabase
         .from('events')
         .select('*')
+        .neq('event_type', 'sabbath')
         .order('start_at', { ascending: true });
 
       if (error) {
@@ -118,10 +120,10 @@ export default function EventsScreen() {
       
       const sanitizedEvents = (data as any[])
         .map((event: any) => {
-          const rawType = (event.type ?? event.event_type ?? 'sabbath') as string;
+          const rawType = (event.type ?? event.event_type ?? 'bible_study') as string;
 
-          if (rawType === 'prayer_meeting') {
-            console.log('[Events] Skipping prayer entry in events feed:', event.id);
+          if (rawType === 'prayer_meeting' || rawType === 'sabbath') {
+            console.log('[Events] Skipping non-event entry in events feed:', event.id, rawType);
             return null;
           }
 
@@ -138,7 +140,7 @@ export default function EventsScreen() {
             date: start,
             endDate: end,
             location: event.location ?? '',
-            type: normalizeEventType(rawType),
+            type: normalizeEventType(rawType)!,
             maxAttendees: event.max_attendees ?? undefined,
             currentAttendees: event.current_attendees ?? 0,
             registeredUsers: registeredUsersSafe,
@@ -250,7 +252,7 @@ export default function EventsScreen() {
         endDate: now,
         endTime: now,
         location: '',
-        type: 'sabbath',
+        type: 'bible_study',
         maxAttendees: ''
       });
       setShowAddModal(false);

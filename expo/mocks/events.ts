@@ -2,20 +2,6 @@ import type { Event } from '@/types/event';
 
 export const mockEvents: Event[] = [
   {
-    id: '1',
-    title: 'Sabbath Service',
-    description: 'Weekly Sabbath worship service with Pastor John speaking on "Walking in Faith". Join us for worship, prayer, and fellowship.',
-    date: new Date(2025, 0, 18, 9, 0),
-    endDate: new Date(2025, 0, 18, 11, 30),
-    location: 'Main Sanctuary',
-    type: 'sabbath',
-    currentAttendees: 45,
-    maxAttendees: 100,
-    createdBy: '2',
-    isRegistrationOpen: true,
-    registeredUsers: ['3'],
-  },
-  {
     id: '2',
     title: 'Youth Bible Study',
     description: 'Interactive Bible study session for young members focusing on modern Christian living and practical faith applications.',
