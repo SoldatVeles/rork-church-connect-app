@@ -4,7 +4,7 @@ import { Calendar, Church, ChevronRight, UserPlus, CheckCircle, XCircle } from '
 import type { SabbathDateGroup as SabbathDateGroupType, SabbathWithGroup } from '@/types/sabbath';
 import { isPublishedSabbath, isCancelledSabbath } from '@/utils/sabbath';
 import { trpc } from '@/lib/trpc';
-import { useAuth } from '@/providers/auth-provider';
+
 import { SabbathStatusBadge } from './SabbathStatusBadge';
 import { SabbathRoleList } from './SabbathRoleList';
 
@@ -44,7 +44,7 @@ interface SwitzerlandSabbathCardProps {
 
 function SwitzerlandSabbathCard({ item, onAttend, onViewDetail, isMutating }: SwitzerlandSabbathCardProps) {
   const { sabbath, group } = item;
-  const { user } = useAuth();
+
   const cancelled = isCancelledSabbath(sabbath.status);
   const published = isPublishedSabbath(sabbath.status);
 
@@ -54,11 +54,9 @@ function SwitzerlandSabbathCard({ item, onAttend, onViewDetail, isMutating }: Sw
   );
 
   const isAttending = useMemo(() => {
-    if (!detailQuery.data || !user?.id) return false;
-    return detailQuery.data.attendance.some(
-      (a) => a.user_id === user.id && a.status === 'attending'
-    );
-  }, [detailQuery.data, user?.id]);
+    if (!detailQuery.data) return false;
+    return detailQuery.data.myAttendanceStatus === 'attending';
+  }, [detailQuery.data]);
 
   const handleAttendPress = () => {
     if (isAttending) return;

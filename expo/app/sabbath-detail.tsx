@@ -480,9 +480,11 @@ export default function SabbathDetailScreen() {
                     </Text>
                   </TouchableOpacity>
                 </View>
-                <Text style={styles.attendanceSummary}>
-                  {attendingCount} {attendingCount === 1 ? 'person' : 'people'} attending
-                </Text>
+                {shouldShowAttendees && (
+                  <Text style={styles.attendanceSummary}>
+                    {attendingCount} {attendingCount === 1 ? 'person' : 'people'} attending
+                  </Text>
+                )}
               </View>
             )}
 

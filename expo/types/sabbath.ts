@@ -79,6 +79,8 @@ export interface SabbathDetailView {
   group: SabbathGroupInfo;
   assignments: SabbathAssignment[];
   attendance: SabbathAttendance[];
+  myAttendanceStatus: SabbathAttendanceStatus | null;
+  attendingCount: number | null;
   isHomeChurch: boolean;
   isAssignedUser: boolean;
   canManage: boolean;

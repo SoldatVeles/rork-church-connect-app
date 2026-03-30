@@ -454,10 +454,24 @@ const getSabbathDetail = publicProcedure
     }
 
     const shouldShowAttendees =
-      isHomeChurch && typedSabbath.status === "published";
+      (isHomeChurch || canManage) && typedSabbath.status === "published";
 
     let attendance: SabbathAttendance[] = [];
-    if (shouldShowAttendees || canManage) {
+    let attendingCount: number | null = null;
+    let myAttendanceStatus: string | null = null;
+
+    const { data: myAttendanceRecord } = await db(ctx.supabase)
+      .from("sabbath_attendance")
+      .select("*")
+      .eq("sabbath_id", input.sabbathId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (myAttendanceRecord) {
+      myAttendanceStatus = (myAttendanceRecord as any).status;
+    }
+
+    if (shouldShowAttendees) {
       const { data: attendanceRaw } = await db(ctx.supabase)
         .from("sabbath_attendance")
         .select("*")
@@ -487,8 +501,23 @@ const getSabbathDetail = publicProcedure
           ...a,
           user_name: attendeeMap.get(a.user_id) ?? "Unknown",
         }));
+
+        attendingCount = attendance.filter((a) => a.status === "attending").length;
       }
     }
+
+    console.log(
+      "[sabbaths.getSabbathDetail] Attendance visibility — isHomeChurch:",
+      isHomeChurch,
+      "canManage:",
+      canManage,
+      "shouldShowAttendees:",
+      shouldShowAttendees,
+      "attendingCount:",
+      attendingCount,
+      "myAttendanceStatus:",
+      myAttendanceStatus
+    );
 
     const canRespondAttendance =
       typedSabbath.status === "published";
@@ -501,6 +530,8 @@ const getSabbathDetail = publicProcedure
       group: groupInfo,
       assignments,
       attendance,
+      myAttendanceStatus: myAttendanceStatus as any,
+      attendingCount,
       isHomeChurch,
       isAssignedUser,
       canManage,
