@@ -6,6 +6,7 @@ import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AuthProvider, useAuth } from "@/providers/auth-provider";
 import { OfflineProvider } from "@/providers/offline-provider";
+import { ChurchProvider } from "@/providers/church-provider";
 import LoadingScreen from "@/components/LoadingScreen";
 import { trpc, trpcClient } from "@/lib/trpc";
 
@@ -61,11 +62,13 @@ export default function RootLayout() {
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <OfflineProvider>
-            <GestureHandlerRootView style={styles.container}>
-              <RootLayoutNav />
-            </GestureHandlerRootView>
-          </OfflineProvider>
+          <ChurchProvider>
+            <OfflineProvider>
+              <GestureHandlerRootView style={styles.container}>
+                <RootLayoutNav />
+              </GestureHandlerRootView>
+            </OfflineProvider>
+          </ChurchProvider>
         </AuthProvider>
       </QueryClientProvider>
     </trpc.Provider>
