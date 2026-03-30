@@ -33,20 +33,21 @@ export const [ChurchProvider, useChurch] = createContextHook(() => {
     queryKey: ['churches'],
     queryFn: async (): Promise<Church[]> => {
       const { data, error } = await supabase
-        .from('churches')
+        .from('groups')
         .select('*')
         .order('name', { ascending: true });
 
       if (error) {
-        console.warn('[Church] Error fetching churches:', error.message);
+        console.warn('[Church] Error fetching groups:', error.message);
         return [];
       }
+
+      console.log('[Church] Fetched groups:', data?.length);
 
       return (data || []).map((c: any) => ({
         id: c.id,
         name: c.name,
-        address: c.address || '',
-        logoUrl: c.logo_url,
+        address: '',
         createdAt: new Date(c.created_at),
       }));
     },
