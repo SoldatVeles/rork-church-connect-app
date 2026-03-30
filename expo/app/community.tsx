@@ -9,10 +9,11 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  Image,
 } from 'react-native';
-import { router, Stack } from 'expo-router';
+import { Stack } from 'expo-router';
 import { useAuth } from '@/providers/auth-provider';
+import { useChurch } from '@/providers/church-provider';
+import { isAdmin } from '@/utils/permissions';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 
@@ -36,15 +37,44 @@ interface CommunityActivity {
 
 export default function CommunityScreen() {
   const { user } = useAuth();
+  const { currentChurch } = useChurch();
+  const currentChurchId = currentChurch?.id ?? null;
+  const userIsAdmin = isAdmin(user);
 
   const membersQuery = useQuery({
-    queryKey: ['community-members'],
+    queryKey: ['community-members', currentChurchId, userIsAdmin],
     queryFn: async () => {
+      if (userIsAdmin) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (error) throw new Error(error.message);
+        return data || [];
+      }
+
+      if (!currentChurchId) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (error) throw new Error(error.message);
+        return data || [];
+      }
+
+      const { data: memberLinks, error: linkError } = await supabase
+        .from('group_members')
+        .select('user_id')
+        .eq('group_id', currentChurchId);
+      if (linkError) throw new Error(linkError.message);
+      const userIds = (memberLinks || []).map((m: any) => m.user_id as string);
+      if (userIds.length === 0) return [];
+
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
+        .in('id', userIds)
         .order('created_at', { ascending: false });
-      
       if (error) throw new Error(error.message);
       return data || [];
     },

@@ -18,6 +18,8 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '@/providers/auth-provider';
+import { useChurch } from '@/providers/church-provider';
+import { isAdmin } from '@/utils/permissions';
 import type { Event, EventType } from '@/types/event';
 import { supabase } from '@/lib/supabase';
 import { addEventToCalendar } from '@/utils/calendar-sync';
@@ -54,8 +56,11 @@ const fallbackEventImage = 'https://images.unsplash.com/photo-1530023367847-a683
 
 export default function EventsScreen() {
   const { user, isAuthenticated, isLoading } = useAuth();
+  const { currentChurch } = useChurch();
+  const currentChurchId = currentChurch?.id ?? null;
+  const userIsAdmin = isAdmin(user);
   
-  console.log('[Events] Auth state:', { user: user?.id, isAuthenticated, isLoading });
+  console.log('[Events] Auth state:', { user: user?.id, isAuthenticated, isLoading, churchId: currentChurchId });
   const [selectedFilter, setSelectedFilter] = useState<EventType | 'all'>('all');
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [showDetailsModal, setShowDetailsModal] = useState<boolean>(false);
@@ -101,15 +106,21 @@ export default function EventsScreen() {
   const queryClient = useQueryClient();
 
   const listQuery = useQuery({
-    queryKey: ['events'],
+    queryKey: ['events', currentChurchId, userIsAdmin],
     queryFn: async () => {
-      console.log('[Events] Fetching events from database');
+      console.log('[Events] Fetching events from database, churchId:', currentChurchId);
       
-      const { data, error } = await supabase
+      let query = supabase
         .from('events')
         .select('*')
         .neq('event_type', 'sabbath')
         .order('start_at', { ascending: true });
+
+      if (!userIsAdmin && currentChurchId) {
+        query = query.or(`group_id.eq.${currentChurchId},group_id.is.null`);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('[Events] Failed to fetch events:', error);
@@ -199,6 +210,7 @@ export default function EventsScreen() {
         is_registration_open: true,
         current_attendees: 0,
         registered_users: [],
+        group_id: currentChurchId,
       };
 
       console.log('[Events] Inserting event with data:', JSON.stringify(insertData, null, 2));

@@ -3,6 +3,7 @@ import React, { useMemo } from 'react';
 import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Bell, Trash2 } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/providers/auth-provider';
 import { useMutation, useQuery } from '@tanstack/react-query';
 
 interface AppNotification {
@@ -14,13 +15,21 @@ interface AppNotification {
 }
 
 export default function NotificationsScreen() {
+  const { user } = useAuth();
+
   const query = useQuery<AppNotification[], Error>({
-    queryKey: ['notifications', 'all'],
+    queryKey: ['notifications', 'all', user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from('notifications')
         .select('*')
         .order('created_at', { ascending: false });
+
+      if (user?.id) {
+        q = q.or(`user_id.eq.${user.id},user_id.is.null`);
+      }
+
+      const { data, error } = await q;
       if (error) throw new Error(error.message);
       return (data ?? []) as AppNotification[];
     },

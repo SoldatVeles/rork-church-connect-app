@@ -11,6 +11,8 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { useAuth } from '@/providers/auth-provider';
+import { useChurch } from '@/providers/church-provider';
+import { isAdmin } from '@/utils/permissions';
 import { canManageAnySabbath, buildChurchScope } from '@/utils/church-scope';
 import { router } from 'expo-router';
 import NotificationDropdown from '@/components/NotificationDropdown';
@@ -223,6 +225,9 @@ const bibleVerses = [
 
 export default function HomeScreen() {
   const { user } = useAuth();
+  const { currentChurch } = useChurch();
+  const currentChurchId = currentChurch?.id ?? null;
+  const userIsAdmin = isAdmin(user);
   const pastorGroupsQuery = trpc.sabbaths.getMyPastorGroups.useQuery();
   const pastorGroupIds = useMemo(() => (pastorGroupsQuery.data ?? []).map((g: any) => g.group_id as string), [pastorGroupsQuery.data]);
   const canManageSabbath = canManageAnySabbath(buildChurchScope(user, null, pastorGroupIds));
@@ -232,39 +237,74 @@ export default function HomeScreen() {
   const [currentVerseIndex, setCurrentVerseIndex] = useState(0);
 
   const eventsQuery = useQuery({
-    queryKey: ['events'],
+    queryKey: ['home-events', currentChurchId, userIsAdmin],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('events')
         .select('*')
+        .neq('event_type', 'sabbath')
         .order('start_at', { ascending: true });
-      
+
+      if (!userIsAdmin && currentChurchId) {
+        query = query.or(`group_id.eq.${currentChurchId},group_id.is.null`);
+      }
+
+      const { data, error } = await query;
       if (error) throw new Error(error.message);
       return data || [];
     },
   });
 
   const prayersActiveQuery = useQuery({
-    queryKey: ['prayers', 'active'],
+    queryKey: ['home-prayers-active', currentChurchId, userIsAdmin],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('prayers')
         .select('*')
         .eq('is_answered', false)
         .order('created_at', { ascending: false });
-      
+
+      if (!userIsAdmin && currentChurchId) {
+        query = query.or(`group_id.eq.${currentChurchId},group_id.is.null,is_shared_all_churches.eq.true`);
+      }
+
+      const { data, error } = await query;
       if (error) throw new Error(error.message);
       return data || [];
     },
   });
 
   const usersQuery = useQuery({
-    queryKey: ['users'],
+    queryKey: ['home-members', currentChurchId, userIsAdmin],
     queryFn: async () => {
+      if (userIsAdmin) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*');
+        if (error) throw new Error(error.message);
+        return data || [];
+      }
+
+      if (!currentChurchId) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*');
+        if (error) throw new Error(error.message);
+        return data || [];
+      }
+
+      const { data: memberLinks, error: linkError } = await supabase
+        .from('group_members')
+        .select('user_id')
+        .eq('group_id', currentChurchId);
+      if (linkError) throw new Error(linkError.message);
+      const userIds = (memberLinks || []).map((m: any) => m.user_id as string);
+      if (userIds.length === 0) return [];
+
       const { data, error } = await supabase
         .from('profiles')
-        .select('*');
-      
+        .select('*')
+        .in('id', userIds);
       if (error) throw new Error(error.message);
       return data || [];
     },
@@ -275,13 +315,21 @@ export default function HomeScreen() {
   const activeRequestsCount = prayersActiveQuery.data?.length ?? 0;
   const membersCount = usersQuery.data?.length ?? 0;
   const notificationsCountQuery = useQuery({
-    queryKey: ['notifications', 'count'],
+    queryKey: ['notifications', 'count', user?.id],
     queryFn: async () => {
-      const { count, error } = await supabase
+      let query = supabase
         .from('notifications')
         .select('*', { count: 'exact', head: true });
-      
-      if (error) throw new Error(error.message);
+
+      if (user?.id) {
+        query = query.or(`user_id.eq.${user.id},user_id.is.null`);
+      }
+
+      const { count, error } = await query;
+      if (error) {
+        console.warn('[Home] Notifications count error:', error.message);
+        return 0;
+      }
       return count ?? 0;
     },
     refetchInterval: 15000,

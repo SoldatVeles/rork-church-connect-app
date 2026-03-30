@@ -328,7 +328,7 @@ export default function AdminScreen() {
     );
   };
 
-  const roles: Role[] = ['visitor', 'member', 'pastor', 'admin'];
+  const roles: Role[] = ['visitor', 'member', 'pastor', 'church_leader', 'admin'];
 
   const handleDeleteUser = (userId: string, userName: string) => {
     Alert.alert(

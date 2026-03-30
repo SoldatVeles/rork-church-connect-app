@@ -13,6 +13,7 @@ import {
 import { Bell, Calendar, Heart, MessageCircle, X, Trash2 } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/providers/auth-provider';
 import { useQuery, useMutation } from '@tanstack/react-query';
 
 interface NotificationDropdownProps {
@@ -27,26 +28,34 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   onClose,
   anchorPosition,
 }) => {
+  const { user } = useAuth();
+
   const notificationsQuery = useQuery({
-    queryKey: ['notifications'],
+    queryKey: ['notifications', user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('notifications')
         .select('*')
         .order('created_at', { ascending: false });
+
+      if (user?.id) {
+        query = query.or(`user_id.eq.${user.id},user_id.is.null`);
+      }
+
+      const { data, error } = await query;
       
       if (error) throw new Error(error.message);
       
-      return data.map(notification => ({
+      return (data || []).map((notification: any) => ({
         id: notification.id,
         type: notification.type,
         title: notification.title,
         message: notification.body || '',
-        isRead: false, // Not in current DB schema
+        isRead: false,
         createdAt: new Date(notification.created_at),
       }));
     },
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: 30000,
   });
   
   const markReadMutation = useMutation({
