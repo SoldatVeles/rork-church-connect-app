@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { useAuth } from '@/providers/auth-provider';
 import { useChurch } from '@/providers/church-provider';
-import { isPastorLevel, isAdmin } from '@/utils/permissions';
+import { isAdmin } from '@/utils/permissions';
 import type { PrayerRequest, PrayerStatus, PrayerUpdate } from '@/types/prayer';
 import { supabase } from '@/lib/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -328,8 +328,7 @@ export default function PrayersScreen() {
   const canUpdateStatus = (prayer: PrayerRequest) => {
     if (!user) return false;
     const isRequester = prayer.requestedBy === user.id;
-    const canManageContent = isPastorLevel(user);
-    return isRequester || canManageContent;
+    return isRequester || userIsAdmin;
   };
 
   const togglePrayMutation = useMutation({
