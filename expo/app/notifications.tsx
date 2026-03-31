@@ -50,8 +50,26 @@ export default function NotificationsScreen() {
 
   const clearAll = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from('notifications').delete().not('id', 'is', null);
-      if (error) throw new Error(error.message);
+      if (!user?.id) return;
+      console.log('[Notifications] Clearing notifications for user:', user.id, 'admin:', userIsAdmin);
+      if (userIsAdmin) {
+        const { error } = await supabase.from('notifications').delete().not('id', 'is', null);
+        if (error) throw new Error(error.message);
+      } else {
+        const { error: errDirect } = await supabase
+          .from('notifications')
+          .delete()
+          .eq('user_id', user.id);
+        if (errDirect) throw new Error(errDirect.message);
+        if (currentChurchId) {
+          const { error: errGroup } = await supabase
+            .from('notifications')
+            .delete()
+            .eq('group_id', currentChurchId)
+            .is('user_id', null);
+          if (errGroup) throw new Error(errGroup.message);
+        }
+      }
     },
     onSuccess: () => query.refetch(),
   });

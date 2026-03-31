@@ -160,9 +160,26 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
 
   const clearAllMutation = useMutation({
     mutationFn: async () => {
-      console.log('Clearing all notifications');
-      const { error } = await supabase.from('notifications').delete().not('id', 'is', null);
-      if (error) throw new Error(error.message);
+      if (!user?.id) return;
+      console.log('[NotificationDropdown] Clearing notifications for user:', user.id, 'admin:', userIsAdmin);
+      if (userIsAdmin) {
+        const { error } = await supabase.from('notifications').delete().not('id', 'is', null);
+        if (error) throw new Error(error.message);
+      } else {
+        const { error: errDirect } = await supabase
+          .from('notifications')
+          .delete()
+          .eq('user_id', user.id);
+        if (errDirect) throw new Error(errDirect.message);
+        if (currentChurchId) {
+          const { error: errGroup } = await supabase
+            .from('notifications')
+            .delete()
+            .eq('group_id', currentChurchId)
+            .is('user_id', null);
+          if (errGroup) throw new Error(errGroup.message);
+        }
+      }
     },
     onSuccess: () => notificationsQuery.refetch(),
   });
