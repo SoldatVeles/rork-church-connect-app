@@ -243,7 +243,6 @@ export default function HomeScreen() {
       let query = supabase
         .from('events')
         .select('*')
-        .or('event_type.neq.sabbath,event_type.is.null')
         .order('start_at', { ascending: true });
 
       if (!userIsAdmin && currentChurchId) {
@@ -255,7 +254,11 @@ export default function HomeScreen() {
 
       const { data, error } = await query;
       if (error) throw new Error(error.message);
-      return data || [];
+      const rows = data || [];
+      return rows.filter((e: any) => {
+        const t = (e.event_type ?? e.type ?? '') as string;
+        return t !== 'sabbath';
+      });
     },
   });
 
