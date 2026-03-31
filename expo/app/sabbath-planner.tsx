@@ -822,10 +822,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 32,
-    backgroundColor: 'transparent',
-    ...(Platform.OS === 'web'
-      ? { background: 'linear-gradient(to right, rgba(255,255,255,0), rgba(255,255,255,1))' } as any
-      : {}),
+    backgroundColor: Platform.OS === 'web' ? 'rgba(255,255,255,0.8)' : 'transparent',
   },
   dateChip: {
     width: 62,
