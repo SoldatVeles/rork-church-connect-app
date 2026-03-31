@@ -44,23 +44,35 @@ export default function PrayersScreen() {
   const userIsAdmin = isAdmin(user);
 
   const allPrayersQuery = useQuery({
-    queryKey: ['prayers', currentChurchId],
+    queryKey: ['prayers', currentChurchId, userIsAdmin],
     queryFn: async () => {
       let query = supabase
         .from('prayers')
-        .select('*')
+        .select(`
+          *,
+          profiles!prayers_created_by_fkey(full_name)
+        `)
         .order('created_at', { ascending: false });
+
+      if (!userIsAdmin && currentChurchId) {
+        query = query.or(`group_id.eq.${currentChurchId},group_id.is.null,is_shared_all_churches.eq.true`);
+      } else if (!userIsAdmin && !currentChurchId) {
+        query = query.or('group_id.is.null,is_shared_all_churches.eq.true');
+      }
 
       const { data, error } = await query;
 
-      if (error) throw new Error(error.message);
+      if (error) {
+        console.error('[Prayers] Fetch error:', error.message);
+        throw new Error(error.message);
+      }
 
-      return (data || []).map(prayer => ({
+      return (data || []).map((prayer: any) => ({
         id: prayer.id,
         title: prayer.title,
         description: prayer.description || '',
         requestedBy: prayer.created_by || '',
-        requestedByName: 'Anonymous',
+        requestedByName: prayer.profiles?.full_name || 'Anonymous',
         status: prayer.is_answered ? 'answered' as PrayerStatus : 'active' as PrayerStatus,
         isAnonymous: prayer.is_anonymous || false,
         isUrgent: false,
@@ -141,15 +153,7 @@ export default function PrayersScreen() {
     }));
   }, [allPrayersQuery.data, prayingQuery.data, updatesQuery.data]);
 
-  const visiblePrayers: PrayerRequest[] = useMemo(() => {
-    if (userIsAdmin) return mergedPrayers;
-    if (!currentChurchId) return mergedPrayers.filter(p => p.isSharedAllChurches);
-    return mergedPrayers.filter(p =>
-      p.groupId === currentChurchId ||
-      p.isSharedAllChurches ||
-      p.groupId === null
-    );
-  }, [mergedPrayers, currentChurchId, userIsAdmin]);
+  const visiblePrayers: PrayerRequest[] = mergedPrayers;
   
   const createPrayerMutation = useMutation({
     mutationFn: async (prayerData: {
