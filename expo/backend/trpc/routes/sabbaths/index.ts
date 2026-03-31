@@ -394,8 +394,7 @@ const getSabbathDetail = publicProcedure
       ? { id: group.id, name: group.name }
       : { id: typedSabbath.group_id, name: "Unknown Church" };
 
-    const isAdminOrLeader = profile.role === "admin" || profile.role === "church_leader";
-    const isPastor = await checkIsChurchPastor(
+    const canManage = await checkCanManageSabbath(
       ctx.supabase,
       user.id,
       typedSabbath.group_id
@@ -406,7 +405,6 @@ const getSabbathDetail = publicProcedure
       profile.home_group_id
     );
     const isHomeChurch = effectiveGroupId === typedSabbath.group_id;
-    const canManage = isAdminOrLeader || isPastor;
 
     const { data: assignmentsRaw } = await db(ctx.supabase)
       .from("sabbath_assignments")
