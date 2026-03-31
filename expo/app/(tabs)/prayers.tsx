@@ -173,7 +173,6 @@ export default function PrayersScreen() {
           created_by: prayerData.requestedBy,
           is_anonymous: prayerData.isAnonymous,
           is_answered: false,
-          category: 'personal',
           group_id: currentChurchId,
           is_shared_all_churches: prayerData.isSharedAllChurches,
         })
