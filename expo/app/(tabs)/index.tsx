@@ -265,7 +265,7 @@ export default function HomeScreen() {
         .order('created_at', { ascending: false });
 
       if (!userIsAdmin && currentChurchId) {
-        query = query.or(`group_id.eq.${currentChurchId},group_id.is.null,is_shared_all_churches.eq.true`);
+        query = query.or(`group_id.eq.${currentChurchId},is_shared_all_churches.eq.true`);
       }
 
       const { data, error } = await query;
