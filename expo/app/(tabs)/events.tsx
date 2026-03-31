@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { Calendar, MapPin, Users, Plus, Clock, AlertCircle, X, CalendarPlus } from 'lucide-react-native';
+import { Calendar, MapPin, Users, Plus, Clock, AlertCircle, X, CalendarPlus, Globe, Trash2 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   StyleSheet,
@@ -19,7 +19,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '@/providers/auth-provider';
 import { useChurch } from '@/providers/church-provider';
+import type { Church } from '@/providers/church-provider';
 import { isAdmin } from '@/utils/permissions';
+import { buildChurchScope, canManageEventsForGroup, canManageAnyEvent } from '@/utils/church-scope';
 import type { Event, EventType } from '@/types/event';
 import { supabase } from '@/lib/supabase';
 import { addEventToCalendar } from '@/utils/calendar-sync';
@@ -61,11 +63,38 @@ const fallbackEventImage = 'https://images.unsplash.com/photo-1530023367847-a683
 
 export default function EventsScreen() {
   const { user, isAuthenticated, isLoading } = useAuth();
-  const { currentChurch } = useChurch();
+  const { currentChurch, availableChurches } = useChurch();
   const currentChurchId = currentChurch?.id ?? null;
   const userIsAdmin = isAdmin(user);
-  
-  console.log('[Events] Auth state:', { user: user?.id, isAuthenticated, isLoading, churchId: currentChurchId });
+
+  const pastorGroupsQuery = useQuery({
+    queryKey: ['pastor-groups-for-events', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      const { data, error } = await supabase
+        .from('group_members')
+        .select('group_id')
+        .eq('user_id', user.id)
+        .eq('role', 'pastor');
+      if (error) {
+        console.warn('[Events] Error fetching pastor groups:', error.message);
+        return [];
+      }
+      return (data || []).map((r: any) => r.group_id as string);
+    },
+    enabled: !!user?.id,
+  });
+  const pastorGroupIds = useMemo(() => pastorGroupsQuery.data ?? [], [pastorGroupsQuery.data]);
+  const churchScope = useMemo(() => buildChurchScope(user, currentChurchId, pastorGroupIds), [user, currentChurchId, pastorGroupIds]);
+  const canManageEvents = canManageAnyEvent(churchScope);
+
+  const manageableChurches = useMemo<Church[]>(() => {
+    if (!availableChurches || availableChurches.length === 0) return [];
+    if (userIsAdmin) return availableChurches;
+    return availableChurches.filter((c) => canManageEventsForGroup(churchScope, c.id));
+  }, [availableChurches, userIsAdmin, churchScope]);
+
+  console.log('[Events] Auth state:', { user: user?.id, isAuthenticated, isLoading, churchId: currentChurchId, canManageEvents });
   const [selectedFilter, setSelectedFilter] = useState<EventType | 'all'>('all');
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [showDetailsModal, setShowDetailsModal] = useState<boolean>(false);
@@ -80,6 +109,8 @@ export default function EventsScreen() {
     location: string;
     type: EventType;
     maxAttendees?: string;
+    groupId: string | null;
+    isSharedAllChurches: boolean;
   }>({
     title: '',
     description: '',
@@ -90,6 +121,8 @@ export default function EventsScreen() {
     location: '',
     type: 'bible_study',
     maxAttendees: '',
+    groupId: currentChurchId,
+    isSharedAllChurches: false,
   });
 
   const [showDatePicker, setShowDatePicker] = useState<{
@@ -121,7 +154,7 @@ export default function EventsScreen() {
         .order('start_at', { ascending: true });
 
       if (!userIsAdmin && currentChurchId) {
-        query = query.eq('group_id', currentChurchId);
+        query = query.or(`group_id.eq.${currentChurchId},is_shared_all_churches.eq.true`);
       } else if (!userIsAdmin && !currentChurchId) {
         console.log('[Events] Non-admin user has no church, returning empty');
         return [];
@@ -179,6 +212,8 @@ export default function EventsScreen() {
           createdBy: event.created_by,
           imageUrl: event.image_url ?? undefined,
           createdAt: new Date(event.created_at ?? new Date().toISOString()),
+          groupId: event.group_id ?? null,
+          isSharedAllChurches: event.is_shared_all_churches ?? false,
         } as Event);
       }
 
@@ -201,6 +236,8 @@ export default function EventsScreen() {
       type: EventType;
       maxAttendees?: number;
       createdBy: string;
+      groupId: string | null;
+      isSharedAllChurches: boolean;
     }) => {
       console.log('[Events] mutationFn called with:', eventData);
 
@@ -232,7 +269,8 @@ export default function EventsScreen() {
         is_registration_open: true,
         current_attendees: 0,
         registered_users: [],
-        group_id: currentChurchId,
+        group_id: eventData.groupId,
+        is_shared_all_churches: eventData.isSharedAllChurches ?? false,
       };
 
       console.log('[Events] Inserting event with data:', JSON.stringify(insertData, null, 2));
@@ -287,7 +325,9 @@ export default function EventsScreen() {
         endTime: now,
         location: '',
         type: 'bible_study',
-        maxAttendees: ''
+        maxAttendees: '',
+        groupId: currentChurchId,
+        isSharedAllChurches: false,
       });
       setShowAddModal(false);
       Alert.alert('Success', 'Event has been created successfully!');
@@ -399,6 +439,31 @@ export default function EventsScreen() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async ({ eventId }: { eventId: string }) => {
+      console.log('[Events] Delete mutation called for', eventId);
+      const { error } = await supabase
+        .from('events')
+        .delete()
+        .eq('id', eventId);
+      if (error) {
+        console.error('[Events] Delete failed:', error);
+        throw new Error(error.message ?? 'Failed to delete event');
+      }
+      return true;
+    },
+    onSuccess: () => {
+      console.log('[Events] Delete mutation success');
+      void queryClient.invalidateQueries({ queryKey: ['events'] });
+      void queryClient.invalidateQueries({ queryKey: ['home-events'] });
+      Alert.alert('Deleted', 'The event has been removed.');
+    },
+    onError: (error) => {
+      console.error('[Events] Delete mutation error:', error);
+      Alert.alert('Error', (error as Error).message ?? 'Could not delete event.');
+    },
+  });
+
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('en-US', {
       weekday: 'short',
@@ -501,6 +566,8 @@ export default function EventsScreen() {
       type: form.type,
       maxAttendees: form.maxAttendees ? Number(form.maxAttendees) : undefined,
       createdBy: user.id,
+      groupId: form.groupId,
+      isSharedAllChurches: form.isSharedAllChurches,
     };
 
     console.log('[Events] Creating event with payload:', JSON.stringify(payload, null, 2));
@@ -562,13 +629,19 @@ export default function EventsScreen() {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <Text style={styles.title}>Church Events</Text>
-          <TouchableOpacity
-            testID="add-event-button"
-            style={styles.addButton}
-            onPress={() => setShowAddModal(true)}
-          >
-            <Plus size={20} color="white" />
-          </TouchableOpacity>
+          {canManageEvents && (
+            <TouchableOpacity
+              testID="add-event-button"
+              style={styles.addButton}
+              onPress={() => {
+                const defaultGroup = manageableChurches.length > 0 ? manageableChurches[0].id : currentChurchId;
+                setForm(prev => ({ ...prev, groupId: defaultGroup }));
+                setShowAddModal(true);
+              }}
+            >
+              <Plus size={20} color="white" />
+            </TouchableOpacity>
+          )}
         </View>
         
         <View style={styles.filtersContainer}>
@@ -674,6 +747,13 @@ export default function EventsScreen() {
               </View>
             </View>
 
+            {event.isSharedAllChurches && (
+              <View style={styles.sharedBadgeRow}>
+                <Globe size={12} color="#6366f1" />
+                <Text style={styles.sharedBadgeText}>Shared with all churches</Text>
+              </View>
+            )}
+
             <View style={styles.eventActions}>
               {event.isRegistrationOpen && (
                 <TouchableOpacity
@@ -713,6 +793,22 @@ export default function EventsScreen() {
               >
                 <Text style={styles.detailsButtonText}>View Details</Text>
               </TouchableOpacity>
+
+              {event.groupId && canManageEventsForGroup(churchScope, event.groupId) && (
+                <TouchableOpacity
+                  testID={`delete-event-button-${event.id}`}
+                  style={styles.deleteButton}
+                  onPress={() => {
+                    Alert.alert('Delete Event', 'Are you sure you want to delete this event?', [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Delete', style: 'destructive', onPress: () => deleteMutation.mutate({ eventId: event.id }) },
+                    ]);
+                  }}
+                  disabled={deleteMutation.isPending}
+                >
+                  <Trash2 size={16} color="#ef4444" />
+                </TouchableOpacity>
+              )}
             </View>
           </View>
           ))
@@ -1045,6 +1141,52 @@ export default function EventsScreen() {
                 onChangeText={(text) => setForm(prev => ({ ...prev, maxAttendees: text.replace(/[^0-9]/g, '') }))}
                 keyboardType="numeric"
               />
+            </View>
+
+            {manageableChurches.length > 1 && (
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Church Group</Text>
+                <View style={styles.typesWrap}>
+                  {manageableChurches.map((church) => (
+                    <TouchableOpacity
+                      key={church.id}
+                      testID={`church-${church.id}`}
+                      style={[styles.typeChip, form.groupId === church.id && styles.typeChipActive]}
+                      onPress={() => setForm(prev => ({ ...prev, groupId: church.id }))}
+                    >
+                      <Text style={[styles.typeChipText, form.groupId === church.id && styles.typeChipTextActive]}>
+                        {church.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            <View style={styles.inputGroup}>
+              <TouchableOpacity
+                testID="share-all-churches-toggle"
+                style={styles.shareToggleRow}
+                onPress={() => setForm(prev => ({ ...prev, isSharedAllChurches: !prev.isSharedAllChurches }))}
+                activeOpacity={0.7}
+              >
+                <View style={styles.shareToggleInfo}>
+                  <Globe size={18} color={form.isSharedAllChurches ? '#6366f1' : '#94a3b8'} />
+                  <View>
+                    <Text style={styles.shareToggleLabel}>Share with all churches</Text>
+                    <Text style={styles.shareToggleHint}>Visible to members of every church</Text>
+                  </View>
+                </View>
+                <View style={[
+                  styles.shareToggleTrack,
+                  form.isSharedAllChurches && styles.shareToggleTrackActive,
+                ]}>
+                  <View style={[
+                    styles.shareToggleThumb,
+                    form.isSharedAllChurches && styles.shareToggleThumbActive,
+                  ]} />
+                </View>
+              </TouchableOpacity>
             </View>
 
             <TouchableOpacity
@@ -1740,5 +1882,78 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700' as const,
     color: 'white',
+  },
+  sharedBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: '#eef2ff',
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  sharedBadgeText: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+    color: '#6366f1',
+  },
+  deleteButton: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    backgroundColor: '#fef2f2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  shareToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  shareToggleInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  shareToggleLabel: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: '#1e293b',
+  },
+  shareToggleHint: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginTop: 2,
+  },
+  shareToggleTrack: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#cbd5e1',
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+  },
+  shareToggleTrackActive: {
+    backgroundColor: '#6366f1',
+  },
+  shareToggleThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'white',
+  },
+  shareToggleThumbActive: {
+    alignSelf: 'flex-end',
   },
 });
