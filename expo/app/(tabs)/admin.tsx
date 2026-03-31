@@ -74,8 +74,8 @@ export default function AdminTabScreen() {
   const createUserMutation = trpc.users.create.useMutation({
     onSuccess: (createdUser) => {
       console.log('[Admin] User created successfully', createdUser);
-      queryClient.invalidateQueries({ queryKey: ['users', 'getAll'] });
-      usersQuery.refetch();
+      void queryClient.invalidateQueries({ queryKey: ['users', 'getAll'] });
+      void usersQuery.refetch();
       setNewUser({ firstName: '', lastName: '', email: '', phone: '', password: '', role: 'member' });
       const requiresEmailConfirmation = Boolean(createdUser?.requiresEmailConfirmation);
       const successMessage = requiresEmailConfirmation
@@ -92,7 +92,7 @@ export default function AdminTabScreen() {
   const updateRoleMutation = trpc.users.updateRole.useMutation({
     onSuccess: () => {
       Alert.alert('Success', 'User role updated successfully');
-      usersQuery.refetch();
+      void usersQuery.refetch();
     },
     onError: (error) => {
       Alert.alert('Error', error.message);
@@ -102,7 +102,7 @@ export default function AdminTabScreen() {
   const deleteUserMutation = trpc.users.delete.useMutation({
     onSuccess: () => {
       Alert.alert('Success', 'User removed from church successfully');
-      usersQuery.refetch();
+      void usersQuery.refetch();
     },
     onError: (error) => {
       Alert.alert('Error', error.message);
@@ -112,7 +112,7 @@ export default function AdminTabScreen() {
   const blockUserMutation = trpc.users.block.useMutation({
     onSuccess: (data) => {
       Alert.alert('Success', data.isBlocked ? 'User blocked successfully' : 'User unblocked successfully');
-      usersQuery.refetch();
+      void usersQuery.refetch();
     },
     onError: (error) => {
       Alert.alert('Error', error.message);
@@ -158,8 +158,8 @@ export default function AdminTabScreen() {
     onSuccess: () => {
       Alert.alert('Success', 'Church group created');
       setGroupName('');
-      queryClient.invalidateQueries({ queryKey: ['groups'] });
-      queryClient.invalidateQueries({ queryKey: ['user-groups'] });
+      void queryClient.invalidateQueries({ queryKey: ['groups'] });
+      void queryClient.invalidateQueries({ queryKey: ['user-groups'] });
     },
     onError: (e: Error) => Alert.alert('Error', e.message ?? 'Failed to create group'),
   });
@@ -221,11 +221,45 @@ export default function AdminTabScreen() {
         .eq('group_id', data.groupId)
         .eq('user_id', data.userId);
       if (error) throw new Error(error.message);
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('home_group_id')
+        .eq('id', data.userId)
+        .single();
+
+      if (profile && profile.home_group_id === data.groupId) {
+        const { data: otherMemberships } = await supabase
+          .from('group_members')
+          .select('group_id')
+          .eq('user_id', data.userId)
+          .limit(1);
+
+        const newHomeGroupId = otherMemberships && otherMemberships.length > 0
+          ? otherMemberships[0].group_id
+          : null;
+
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({ home_group_id: newHomeGroupId })
+          .eq('id', data.userId);
+
+        if (updateError) {
+          console.warn('[Admin] Failed to clear home_group_id for user:', data.userId, updateError.message);
+        } else {
+          console.log('[Admin] Updated home_group_id for user:', data.userId, '→', newHomeGroupId);
+        }
+      }
     },
     onSuccess: () => {
       Alert.alert('Success', 'Member removed from group');
-      queryClient.invalidateQueries({ queryKey: ['group-members', expandedGroupId] });
-      queryClient.invalidateQueries({ queryKey: ['groups'] });
+      void queryClient.invalidateQueries({ queryKey: ['group-members', expandedGroupId] });
+      void queryClient.invalidateQueries({ queryKey: ['groups'] });
+      void queryClient.invalidateQueries({ queryKey: ['churches'] });
+      void queryClient.invalidateQueries({ queryKey: ['user-groups'] });
+      void queryClient.invalidateQueries({ queryKey: ['users', 'getAll'] });
+      void queryClient.invalidateQueries({ queryKey: ['prayers'] });
+      void queryClient.invalidateQueries({ queryKey: ['events'] });
     },
     onError: (e: Error) => Alert.alert('Error', e.message),
   });
@@ -251,7 +285,7 @@ export default function AdminTabScreen() {
     onSuccess: () => {
       Alert.alert('Success', 'Group deleted');
       setExpandedGroupId(null);
-      queryClient.invalidateQueries({ queryKey: ['groups'] });
+      void queryClient.invalidateQueries({ queryKey: ['groups'] });
     },
     onError: (e: Error) => Alert.alert('Error', e.message),
   });
@@ -304,23 +338,15 @@ export default function AdminTabScreen() {
       if (error) throw new Error(error.message);
 
       for (const userId of data.userIds) {
-        const { data: profile } = await supabase
+        const { error: updateError } = await supabase
           .from('profiles')
-          .select('home_group_id')
-          .eq('id', userId)
-          .single();
+          .update({ home_group_id: data.groupId })
+          .eq('id', userId);
 
-        if (profile && !profile.home_group_id) {
-          const { error: updateError } = await supabase
-            .from('profiles')
-            .update({ home_group_id: data.groupId })
-            .eq('id', userId);
-
-          if (updateError) {
-            console.warn('[Admin] Failed to sync home_group_id for user:', userId, updateError.message);
-          } else {
-            console.log('[Admin] Synced home_group_id for user:', userId, '→', data.groupId);
-          }
+        if (updateError) {
+          console.warn('[Admin] Failed to sync home_group_id for user:', userId, updateError.message);
+        } else {
+          console.log('[Admin] Synced home_group_id for user:', userId, '→', data.groupId);
         }
       }
     },
@@ -328,8 +354,13 @@ export default function AdminTabScreen() {
       Alert.alert('Success', 'Members added to church group');
       setSelectedGroupForAdding('');
       setSelectedUsersForGroup([]);
-      queryClient.invalidateQueries({ queryKey: ['groups'] });
-      queryClient.invalidateQueries({ queryKey: ['group-members'] });
+      void queryClient.invalidateQueries({ queryKey: ['groups'] });
+      void queryClient.invalidateQueries({ queryKey: ['group-members'] });
+      void queryClient.invalidateQueries({ queryKey: ['churches'] });
+      void queryClient.invalidateQueries({ queryKey: ['user-groups'] });
+      void queryClient.invalidateQueries({ queryKey: ['users', 'getAll'] });
+      void queryClient.invalidateQueries({ queryKey: ['prayers'] });
+      void queryClient.invalidateQueries({ queryKey: ['events'] });
     },
     onError: (e: Error) => Alert.alert('Error', e.message ?? 'Failed to add members'),
   });
@@ -340,7 +371,7 @@ export default function AdminTabScreen() {
     onSuccess: () => {
       Alert.alert('Success', 'Sermon created successfully');
       resetSermonForm();
-      sermonsQuery.refetch();
+      void sermonsQuery.refetch();
     },
     onError: (error) => {
       Alert.alert('Error', error.message);
@@ -351,7 +382,7 @@ export default function AdminTabScreen() {
     onSuccess: () => {
       Alert.alert('Success', 'Sermon updated successfully');
       resetSermonForm();
-      sermonsQuery.refetch();
+      void sermonsQuery.refetch();
     },
     onError: (error) => {
       Alert.alert('Error', error.message);
@@ -361,7 +392,7 @@ export default function AdminTabScreen() {
   const deleteSermonMutation = trpc.sermons.delete.useMutation({
     onSuccess: () => {
       Alert.alert('Success', 'Sermon deleted successfully');
-      sermonsQuery.refetch();
+      void sermonsQuery.refetch();
     },
     onError: (error) => {
       Alert.alert('Error', error.message);

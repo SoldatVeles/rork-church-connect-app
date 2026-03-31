@@ -92,8 +92,8 @@ export default function AdminScreen() {
   const createUserMutation = trpc.users.create.useMutation({
     onSuccess: (createdUser) => {
       console.log('[Admin] User created successfully', createdUser);
-      queryClient.invalidateQueries({ queryKey: ['users', 'getAll'] });
-      usersQuery.refetch();
+      void queryClient.invalidateQueries({ queryKey: ['users', 'getAll'] });
+      void usersQuery.refetch();
       setNewUser({ firstName: '', lastName: '', email: '', phone: '', password: '', role: 'member' });
       const requiresEmailConfirmation = Boolean(createdUser?.requiresEmailConfirmation);
       const successMessage = requiresEmailConfirmation
@@ -110,7 +110,7 @@ export default function AdminScreen() {
   const updateRoleMutation = trpc.users.updateRole.useMutation({
     onSuccess: () => {
       Alert.alert('Success', 'User role updated successfully');
-      usersQuery.refetch();
+      void usersQuery.refetch();
     },
     onError: (error) => {
       Alert.alert('Error', error.message);
@@ -120,7 +120,7 @@ export default function AdminScreen() {
   const deleteUserMutation = trpc.users.delete.useMutation({
     onSuccess: () => {
       Alert.alert('Success', 'User deleted successfully');
-      usersQuery.refetch();
+      void usersQuery.refetch();
     },
     onError: (error) => {
       Alert.alert('Error', error.message);
@@ -130,7 +130,7 @@ export default function AdminScreen() {
   const blockUserMutation = trpc.users.block.useMutation({
     onSuccess: (data) => {
       Alert.alert('Success', data.isBlocked ? 'User blocked successfully' : 'User unblocked successfully');
-      usersQuery.refetch();
+      void usersQuery.refetch();
     },
     onError: (error) => {
       Alert.alert('Error', error.message);
@@ -165,8 +165,8 @@ export default function AdminScreen() {
     onSuccess: () => {
       Alert.alert('Success', 'Group created');
       setGroupName('');
-      queryClient.invalidateQueries({ queryKey: ['groups'] });
-      queryClient.invalidateQueries({ queryKey: ['user-groups'] });
+      void queryClient.invalidateQueries({ queryKey: ['groups'] });
+      void queryClient.invalidateQueries({ queryKey: ['user-groups'] });
     },
     onError: (e: Error) => Alert.alert('Error', e.message ?? 'Failed to create group'),
   });
@@ -198,23 +198,15 @@ export default function AdminScreen() {
       if (error) throw new Error(error.message);
 
       for (const userId of data.userIds) {
-        const { data: profile } = await supabase
+        const { error: updateError } = await supabase
           .from('profiles')
-          .select('home_group_id')
-          .eq('id', userId)
-          .single();
+          .update({ home_group_id: data.groupId })
+          .eq('id', userId);
 
-        if (profile && !profile.home_group_id) {
-          const { error: updateError } = await supabase
-            .from('profiles')
-            .update({ home_group_id: data.groupId })
-            .eq('id', userId);
-
-          if (updateError) {
-            console.warn('[Admin] Failed to sync home_group_id for user:', userId, updateError.message);
-          } else {
-            console.log('[Admin] Synced home_group_id for user:', userId, '\u2192', data.groupId);
-          }
+        if (updateError) {
+          console.warn('[Admin] Failed to sync home_group_id for user:', userId, updateError.message);
+        } else {
+          console.log('[Admin] Synced home_group_id for user:', userId, '\u2192', data.groupId);
         }
       }
     },
@@ -222,7 +214,13 @@ export default function AdminScreen() {
       Alert.alert('Success', 'Members added to group');
       setSelectedGroupForAdding('');
       setSelectedUsersForGroup([]);
-      queryClient.invalidateQueries({ queryKey: ['groups'] });
+      void queryClient.invalidateQueries({ queryKey: ['groups'] });
+      void queryClient.invalidateQueries({ queryKey: ['group-members'] });
+      void queryClient.invalidateQueries({ queryKey: ['churches'] });
+      void queryClient.invalidateQueries({ queryKey: ['user-groups'] });
+      void queryClient.invalidateQueries({ queryKey: ['users', 'getAll'] });
+      void queryClient.invalidateQueries({ queryKey: ['prayers'] });
+      void queryClient.invalidateQueries({ queryKey: ['events'] });
     },
     onError: (e: Error) => Alert.alert('Error', e.message ?? 'Failed to add members'),
   });
@@ -233,7 +231,7 @@ export default function AdminScreen() {
     onSuccess: () => {
       Alert.alert('Success', 'Sermon created successfully');
       resetSermonForm();
-      sermonsQuery.refetch();
+      void sermonsQuery.refetch();
     },
     onError: (error) => {
       Alert.alert('Error', error.message);
@@ -244,7 +242,7 @@ export default function AdminScreen() {
     onSuccess: () => {
       Alert.alert('Success', 'Sermon updated successfully');
       resetSermonForm();
-      sermonsQuery.refetch();
+      void sermonsQuery.refetch();
     },
     onError: (error) => {
       Alert.alert('Error', error.message);
@@ -254,7 +252,7 @@ export default function AdminScreen() {
   const deleteSermonMutation = trpc.sermons.delete.useMutation({
     onSuccess: () => {
       Alert.alert('Success', 'Sermon deleted successfully');
-      sermonsQuery.refetch();
+      void sermonsQuery.refetch();
     },
     onError: (error) => {
       Alert.alert('Error', error.message);
