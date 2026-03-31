@@ -246,7 +246,10 @@ export default function HomeScreen() {
         .order('start_at', { ascending: true });
 
       if (!userIsAdmin && currentChurchId) {
-        query = query.or(`group_id.eq.${currentChurchId},group_id.is.null`);
+        query = query.eq('group_id', currentChurchId);
+      } else if (!userIsAdmin && !currentChurchId) {
+        console.log('[Home] Non-admin user has no church, returning empty events');
+        return [];
       }
 
       const { data, error } = await query;
