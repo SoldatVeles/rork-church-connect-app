@@ -10,10 +10,12 @@ import {
   Dimensions,
   ActivityIndicator,
 } from 'react-native';
-import { Bell, Calendar, Heart, MessageCircle, X, Trash2 } from 'lucide-react-native';
+import { Bell, Calendar, Heart, MessageCircle, X, Trash2, BookOpen } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
+import { useChurch } from '@/providers/church-provider';
+import { isAdmin as checkIsAdmin } from '@/utils/permissions';
 import { useQuery, useMutation } from '@tanstack/react-query';
 
 interface NotificationDropdownProps {
@@ -29,17 +31,27 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   anchorPosition,
 }) => {
   const { user } = useAuth();
+  const { currentChurch } = useChurch();
+  const currentChurchId = currentChurch?.id ?? null;
+  const userIsAdmin = checkIsAdmin(user);
 
   const notificationsQuery = useQuery({
-    queryKey: ['notifications', user?.id],
+    queryKey: ['notifications', user?.id, currentChurchId, userIsAdmin],
     queryFn: async () => {
+      if (!user?.id) return [];
       let query = supabase
         .from('notifications')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (user?.id) {
-        query = query.or(`user_id.eq.${user.id},user_id.is.null`);
+      if (userIsAdmin) {
+        // Admin sees all
+      } else {
+        const filters = [`user_id.eq.${user.id}`];
+        if (currentChurchId) {
+          filters.push(`group_id.eq.${currentChurchId}`);
+        }
+        query = query.or(filters.join(','));
       }
 
       const { data, error } = await query;
@@ -77,6 +89,14 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
         return <Heart size={20} color="#ef4444" />;
       case 'announcement':
         return <MessageCircle size={20} color="#10b981" />;
+      case 'sabbath_published':
+      case 'sabbath_updated':
+      case 'sabbath_cancelled':
+      case 'sabbath_assignment':
+      case 'sabbath_reassigned':
+      case 'sabbath_assignment_cancelled':
+      case 'sabbath_response':
+        return <BookOpen size={20} color="#8b5cf6" />;
       default:
         return <Bell size={20} color="#6b7280" />;
     }
@@ -96,8 +116,16 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
       case 'prayer':
         router.push('/(tabs)/prayers');
         break;
+      case 'sabbath_published':
+      case 'sabbath_updated':
+      case 'sabbath_cancelled':
+      case 'sabbath_assignment':
+      case 'sabbath_reassigned':
+      case 'sabbath_assignment_cancelled':
+      case 'sabbath_response':
+        router.push('/(tabs)/sabbath');
+        break;
       default:
-        // Stay on current screen for announcements
         break;
     }
     

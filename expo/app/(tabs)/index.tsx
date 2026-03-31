@@ -315,14 +315,21 @@ export default function HomeScreen() {
   const activeRequestsCount = prayersActiveQuery.data?.length ?? 0;
   const membersCount = usersQuery.data?.length ?? 0;
   const notificationsCountQuery = useQuery({
-    queryKey: ['notifications', 'count', user?.id],
+    queryKey: ['notifications', 'count', user?.id, currentChurchId, userIsAdmin],
     queryFn: async () => {
+      if (!user?.id) return 0;
       let query = supabase
         .from('notifications')
         .select('*', { count: 'exact', head: true });
 
-      if (user?.id) {
-        query = query.or(`user_id.eq.${user.id},user_id.is.null`);
+      if (userIsAdmin) {
+        // Admin sees all
+      } else {
+        const filters = [`user_id.eq.${user.id}`];
+        if (currentChurchId) {
+          filters.push(`group_id.eq.${currentChurchId}`);
+        }
+        query = query.or(filters.join(','));
       }
 
       const { count, error } = await query;

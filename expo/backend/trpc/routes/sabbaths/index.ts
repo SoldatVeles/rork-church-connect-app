@@ -33,6 +33,182 @@ function db(supabase: any): SupabaseAny {
   return supabase;
 }
 
+const ROLE_LABELS: Record<string, string> = {
+  first_part_leader: "First Part Leader",
+  lesson_presenter: "Lesson Presenter",
+  second_part_leader: "Second Part Leader",
+  sermon_speaker: "Sermon Speaker",
+};
+
+function roleLabel(role: string): string {
+  return ROLE_LABELS[role] ?? role;
+}
+
+async function createNotification(
+  supabase: SupabaseAny,
+  params: {
+    type: string;
+    title: string;
+    body?: string | null;
+    linkPath?: string | null;
+    userId?: string | null;
+    groupId?: string | null;
+    createdBy?: string | null;
+  }
+): Promise<void> {
+  const { error } = await db(supabase)
+    .from("notifications")
+    .insert({
+      type: params.type,
+      title: params.title,
+      body: params.body ?? null,
+      link_path: params.linkPath ?? null,
+      user_id: params.userId ?? null,
+      group_id: params.groupId ?? null,
+      created_by: params.createdBy ?? null,
+    });
+  if (error) {
+    console.error("[createNotification] Insert error:", error.message);
+  }
+}
+
+async function createNotificationBatch(
+  supabase: SupabaseAny,
+  rows: Array<{
+    type: string;
+    title: string;
+    body?: string | null;
+    link_path?: string | null;
+    user_id?: string | null;
+    group_id?: string | null;
+    created_by?: string | null;
+  }>
+): Promise<void> {
+  if (rows.length === 0) return;
+  const { error } = await db(supabase).from("notifications").insert(rows);
+  if (error) {
+    console.error("[createNotificationBatch] Insert error:", error.message);
+  }
+}
+
+async function getChurchMemberIds(
+  supabase: SupabaseAny,
+  groupId: string
+): Promise<string[]> {
+  const ids = new Set<string>();
+  const { data: profiles } = await db(supabase)
+    .from("profiles")
+    .select("id")
+    .eq("home_group_id", groupId);
+  if (profiles) {
+    for (const p of profiles as Array<{ id: string }>) ids.add(p.id);
+  }
+  const { data: pastors } = await db(supabase)
+    .from("group_pastors")
+    .select("user_id")
+    .eq("group_id", groupId);
+  if (pastors) {
+    for (const p of pastors as Array<{ user_id: string }>) ids.add(p.user_id);
+  }
+  return Array.from(ids);
+}
+
+async function getChurchLeaderIds(
+  supabase: SupabaseAny,
+  groupId: string
+): Promise<string[]> {
+  const ids = new Set<string>();
+  const { data: admins } = await db(supabase)
+    .from("profiles")
+    .select("id")
+    .eq("role", "admin");
+  if (admins) {
+    for (const a of admins as Array<{ id: string }>) ids.add(a.id);
+  }
+  const { data: pastors } = await db(supabase)
+    .from("group_pastors")
+    .select("user_id")
+    .eq("group_id", groupId);
+  if (pastors) {
+    for (const p of pastors as Array<{ user_id: string }>) ids.add(p.user_id);
+  }
+  const { data: leaders } = await db(supabase)
+    .from("profiles")
+    .select("id")
+    .eq("role", "church_leader")
+    .eq("home_group_id", groupId);
+  if (leaders) {
+    for (const l of leaders as Array<{ id: string }>) ids.add(l.id);
+  }
+  return Array.from(ids);
+}
+
+async function notifyChurchMembers(
+  supabase: SupabaseAny,
+  groupId: string,
+  params: {
+    type: string;
+    title: string;
+    body?: string | null;
+    linkPath?: string | null;
+    createdBy?: string | null;
+  }
+): Promise<void> {
+  const memberIds = await getChurchMemberIds(supabase, groupId);
+  console.log(
+    `[notifyChurchMembers] Sending to ${memberIds.length} members of group ${groupId}`
+  );
+  const rows = memberIds.map((uid) => ({
+    type: params.type,
+    title: params.title,
+    body: params.body ?? null,
+    link_path: params.linkPath ?? null,
+    user_id: uid,
+    group_id: groupId,
+    created_by: params.createdBy ?? null,
+  }));
+  await createNotificationBatch(supabase, rows);
+}
+
+async function getGroupName(
+  supabase: SupabaseAny,
+  groupId: string
+): Promise<string> {
+  const { data } = await db(supabase)
+    .from("groups")
+    .select("name")
+    .eq("id", groupId)
+    .maybeSingle();
+  return (data as any)?.name ?? "Unknown Church";
+}
+
+async function notifyChurchLeaders(
+  supabase: SupabaseAny,
+  groupId: string,
+  params: {
+    type: string;
+    title: string;
+    body?: string | null;
+    linkPath?: string | null;
+    createdBy?: string | null;
+  }
+): Promise<void> {
+  const leaderIds = await getChurchLeaderIds(supabase, groupId);
+  console.log(
+    `[notifyChurchLeaders] Sending to ${leaderIds.length} leaders of group ${groupId}`
+  );
+  const rows = leaderIds.map((uid) => ({
+    type: params.type,
+    title: params.title,
+    body: params.body ?? null,
+    link_path: params.linkPath ?? null,
+    user_id: uid,
+    group_id: groupId,
+    created_by: params.createdBy ?? null,
+  }));
+  await createNotificationBatch(supabase, rows);
+}
+
 async function getAuthenticatedUser(ctx: { supabase: any; req: Request }) {
   const authHeader = ctx.req.headers.get("authorization");
   if (!authHeader) {
@@ -769,9 +945,17 @@ const updateSabbath = publicProcedure
       throw new Error(updateError.message);
     }
 
-    // TODO: If published Sabbath was updated, trigger notification to assigned users and home church members about the change
     if (typedSabbath.status === "published") {
-      console.log("[sabbaths.updateSabbath] Published sabbath updated — notification pending:", input.sabbathId);
+      const groupName = await getGroupName(ctx.supabase, typedSabbath.group_id);
+      const dateLabel = formatSabbathDate(typedSabbath.sabbath_date);
+      await notifyChurchMembers(ctx.supabase, typedSabbath.group_id, {
+        type: "sabbath_updated",
+        title: "Sabbath Updated",
+        body: `The Sabbath on ${dateLabel} at ${groupName} has been updated.`,
+        linkPath: `/sabbath-detail?id=${input.sabbathId}`,
+        createdBy: user.id,
+      });
+      console.log("[sabbaths.updateSabbath] Published sabbath update notifications sent:", input.sabbathId);
     }
 
     console.log("[sabbaths.updateSabbath] Updated:", input.sabbathId);
@@ -819,12 +1003,22 @@ const assignRole = publicProcedure
       throw new Error(error.message);
     }
 
-    // TODO: Trigger notification to the assigned member about their new role
+    const groupName = await getGroupName(ctx.supabase, (sabbath as any).group_id);
+    await createNotification(ctx.supabase, {
+      type: "sabbath_assignment",
+      title: "New Sabbath Role Assignment",
+      body: `You have been assigned as ${roleLabel(input.role)} at ${groupName}.`,
+      linkPath: `/sabbath-detail?id=${input.sabbathId}`,
+      userId: input.userId,
+      groupId: (sabbath as any).group_id,
+      createdBy: user.id,
+    });
     console.log(
       "[sabbaths.assignRole] Assigned user",
       input.userId,
       "to role",
-      input.role
+      input.role,
+      "— notification sent"
     );
     return assignment as SabbathAssignment;
   });
@@ -879,15 +1073,35 @@ const reassignRole = publicProcedure
       throw new Error(error.message);
     }
 
-    // TODO: Trigger notification to the newly assigned member about their role
-    // TODO: Optionally notify the replaced member (previousUserId) that they have been reassigned
+    const groupName = await getGroupName(ctx.supabase, (sabbath as any).group_id);
+    await createNotification(ctx.supabase, {
+      type: "sabbath_assignment",
+      title: "New Sabbath Role Assignment",
+      body: `You have been assigned as ${roleLabel(input.role)} at ${groupName}.`,
+      linkPath: `/sabbath-detail?id=${input.sabbathId}`,
+      userId: input.newUserId,
+      groupId: (sabbath as any).group_id,
+      createdBy: user.id,
+    });
+    if (previousUserId && previousUserId !== input.newUserId) {
+      await createNotification(ctx.supabase, {
+        type: "sabbath_reassigned",
+        title: "Sabbath Role Reassigned",
+        body: `Your ${roleLabel(input.role)} role at ${groupName} has been reassigned to another member.`,
+        linkPath: `/sabbath-detail?id=${input.sabbathId}`,
+        userId: previousUserId,
+        groupId: (sabbath as any).group_id,
+        createdBy: user.id,
+      });
+    }
     console.log(
       "[sabbaths.reassignRole] Reassigned role",
       input.role,
       "from user",
       previousUserId,
       "to user",
-      input.newUserId
+      input.newUserId,
+      "— notifications sent"
     );
     return assignment as SabbathAssignment;
   });
@@ -958,8 +1172,29 @@ const publish = publicProcedure
       throw new Error(error.message);
     }
 
-    // TODO: Trigger notification to assigned users and home church members about published Sabbath
-    console.log("[sabbaths.publish] Published sabbath:", input.sabbathId);
+    const groupName = await getGroupName(ctx.supabase, typedSabbath.group_id);
+    const publishDateLabel = formatSabbathDate(typedSabbath.sabbath_date);
+    await notifyChurchMembers(ctx.supabase, typedSabbath.group_id, {
+      type: "sabbath_published",
+      title: "Sabbath Program Published",
+      body: `The Sabbath program for ${publishDateLabel} at ${groupName} has been published.`,
+      linkPath: `/sabbath-detail?id=${input.sabbathId}`,
+      createdBy: user.id,
+    });
+    const assignedUserIds = assignmentsList
+      .map((a) => a.user_id)
+      .filter((uid): uid is string => !!uid);
+    const assignedNotifs = assignedUserIds.map((uid) => ({
+      type: "sabbath_assignment",
+      title: "Sabbath Role Assignment",
+      body: `You have been assigned a role for the Sabbath on ${publishDateLabel} at ${groupName}. Please review and respond.`,
+      link_path: `/sabbath-detail?id=${input.sabbathId}`,
+      user_id: uid,
+      group_id: typedSabbath.group_id,
+      created_by: user.id,
+    }));
+    await createNotificationBatch(ctx.supabase, assignedNotifs);
+    console.log("[sabbaths.publish] Published sabbath:", input.sabbathId, "— notifications sent");
     return updated as Sabbath;
   });
 
@@ -1009,8 +1244,35 @@ const cancel = publicProcedure
       throw new Error(error.message);
     }
 
-    // TODO: Trigger notification to assigned users and home church members about cancellation
-    console.log("[sabbaths.cancel] Cancelled sabbath:", input.sabbathId);
+    const groupName = await getGroupName(ctx.supabase, typedSabbath.group_id);
+    const cancelDateLabel = formatSabbathDate(typedSabbath.sabbath_date);
+    await notifyChurchMembers(ctx.supabase, typedSabbath.group_id, {
+      type: "sabbath_cancelled",
+      title: "Sabbath Cancelled",
+      body: `The Sabbath on ${cancelDateLabel} at ${groupName} has been cancelled.${input.cancellationReason ? " Reason: " + input.cancellationReason : ""}`,
+      linkPath: `/sabbath-detail?id=${input.sabbathId}`,
+      createdBy: user.id,
+    });
+    if (typedSabbath.status === "published") {
+      const { data: cancelAssignments } = await db(ctx.supabase)
+        .from("sabbath_assignments")
+        .select("user_id")
+        .eq("sabbath_id", input.sabbathId)
+        .not("user_id", "is", null);
+      if (cancelAssignments && cancelAssignments.length > 0) {
+        const cancelNotifs = (cancelAssignments as Array<{ user_id: string }>).map((a) => ({
+          type: "sabbath_assignment_cancelled",
+          title: "Sabbath Assignment Cancelled",
+          body: `Your assignment for the Sabbath on ${cancelDateLabel} at ${groupName} is no longer active because the Sabbath was cancelled.`,
+          link_path: `/sabbath-detail?id=${input.sabbathId}`,
+          user_id: a.user_id,
+          group_id: typedSabbath.group_id,
+          created_by: user.id,
+        }));
+        await createNotificationBatch(ctx.supabase, cancelNotifs);
+      }
+    }
+    console.log("[sabbaths.cancel] Cancelled sabbath:", input.sabbathId, "— notifications sent");
     return updated as Sabbath;
   });
 
@@ -1146,8 +1408,17 @@ const acceptAssignment = publicProcedure
       throw new Error(error.message);
     }
 
-    // TODO: Trigger notification to pastors/admins of the hosting church that assignment was accepted
-    console.log("[sabbaths.acceptAssignment] Accepted:", input.assignmentId);
+    const acceptGroupId = typedAssignment.sabbaths.group_id as string;
+    const acceptProfile = await getUserProfile(ctx.supabase, user.id);
+    const acceptUserName = acceptProfile.display_name || acceptProfile.full_name || "A member";
+    await notifyChurchLeaders(ctx.supabase, acceptGroupId, {
+      type: "sabbath_response",
+      title: "Assignment Accepted",
+      body: `${acceptUserName} accepted the ${roleLabel(typedAssignment.role)} role.`,
+      linkPath: `/sabbath-detail?id=${typedAssignment.sabbath_id}`,
+      createdBy: user.id,
+    });
+    console.log("[sabbaths.acceptAssignment] Accepted:", input.assignmentId, "— leader notifications sent");
     return updated as SabbathAssignment;
   });
 
@@ -1163,7 +1434,7 @@ const declineAssignment = publicProcedure
 
     const { data: assignment, error: fetchError } = await db(ctx.supabase)
       .from("sabbath_assignments")
-      .select("*, sabbaths!inner(status)")
+      .select("*, sabbaths!inner(status, group_id)")
       .eq("id", input.assignmentId)
       .single();
 
@@ -1200,8 +1471,19 @@ const declineAssignment = publicProcedure
       throw new Error(error.message);
     }
 
-    // TODO: Trigger notification to pastors/admins about declined assignment
-    console.log("[sabbaths.declineAssignment] Declined:", input.assignmentId);
+    const declineGroupId = (assignment as any).sabbaths?.group_id as string | undefined;
+    if (declineGroupId) {
+      const declineProfile = await getUserProfile(ctx.supabase, user.id);
+      const declineUserName = declineProfile.display_name || declineProfile.full_name || "A member";
+      await notifyChurchLeaders(ctx.supabase, declineGroupId, {
+        type: "sabbath_response",
+        title: "Assignment Declined",
+        body: `${declineUserName} declined the ${roleLabel(typedAssignment.role)} role.${input.reason ? " Reason: " + input.reason : ""}`,
+        linkPath: `/sabbath-detail?id=${typedAssignment.sabbath_id}`,
+        createdBy: user.id,
+      });
+    }
+    console.log("[sabbaths.declineAssignment] Declined:", input.assignmentId, "— leader notifications sent");
     return updated as SabbathAssignment;
   });
 
@@ -1217,7 +1499,7 @@ const suggestReplacement = publicProcedure
 
     const { data: assignment, error: fetchError } = await db(ctx.supabase)
       .from("sabbath_assignments")
-      .select("*, sabbaths!inner(status)")
+      .select("*, sabbaths!inner(status, group_id)")
       .eq("id", input.assignmentId)
       .single();
 
@@ -1260,10 +1542,28 @@ const suggestReplacement = publicProcedure
       throw new Error(error.message);
     }
 
-    // TODO: Trigger notification to pastors/admins about replacement suggestion
+    const suggestGroupId = (assignment as any).sabbaths?.group_id as string | undefined;
+    if (suggestGroupId) {
+      const suggestProfile = await getUserProfile(ctx.supabase, user.id);
+      const suggestUserName = suggestProfile.display_name || suggestProfile.full_name || "A member";
+      const { data: suggestedProfile } = await db(ctx.supabase)
+        .from("profiles")
+        .select("full_name, display_name")
+        .eq("id", input.suggestedUserId)
+        .maybeSingle();
+      const suggestedName = (suggestedProfile as any)?.display_name || (suggestedProfile as any)?.full_name || "another member";
+      await notifyChurchLeaders(ctx.supabase, suggestGroupId, {
+        type: "sabbath_response",
+        title: "Replacement Suggested",
+        body: `${suggestUserName} suggested ${suggestedName} as replacement for the ${roleLabel(typedAssignment.role)} role.`,
+        linkPath: `/sabbath-detail?id=${typedAssignment.sabbath_id}`,
+        createdBy: user.id,
+      });
+    }
     console.log(
       "[sabbaths.suggestReplacement] Suggested replacement for:",
-      input.assignmentId
+      input.assignmentId,
+      "— leader notifications sent"
     );
     return updated as SabbathAssignment;
   });

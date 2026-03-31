@@ -4,6 +4,8 @@ import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, Touchabl
 import { Bell, Trash2 } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
+import { useChurch } from '@/providers/church-provider';
+import { isAdmin as checkIsAdmin } from '@/utils/permissions';
 import { useMutation, useQuery } from '@tanstack/react-query';
 
 interface AppNotification {
@@ -16,17 +18,27 @@ interface AppNotification {
 
 export default function NotificationsScreen() {
   const { user } = useAuth();
+  const { currentChurch } = useChurch();
+  const currentChurchId = currentChurch?.id ?? null;
+  const userIsAdmin = checkIsAdmin(user);
 
   const query = useQuery<AppNotification[], Error>({
-    queryKey: ['notifications', 'all', user?.id],
+    queryKey: ['notifications', 'all', user?.id, currentChurchId, userIsAdmin],
     queryFn: async () => {
+      if (!user?.id) return [];
       let q = supabase
         .from('notifications')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (user?.id) {
-        q = q.or(`user_id.eq.${user.id},user_id.is.null`);
+      if (userIsAdmin) {
+        // Admin sees all notifications
+      } else {
+        const filters = [`user_id.eq.${user.id}`];
+        if (currentChurchId) {
+          filters.push(`group_id.eq.${currentChurchId}`);
+        }
+        q = q.or(filters.join(','));
       }
 
       const { data, error } = await q;
