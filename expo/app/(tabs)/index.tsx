@@ -254,11 +254,23 @@ export default function HomeScreen() {
 
       const { data, error } = await query;
       if (error) throw new Error(error.message);
-      const rows = data || [];
-      return rows.filter((e: any) => {
-        const t = (e.event_type ?? e.type ?? '') as string;
-        return t !== 'sabbath';
+      const rows = (data || []) as any[];
+      console.log('[Home] Raw event rows fetched:', rows.length);
+      const rawTypes = rows.map((r: any) => ({ id: r.id, title: r.title, event_type: r.event_type, type: r.type }));
+      console.log('[Home] Raw type values per row:', JSON.stringify(rawTypes));
+
+      const filtered = rows.filter((e: any) => {
+        const eventType = typeof e.event_type === 'string' && e.event_type.length > 0 ? e.event_type : null;
+        const legacyType = typeof e.type === 'string' && e.type.length > 0 ? e.type : null;
+        const resolved = eventType ?? legacyType ?? 'bible_study';
+        const dominated = resolved === 'sabbath' || resolved === 'prayer_meeting';
+        if (dominated) {
+          console.log('[Home] Excluding event', e.id, '| resolved type:', resolved);
+        }
+        return !dominated;
       });
+      console.log('[Home] Filtered events count:', filtered.length);
+      return filtered;
     },
   });
 

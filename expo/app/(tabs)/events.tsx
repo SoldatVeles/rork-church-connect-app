@@ -42,13 +42,17 @@ const eventTypeLabels: Record<EventType, string> = {
   conference: 'Conference',
 };
 
-const normalizeEventType = (value: unknown): EventType | null => {
-  if (value === 'sabbath') {
-    return null;
-  }
-  if (allowedEventTypes.includes(value as EventType)) {
-    return value as EventType;
-  }
+const resolveRawType = (row: any): string => {
+  const eventType = row.event_type;
+  const legacyType = row.type;
+  if (typeof eventType === 'string' && eventType.length > 0) return eventType;
+  if (typeof legacyType === 'string' && legacyType.length > 0) return legacyType;
+  return 'bible_study';
+};
+
+const normalizeEventType = (value: string): EventType | null => {
+  if (value === 'sabbath' || value === 'prayer_meeting') return null;
+  if (allowedEventTypes.includes(value as EventType)) return value as EventType;
   console.log('[Events] Normalized unexpected event type to bible_study:', value);
   return 'bible_study';
 };
@@ -130,42 +134,47 @@ export default function EventsScreen() {
         throw new Error(error.message ?? 'Failed to load events');
       }
 
-      console.log('[Events] Fetched events:', data);
-      
-      const sanitizedEvents = (data as any[])
-        .map((event: any) => {
-          const rawType = (event.type ?? event.event_type ?? 'bible_study') as string;
+      const rows = (data ?? []) as any[];
+      console.log('[Events] Raw rows fetched:', rows.length);
+      const rawTypes = rows.map((r: any) => ({ id: r.id, title: r.title, event_type: r.event_type, type: r.type }));
+      console.log('[Events] Raw type values per row:', JSON.stringify(rawTypes));
 
-          if (rawType === 'prayer_meeting' || rawType === 'sabbath') {
-            console.log('[Events] Skipping non-event entry in events feed:', event.id, rawType);
-            return null;
-          }
+      const sanitizedEvents: Event[] = [];
+      for (const event of rows) {
+        const rawType = resolveRawType(event);
+        const normalized = normalizeEventType(rawType);
+        console.log('[Events] Row', event.id, '| event_type:', event.event_type, '| type:', event.type, '| resolved:', rawType, '| normalized:', normalized);
 
-          const start = event.start_at ? new Date(event.start_at) : new Date();
-          const end = event.end_at ? new Date(event.end_at) : undefined;
-          const registeredUsersSafe: string[] = Array.isArray(event?.registered_users)
-            ? (event.registered_users as string[])
-            : [];
+        if (!normalized) {
+          console.log('[Events] Skipping excluded type:', rawType, 'for event', event.id);
+          continue;
+        }
 
-          return {
-            id: event.id,
-            title: event.title,
-            description: event.description ?? '',
-            date: start,
-            endDate: end,
-            location: event.location ?? '',
-            type: normalizeEventType(rawType)!,
-            maxAttendees: event.max_attendees ?? undefined,
-            currentAttendees: event.current_attendees ?? 0,
-            registeredUsers: registeredUsersSafe,
-            isRegistrationOpen: event.is_registration_open ?? true,
-            createdBy: event.created_by,
-            imageUrl: event.image_url ?? undefined,
-            createdAt: new Date(event.created_at ?? new Date().toISOString()),
-          } as Event;
-        })
-        .filter((item): item is Event => item !== null);
+        const start = event.start_at ? new Date(event.start_at) : new Date();
+        const end = event.end_at ? new Date(event.end_at) : undefined;
+        const registeredUsersSafe: string[] = Array.isArray(event?.registered_users)
+          ? (event.registered_users as string[])
+          : [];
 
+        sanitizedEvents.push({
+          id: event.id,
+          title: event.title,
+          description: event.description ?? '',
+          date: start,
+          endDate: end,
+          location: event.location ?? '',
+          type: normalized,
+          maxAttendees: event.max_attendees ?? undefined,
+          currentAttendees: event.current_attendees ?? 0,
+          registeredUsers: registeredUsersSafe,
+          isRegistrationOpen: event.is_registration_open ?? true,
+          createdBy: event.created_by,
+          imageUrl: event.image_url ?? undefined,
+          createdAt: new Date(event.created_at ?? new Date().toISOString()),
+        } as Event);
+      }
+
+      console.log('[Events] Final sanitized events count:', sanitizedEvents.length);
       return sanitizedEvents;
     },
   });
