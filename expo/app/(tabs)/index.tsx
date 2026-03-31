@@ -256,8 +256,16 @@ export default function HomeScreen() {
       if (error) throw new Error(error.message);
       const rows = (data || []) as any[];
       console.log('[Home] Raw event rows fetched:', rows.length);
-      const rawTypes = rows.map((r: any) => ({ id: r.id, title: r.title, event_type: r.event_type, type: r.type }));
-      console.log('[Home] Raw type values per row:', JSON.stringify(rawTypes));
+      const rawDetails = rows.map((r: any) => ({
+        id: r.id,
+        title: r.title,
+        event_type: r.event_type,
+        type: r.type,
+        group_id: r.group_id,
+        start_at: r.start_at,
+        created_at: r.created_at,
+      }));
+      console.log('[Home] Raw event row details:', JSON.stringify(rawDetails));
 
       const filtered = rows.filter((e: any) => {
         const eventType = typeof e.event_type === 'string' && e.event_type.length > 0 ? e.event_type : null;
@@ -270,6 +278,8 @@ export default function HomeScreen() {
         return !dominated;
       });
       console.log('[Home] Filtered events count:', filtered.length);
+      console.log('[Home] Filtered event ids:', filtered.map((e: any) => e.id));
+      console.log('[Home] Excluded count:', rows.length - filtered.length);
       return filtered;
     },
   });

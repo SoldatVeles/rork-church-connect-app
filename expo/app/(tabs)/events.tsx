@@ -136,8 +136,16 @@ export default function EventsScreen() {
 
       const rows = (data ?? []) as any[];
       console.log('[Events] Raw rows fetched:', rows.length);
-      const rawTypes = rows.map((r: any) => ({ id: r.id, title: r.title, event_type: r.event_type, type: r.type }));
-      console.log('[Events] Raw type values per row:', JSON.stringify(rawTypes));
+      const rawDetails = rows.map((r: any) => ({
+        id: r.id,
+        title: r.title,
+        event_type: r.event_type,
+        type: r.type,
+        group_id: r.group_id,
+        start_at: r.start_at,
+        created_at: r.created_at,
+      }));
+      console.log('[Events] Raw row details:', JSON.stringify(rawDetails));
 
       const sanitizedEvents: Event[] = [];
       for (const event of rows) {
@@ -175,6 +183,8 @@ export default function EventsScreen() {
       }
 
       console.log('[Events] Final sanitized events count:', sanitizedEvents.length);
+      console.log('[Events] Sanitized event ids:', sanitizedEvents.map(e => e.id));
+      console.log('[Events] Skipped count:', rows.length - sanitizedEvents.length);
       return sanitizedEvents;
     },
   });
