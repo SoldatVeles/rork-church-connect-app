@@ -17,6 +17,7 @@ import { useAuth } from '@/providers/auth-provider';
 import { useChurch } from '@/providers/church-provider';
 import { isAdmin as checkIsAdmin } from '@/utils/permissions';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { Colors, Shadow, Radius, Spacing } from '@/constants/theme';
 
 interface NotificationDropdownProps {
   visible: boolean;
@@ -420,7 +421,6 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
 };
 
 const styles = StyleSheet.create({
-  // Web styles
   webOverlay: {
     position: 'absolute',
     top: 0,
@@ -431,13 +431,9 @@ const styles = StyleSheet.create({
   },
   webDropdown: {
     position: 'absolute',
-    backgroundColor: 'white',
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.xl,
+    ...Shadow.lg,
     width: 360,
     maxHeight: 480,
     zIndex: 999,
@@ -446,72 +442,72 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    padding: Spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: Colors.border,
   },
   dropdownTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#1e293b',
+    fontWeight: '600' as const,
+    color: Colors.textSecondary,
   },
   notificationsList: {
     maxHeight: 400,
   },
   notificationItem: {
     flexDirection: 'row',
-    padding: 12,
+    padding: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    borderBottomColor: Colors.borderLight,
   },
   unreadNotification: {
-    backgroundColor: '#eff6ff',
+    backgroundColor: Colors.infoLight,
   },
   notificationIcon: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: '#f3f4f6',
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.surfaceSecondary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: Spacing.md,
   },
   notificationContent: {
     flex: 1,
   },
   notificationTitle: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#1e293b',
+    fontWeight: '500' as const,
+    color: Colors.textSecondary,
     marginBottom: 4,
   },
   unreadText: {
-    fontWeight: '600',
+    fontWeight: '600' as const,
   },
   notificationMessage: {
     fontSize: 13,
-    color: '#64748b',
+    color: Colors.textMuted,
     marginBottom: 4,
     lineHeight: 18,
   },
   notificationTime: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: Colors.textPlaceholder,
   },
   itemDeleteButton: {
     padding: 6,
     alignSelf: 'center',
   },
   viewAllButton: {
-    padding: 16,
+    padding: Spacing.lg,
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+    borderTopColor: Colors.border,
   },
   viewAllText: {
     fontSize: 14,
-    color: '#3b82f6',
-    fontWeight: '500',
+    color: Colors.info,
+    fontWeight: '500' as const,
   },
   loadingContainer: {
     padding: 40,
@@ -525,11 +521,9 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: '#94a3b8',
-    marginTop: 12,
+    color: Colors.textPlaceholder,
+    marginTop: Spacing.md,
   },
-
-  // Mobile Modal styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -539,7 +533,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalContent: {
-    backgroundColor: 'white',
+    backgroundColor: Colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '80%',
@@ -549,19 +543,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    padding: Spacing.xl,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: Colors.border,
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: '600',
-    color: '#1e293b',
+    fontWeight: '600' as const,
+    color: Colors.textSecondary,
   },
   modalHeaderActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: Spacing.md,
   },
   markAllButton: {
     padding: 4,
@@ -569,16 +563,16 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    gap: 12,
+    gap: Spacing.md,
   },
   modalNotificationsList: {
     flex: 1,
   },
   modalNotificationItem: {
     flexDirection: 'row',
-    padding: 16,
+    padding: Spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    borderBottomColor: Colors.borderLight,
   },
 });
 

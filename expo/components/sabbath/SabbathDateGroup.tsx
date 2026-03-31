@@ -4,6 +4,7 @@ import { Calendar, Church, ChevronRight, UserPlus, CheckCircle, XCircle } from '
 import type { SabbathDateGroup as SabbathDateGroupType, SabbathWithGroup } from '@/types/sabbath';
 import { isPublishedSabbath, isCancelledSabbath } from '@/utils/sabbath';
 import { trpc } from '@/lib/trpc';
+import { Colors, Shadow, Radius, Spacing } from '@/constants/theme';
 
 import { SabbathStatusBadge } from './SabbathStatusBadge';
 import { SabbathRoleList } from './SabbathRoleList';
@@ -128,30 +129,26 @@ function SwitzerlandSabbathCard({ item, onAttend, onViewDetail, isMutating }: Sw
 
 const styles = StyleSheet.create({
   dateGroup: {
-    marginBottom: 20,
+    marginBottom: Spacing.xl,
   },
   dateGroupHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 10,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
     paddingHorizontal: 4,
   },
   dateGroupLabel: {
     fontSize: 16,
     fontWeight: '700' as const,
-    color: '#1e3a8a',
+    color: Colors.primary,
   },
   swissCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.xl,
+    padding: Spacing.lg,
+    marginBottom: Spacing.md,
+    ...Shadow.sm,
   },
   swissCardHeader: {
     flexDirection: 'row',
@@ -173,51 +170,51 @@ const styles = StyleSheet.create({
   swissChurchName: {
     fontSize: 15,
     fontWeight: '600' as const,
-    color: '#1e293b',
+    color: Colors.textSecondary,
     flex: 1,
   },
   cancelledBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#fef2f2',
-    borderRadius: 10,
+    gap: Spacing.sm,
+    backgroundColor: Colors.dangerLight,
+    borderRadius: Radius.md,
     paddingVertical: 10,
     paddingHorizontal: 14,
-    marginBottom: 10,
+    marginBottom: Spacing.md,
   },
   cancelledText: {
     fontSize: 14,
     fontWeight: '500' as const,
-    color: '#991b1b',
+    color: Colors.dangerDark,
     flex: 1,
   },
   swissAttendButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: Spacing.sm,
     paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1.5,
-    borderColor: '#1e3a8a',
-    backgroundColor: '#eff6ff',
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryLight,
   },
   swissAttendButtonText: {
     fontSize: 14,
     fontWeight: '600' as const,
-    color: '#1e3a8a',
+    color: Colors.primary,
   },
   swissAttendingBadge: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
-    gap: 8,
+    gap: Spacing.sm,
     paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     backgroundColor: '#f0fdf4',
     borderWidth: 1.5,
-    borderColor: '#bbf7d0',
+    borderColor: Colors.successBorder,
   },
   swissAttendingText: {
     fontSize: 14,

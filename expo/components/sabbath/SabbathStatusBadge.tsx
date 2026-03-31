@@ -2,19 +2,20 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { SabbathStatus, SabbathAssignmentStatus } from '@/types/sabbath';
 import { getSabbathStatusLabel, getAssignmentStatusLabel } from '@/utils/sabbath';
+import { Colors, Radius } from '@/constants/theme';
 
 const STATUS_COLORS = {
-  draft: { bg: '#fef3c7', text: '#92400e', border: '#fde68a' },
-  published: { bg: '#dcfce7', text: '#166534', border: '#bbf7d0' },
-  cancelled: { bg: '#fee2e2', text: '#991b1b', border: '#fecaca' },
+  draft: { bg: Colors.warningLight, text: Colors.warningDark, border: Colors.warningBorder },
+  published: { bg: Colors.successLight, text: Colors.successDark, border: Colors.successBorder },
+  cancelled: { bg: Colors.dangerLight, text: Colors.dangerDark, border: Colors.dangerBorder },
 } as const;
 
 const ASSIGNMENT_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  pending: { bg: '#fef9c3', text: '#854d0e' },
-  accepted: { bg: '#dcfce7', text: '#166534' },
-  declined: { bg: '#fee2e2', text: '#991b1b' },
-  replacement_suggested: { bg: '#e0e7ff', text: '#3730a3' },
-  reassigned: { bg: '#f3e8ff', text: '#6b21a8' },
+  pending: { bg: Colors.warningLight, text: Colors.warningDark },
+  accepted: { bg: Colors.successLight, text: Colors.successDark },
+  declined: { bg: Colors.dangerLight, text: Colors.dangerDark },
+  replacement_suggested: { bg: Colors.indigoLight, text: Colors.indigo },
+  reassigned: { bg: Colors.purpleLight, text: Colors.purpleDark },
 };
 
 interface SabbathStatusBadgeProps {
@@ -51,7 +52,7 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     alignSelf: 'flex-start' as const,
   },
@@ -62,10 +63,10 @@ const styles = StyleSheet.create({
   assignmentContainer: {
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 8,
+    borderRadius: Radius.sm,
   },
   assignmentText: {
     fontSize: 10,
-    fontWeight: '500' as const,
+    fontWeight: '600' as const,
   },
 });

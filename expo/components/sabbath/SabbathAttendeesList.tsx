@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Users } from 'lucide-react-native';
 import type { SabbathAttendance } from '@/types/sabbath';
+import { Colors, Shadow, Radius, Spacing } from '@/constants/theme';
 
 interface SabbathAttendeesListProps {
   attendance: SabbathAttendance[];
@@ -37,15 +38,11 @@ export function SabbathAttendeesList({ attendance, attendingCount }: SabbathAtte
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.xl,
+    padding: Spacing.xl,
+    marginBottom: Spacing.md,
+    ...Shadow.sm,
   },
   header: {
     flexDirection: 'row',
@@ -56,11 +53,11 @@ const styles = StyleSheet.create({
   sectionHeading: {
     fontSize: 15,
     fontWeight: '700' as const,
-    color: '#334155',
+    color: Colors.textTertiary,
   },
   emptyText: {
     fontSize: 14,
-    color: '#94a3b8',
+    color: Colors.textPlaceholder,
     fontStyle: 'italic' as const,
     marginTop: 4,
   },
@@ -74,18 +71,18 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#e0e7ff',
+    backgroundColor: Colors.indigoLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   initial: {
     fontSize: 14,
     fontWeight: '700' as const,
-    color: '#3730a3',
+    color: Colors.indigo,
   },
   name: {
     fontSize: 14,
     fontWeight: '500' as const,
-    color: '#1e293b',
+    color: Colors.textSecondary,
   },
 });

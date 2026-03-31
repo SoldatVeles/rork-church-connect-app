@@ -4,6 +4,7 @@ import { UserCheck, UserX, RefreshCw } from 'lucide-react-native';
 import type { SabbathAssignment } from '@/types/sabbath';
 import { getSabbathRoleLabel } from '@/utils/sabbath';
 import { AssignmentStatusBadge } from './SabbathStatusBadge';
+import { Colors, Shadow, Radius, Spacing } from '@/constants/theme';
 
 interface SabbathAssignmentActionsProps {
   myAssignment: SabbathAssignment;
@@ -77,27 +78,23 @@ export function SabbathAssignmentActions({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.xl,
+    padding: Spacing.xl,
+    marginBottom: Spacing.md,
+    ...Shadow.sm,
   },
   sectionHeading: {
     fontSize: 15,
     fontWeight: '700' as const,
-    color: '#334155',
-    marginBottom: 8,
+    color: Colors.textTertiary,
+    marginBottom: Spacing.sm,
   },
   roleText: {
     fontSize: 16,
     fontWeight: '600' as const,
-    color: '#1e293b',
-    marginBottom: 8,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.sm,
   },
   actions: {
     flexDirection: 'row',
@@ -110,9 +107,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#166534',
+    backgroundColor: Colors.successDark,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: Radius.md,
   },
   acceptButtonText: {
     fontSize: 14,
@@ -125,14 +122,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#fee2e2',
+    backgroundColor: Colors.dangerLight,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: Radius.md,
   },
   declineButtonText: {
     fontSize: 14,
     fontWeight: '600' as const,
-    color: '#991b1b',
+    color: Colors.dangerDark,
   },
   suggestButton: {
     flexDirection: 'row',
@@ -140,15 +137,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1.5,
-    borderColor: '#1e3a8a',
-    backgroundColor: '#eff6ff',
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryLight,
     marginTop: 10,
   },
   suggestButtonText: {
     fontSize: 14,
     fontWeight: '600' as const,
-    color: '#1e3a8a',
+    color: Colors.primary,
   },
 });

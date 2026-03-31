@@ -4,6 +4,7 @@ import type { SabbathAssignment, SabbathRole } from '@/types/sabbath';
 import { ALL_ROLES } from '@/types/sabbath';
 import { getSabbathRoleLabel } from '@/utils/sabbath';
 import { AssignmentStatusBadge } from './SabbathStatusBadge';
+import { Colors, Shadow, Radius, Spacing } from '@/constants/theme';
 
 interface RoleRowProps {
   role: SabbathRole;
@@ -67,21 +68,17 @@ export function SabbathRoleList({ assignments, compact }: SabbathRoleListProps) 
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.xl,
+    padding: Spacing.xl,
+    marginBottom: Spacing.md,
+    ...Shadow.sm,
   },
   sectionHeading: {
     fontSize: 15,
     fontWeight: '700' as const,
-    color: '#334155',
-    marginBottom: 8,
+    color: Colors.textTertiary,
+    marginBottom: Spacing.sm,
   },
   row: {
     flexDirection: 'row',
@@ -89,16 +86,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: Colors.border,
   },
   left: {
     flex: 1,
-    marginRight: 12,
+    marginRight: Spacing.md,
   },
   roleLabel: {
     fontSize: 12,
     fontWeight: '600' as const,
-    color: '#64748b',
+    color: Colors.textMuted,
     textTransform: 'uppercase' as const,
     letterSpacing: 0.5,
     marginBottom: 2,
@@ -106,14 +103,14 @@ const styles = StyleSheet.create({
   assignee: {
     fontSize: 15,
     fontWeight: '500' as const,
-    color: '#1e293b',
+    color: Colors.textSecondary,
   },
   unassigned: {
-    color: '#94a3b8',
+    color: Colors.textPlaceholder,
     fontStyle: 'italic' as const,
   },
   compactContainer: {
-    marginBottom: 12,
+    marginBottom: Spacing.md,
   },
   compactRow: {
     flexDirection: 'row',
@@ -121,18 +118,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: Colors.borderLight,
   },
   compactRoleLabel: {
     fontSize: 12,
     fontWeight: '600' as const,
-    color: '#64748b',
+    color: Colors.textMuted,
     textTransform: 'uppercase' as const,
     letterSpacing: 0.3,
   },
   compactAssignee: {
     fontSize: 14,
     fontWeight: '500' as const,
-    color: '#1e293b',
+    color: Colors.textSecondary,
   },
 });

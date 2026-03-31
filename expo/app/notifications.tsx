@@ -7,6 +7,7 @@ import { useAuth } from '@/providers/auth-provider';
 import { useChurch } from '@/providers/church-provider';
 import { isAdmin as checkIsAdmin } from '@/utils/permissions';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { Colors, Spacing } from '@/constants/theme';
 
 interface AppNotification {
   id: string;
@@ -189,35 +190,35 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
+  container: { flex: 1, backgroundColor: Colors.background },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-    backgroundColor: 'white',
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.surface,
   },
-  title: { fontSize: 20, fontWeight: '700', color: '#0f172a' },
+  title: { fontSize: 20, fontWeight: '700' as const, color: Colors.textPrimary },
   clearBtn: { padding: 6 },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: Spacing.md,
   },
   list: { flex: 1 },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
     paddingVertical: 14,
-    backgroundColor: 'white',
+    backgroundColor: Colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    borderBottomColor: Colors.borderLight,
   },
   content: { flex: 1 },
   titleRow: {
@@ -229,20 +230,20 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#3b82f6',
-    marginRight: 8,
+    backgroundColor: Colors.info,
+    marginRight: Spacing.sm,
   },
   unreadItem: {
-    backgroundColor: '#eff6ff',
+    backgroundColor: Colors.infoLight,
   },
   unreadTitle: {
     fontWeight: '700' as const,
   },
-  itemTitle: { fontSize: 14, fontWeight: '600' as const, color: '#111827' },
-  itemBody: { fontSize: 13, color: '#4b5563', marginBottom: 4, lineHeight: 18 },
-  itemTime: { fontSize: 12, color: '#9ca3af' },
+  itemTitle: { fontSize: 14, fontWeight: '600' as const, color: Colors.textPrimary },
+  itemBody: { fontSize: 13, color: Colors.textTertiary, marginBottom: 4, lineHeight: 18 },
+  itemTime: { fontSize: 12, color: Colors.textPlaceholder },
   itemDeleteButton: { padding: 6, alignSelf: 'center' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
-  emptyText: { fontSize: 14, color: '#94a3b8', marginTop: 12 },
-  errorText: { fontSize: 14, color: '#ef4444' },
+  emptyText: { fontSize: 14, color: Colors.textPlaceholder, marginTop: 12 },
+  errorText: { fontSize: 14, color: Colors.danger },
 });
