@@ -54,12 +54,8 @@ export default function CommunityScreen() {
       }
 
       if (!currentChurchId) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (error) throw new Error(error.message);
-        return data || [];
+        console.log('[Community] Non-admin user has no church selected, returning empty');
+        return [];
       }
 
       const { data: memberLinks, error: linkError } = await supabase

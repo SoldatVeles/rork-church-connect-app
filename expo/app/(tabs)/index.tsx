@@ -286,11 +286,8 @@ export default function HomeScreen() {
       }
 
       if (!currentChurchId) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*');
-        if (error) throw new Error(error.message);
-        return data || [];
+        console.log('[Home] Non-admin user has no church selected, returning empty members');
+        return [];
       }
 
       const { data: memberLinks, error: linkError } = await supabase
