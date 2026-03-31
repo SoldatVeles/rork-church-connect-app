@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -30,6 +30,7 @@ import { trpc } from '@/lib/trpc';
 import { supabase } from '@/lib/supabase';
 import type { Sabbath, SabbathStatus } from '@/types/sabbath';
 import { STATUS_LABELS } from '@/types/sabbath';
+import { getNextUnplannedSaturday } from '@/utils/sabbath';
 
 function getNextSaturday(): Date {
   const now = new Date();
@@ -205,14 +206,28 @@ export default function SabbathPlannerScreen() {
 
   const upcomingSaturdays = useMemo(() => getUpcomingSaturdays(8), []);
 
-  const existingDates = useMemo(() => {
-    if (!effectiveGroupId) return new Set<string>();
-    return new Set(
-      sabbaths
-        .filter((s) => s.group_id === effectiveGroupId)
-        .map((s) => s.sabbath_date)
-    );
+  const groupSabbathDates = useMemo(() => {
+    if (!effectiveGroupId) return [] as string[];
+    return sabbaths
+      .filter((s) => s.group_id === effectiveGroupId)
+      .map((s) => s.sabbath_date);
   }, [sabbaths, effectiveGroupId]);
+
+  const existingDates = useMemo(() => new Set(groupSabbathDates), [groupSabbathDates]);
+
+  useEffect(() => {
+    if (showCreateModal && effectiveGroupId) {
+      const suggested = getNextUnplannedSaturday(groupSabbathDates);
+      const key = formatDateKey(suggested);
+      const isInUpcoming = upcomingSaturdays.some((s) => formatDateKey(s) === key);
+      if (isInUpcoming && !existingDates.has(key)) {
+        setSelectedDate(key);
+      } else {
+        const firstAvailable = upcomingSaturdays.find((s) => !existingDates.has(formatDateKey(s)));
+        setSelectedDate(firstAvailable ? formatDateKey(firstAvailable) : null);
+      }
+    }
+  }, [showCreateModal, effectiveGroupId, groupSabbathDates, existingDates, upcomingSaturdays]);
 
   const filters: { key: FilterType; label: string }[] = [
     { key: 'upcoming', label: 'Upcoming' },
