@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
 import React, { useMemo } from 'react';
 import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Bell, Trash2 } from 'lucide-react-native';
+import { Bell, Trash2, CheckCheck } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
 import { useChurch } from '@/providers/church-provider';
@@ -14,6 +14,7 @@ interface AppNotification {
   title: string;
   body: string | null;
   created_at: string;
+  is_read: boolean;
 }
 
 export default function NotificationsScreen() {
@@ -82,6 +83,49 @@ export default function NotificationsScreen() {
     onSuccess: () => query.refetch(),
   });
 
+  const markReadMutation = useMutation({
+    mutationFn: async (id: string) => {
+      console.log('[Notifications] Marking as read:', id);
+      const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('id', id);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => query.refetch(),
+  });
+
+  const markAllRead = useMutation({
+    mutationFn: async () => {
+      if (!user?.id) return;
+      console.log('[Notifications] Marking all as read');
+      if (userIsAdmin) {
+        const { error } = await supabase
+          .from('notifications')
+          .update({ is_read: true })
+          .eq('is_read', false);
+        if (error) throw new Error(error.message);
+      } else {
+        const { error: errDirect } = await supabase
+          .from('notifications')
+          .update({ is_read: true })
+          .eq('user_id', user.id)
+          .eq('is_read', false);
+        if (errDirect) throw new Error(errDirect.message);
+        if (currentChurchId) {
+          const { error: errGroup } = await supabase
+            .from('notifications')
+            .update({ is_read: true })
+            .eq('group_id', currentChurchId)
+            .is('user_id', null)
+            .eq('is_read', false);
+          if (errGroup) throw new Error(errGroup.message);
+        }
+      }
+    },
+    onSuccess: () => query.refetch(),
+  });
+
   const notifications = useMemo(() => query.data ?? [], [query.data]);
 
   return (
@@ -90,9 +134,16 @@ export default function NotificationsScreen() {
       <View style={styles.headerRow}>
         <Text style={styles.title}>Notifications</Text>
         {notifications.length > 0 && (
-          <TouchableOpacity onPress={() => clearAll.mutate()} style={styles.clearBtn} accessibilityRole="button" testID="clear-all-notifications-page">
-            <Trash2 size={20} color="#ef4444" />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            {notifications.some(n => !n.is_read) && (
+              <TouchableOpacity onPress={() => markAllRead.mutate()} style={styles.clearBtn} accessibilityRole="button" testID="mark-all-read-notifications-page">
+                <CheckCheck size={20} color="#3b82f6" />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity onPress={() => clearAll.mutate()} style={styles.clearBtn} accessibilityRole="button" testID="clear-all-notifications-page">
+              <Trash2 size={20} color="#ef4444" />
+            </TouchableOpacity>
+          </View>
         )}
       </View>
 
@@ -112,16 +163,24 @@ export default function NotificationsScreen() {
       ) : (
         <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
           {notifications.map((n) => (
-            <View key={n.id} style={styles.item}>
+            <TouchableOpacity
+              key={n.id}
+              style={[styles.item, !n.is_read && styles.unreadItem]}
+              onPress={() => { if (!n.is_read) markReadMutation.mutate(n.id); }}
+              activeOpacity={0.7}
+            >
               <View style={styles.content}>
-                <Text style={styles.itemTitle}>{n.title}</Text>
+                <View style={styles.titleRow}>
+                  {!n.is_read && <View style={styles.unreadDot} />}
+                  <Text style={[styles.itemTitle, !n.is_read && styles.unreadTitle]}>{n.title}</Text>
+                </View>
                 {n.body ? <Text style={styles.itemBody}>{n.body}</Text> : null}
                 <Text style={styles.itemTime}>{new Date(n.created_at).toLocaleString()}</Text>
               </View>
               <TouchableOpacity onPress={() => deleteOne.mutate(n.id)} style={styles.itemDeleteButton} accessibilityRole="button" testID={`delete-notification-${n.id}`}>
                 <Trash2 size={18} color="#9ca3af" />
               </TouchableOpacity>
-            </View>
+            </TouchableOpacity>
           ))}
         </ScrollView>
       )}
@@ -144,6 +203,11 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 20, fontWeight: '700', color: '#0f172a' },
   clearBtn: { padding: 6 },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   list: { flex: 1 },
   item: {
     flexDirection: 'row',
@@ -156,7 +220,25 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f3f4f6',
   },
   content: { flex: 1 },
-  itemTitle: { fontSize: 14, fontWeight: '600', color: '#111827', marginBottom: 4 },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#3b82f6',
+    marginRight: 8,
+  },
+  unreadItem: {
+    backgroundColor: '#eff6ff',
+  },
+  unreadTitle: {
+    fontWeight: '700' as const,
+  },
+  itemTitle: { fontSize: 14, fontWeight: '600' as const, color: '#111827' },
   itemBody: { fontSize: 13, color: '#4b5563', marginBottom: 4, lineHeight: 18 },
   itemTime: { fontSize: 12, color: '#9ca3af' },
   itemDeleteButton: { padding: 6, alignSelf: 'center' },

@@ -10,7 +10,7 @@ import {
   Dimensions,
   ActivityIndicator,
 } from 'react-native';
-import { Bell, Calendar, Heart, MessageCircle, X, Trash2, BookOpen } from 'lucide-react-native';
+import { Bell, Calendar, Heart, MessageCircle, X, Trash2, BookOpen, CheckCheck } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
@@ -63,7 +63,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
         type: notification.type,
         title: notification.title,
         message: notification.body || '',
-        isRead: false,
+        isRead: !!notification.is_read,
         createdAt: new Date(notification.created_at),
       }));
     },
@@ -72,7 +72,45 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   
   const markReadMutation = useMutation({
     mutationFn: async (data: { id: string }) => {
-      console.log('Mark read not implemented yet:', data.id);
+      console.log('[NotificationDropdown] Marking notification as read:', data.id);
+      const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('id', data.id);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      void notificationsQuery.refetch();
+    },
+  });
+
+  const markAllReadMutation = useMutation({
+    mutationFn: async () => {
+      if (!user?.id) return;
+      console.log('[NotificationDropdown] Marking all as read for user:', user.id);
+      if (userIsAdmin) {
+        const { error } = await supabase
+          .from('notifications')
+          .update({ is_read: true })
+          .eq('is_read', false);
+        if (error) throw new Error(error.message);
+      } else {
+        const { error: errDirect } = await supabase
+          .from('notifications')
+          .update({ is_read: true })
+          .eq('user_id', user.id)
+          .eq('is_read', false);
+        if (errDirect) throw new Error(errDirect.message);
+        if (currentChurchId) {
+          const { error: errGroup } = await supabase
+            .from('notifications')
+            .update({ is_read: true })
+            .eq('group_id', currentChurchId)
+            .is('user_id', null)
+            .eq('is_read', false);
+          if (errGroup) throw new Error(errGroup.message);
+        }
+      }
     },
     onSuccess: () => {
       void notificationsQuery.refetch();
@@ -212,9 +250,16 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
           <View style={styles.dropdownHeader}>
             <Text style={styles.dropdownTitle}>Notifications</Text>
             {notifications.length > 0 && (
-              <TouchableOpacity onPress={() => clearAllMutation.mutate()} accessibilityRole="button" testID="clear-all-notifications">
-                <Trash2 size={20} color="#ef4444" />
-              </TouchableOpacity>
+              <View style={styles.headerActions}>
+                {notifications.some(n => !n.isRead) && (
+                  <TouchableOpacity onPress={() => markAllReadMutation.mutate()} accessibilityRole="button" testID="mark-all-read-notifications">
+                    <CheckCheck size={20} color="#3b82f6" />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={() => clearAllMutation.mutate()} accessibilityRole="button" testID="clear-all-notifications">
+                  <Trash2 size={20} color="#ef4444" />
+                </TouchableOpacity>
+              </View>
             )}
           </View>
 
@@ -299,9 +344,16 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
             <Text style={styles.modalTitle}>Notifications</Text>
             <View style={styles.modalHeaderActions}>
               {notifications.length > 0 && (
-                <TouchableOpacity onPress={() => clearAllMutation.mutate()} style={styles.markAllButton}>
-                  <Trash2 size={20} color="#ef4444" />
-                </TouchableOpacity>
+                <View style={styles.headerActions}>
+                  {notifications.some(n => !n.isRead) && (
+                    <TouchableOpacity onPress={() => markAllReadMutation.mutate()} style={styles.markAllButton}>
+                      <CheckCheck size={20} color="#3b82f6" />
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity onPress={() => clearAllMutation.mutate()} style={styles.markAllButton}>
+                    <Trash2 size={20} color="#ef4444" />
+                  </TouchableOpacity>
+                </View>
               )}
               <TouchableOpacity onPress={onClose}>
                 <X size={24} color="#6b7280" />
@@ -513,6 +565,11 @@ const styles = StyleSheet.create({
   },
   markAllButton: {
     padding: 4,
+  },
+  headerActions: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
   },
   modalNotificationsList: {
     flex: 1,
