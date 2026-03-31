@@ -19,7 +19,9 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Modal,
 } from 'react-native';
+import { Users, ChevronDown, RefreshCw } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/providers/auth-provider';
@@ -336,9 +338,20 @@ export default function SabbathScreen() {
     },
   });
 
+  const [showSuggestModal, setShowSuggestModal] = useState(false);
+  const [suggestingAssignmentId, setSuggestingAssignmentId] = useState<string | null>(null);
+
+  const suggestGroupedMembersQuery = trpc.sabbaths.getAllMembersGrouped.useQuery(
+    { primaryGroupId: myChurchQuery.data?.sabbath?.group_id ?? '' },
+    { enabled: !!myChurchQuery.data?.sabbath?.group_id && showSuggestModal }
+  );
+  const suggestGroupedMembers = useMemo(() => suggestGroupedMembersQuery.data ?? [], [suggestGroupedMembersQuery.data]);
+
   const suggestReplacementMutation = trpc.sabbaths.suggestReplacement.useMutation({
     onSuccess: () => {
       console.log('[Sabbath] Replacement suggested');
+      setShowSuggestModal(false);
+      setSuggestingAssignmentId(null);
       void sabbathDetailQuery.refetch();
       Alert.alert('Sent', 'Your replacement suggestion has been submitted to the church leaders.');
     },
@@ -382,24 +395,18 @@ export default function SabbathScreen() {
     ]);
   }, [declineMutation]);
 
-  const handleSuggestReplacement = useCallback((_assignmentId: string) => {
-    Alert.alert(
-      'Suggest Replacement',
-      'This will notify your church leaders that you would like to suggest a replacement for your assignment. A leader will follow up with you.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Notify Leaders',
-          onPress: () => {
-            Alert.alert(
-              'Coming Soon',
-              'The replacement suggestion flow with user selection is being built. Please contact your church leader directly for now.'
-            );
-          },
-        },
-      ]
-    );
+  const handleSuggestReplacement = useCallback((assignmentId: string) => {
+    setSuggestingAssignmentId(assignmentId);
+    setShowSuggestModal(true);
   }, []);
+
+  const handleConfirmSuggestReplacement = useCallback((suggestedUserId: string) => {
+    if (!suggestingAssignmentId) return;
+    suggestReplacementMutation.mutate({
+      assignmentId: suggestingAssignmentId,
+      suggestedUserId,
+    });
+  }, [suggestingAssignmentId, suggestReplacementMutation]);
 
   const handleViewDetail = useCallback((sabbathId: string) => {
     router.push({ pathname: '/sabbath-detail' as any, params: { sabbathId } });
@@ -470,6 +477,79 @@ export default function SabbathScreen() {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      <Modal visible={showSuggestModal} animationType="slide" transparent>
+        <View style={styles.suggestModalOverlay}>
+          <View style={styles.suggestModalContainer}>
+            <View style={styles.suggestModalHandle} />
+            <View style={styles.suggestModalHeader}>
+              <RefreshCw size={20} color="#1e3a8a" />
+              <Text style={styles.suggestModalTitle}>Suggest Replacement</Text>
+            </View>
+            <Text style={styles.suggestModalSubtitle}>
+              Select a member to suggest as your replacement. A church leader will review and approve.
+            </Text>
+            <ScrollView style={styles.suggestMembersList} showsVerticalScrollIndicator={false}>
+              {suggestGroupedMembers.length === 0 ? (
+                <View style={styles.suggestEmptyMembers}>
+                  {suggestGroupedMembersQuery.isLoading ? (
+                    <ActivityIndicator size="large" color="#1e3a8a" />
+                  ) : (
+                    <>
+                      <Users size={32} color="#cbd5e1" />
+                      <Text style={styles.suggestEmptyText}>No members found</Text>
+                    </>
+                  )}
+                </View>
+              ) : (
+                suggestGroupedMembers.map((section) => (
+                  <View key={section.groupId}>
+                    <View style={styles.suggestGroupHeader}>
+                      <View style={[
+                        styles.suggestGroupDot,
+                        section.groupId === myChurchQuery.data?.sabbath?.group_id && styles.suggestGroupDotPrimary,
+                      ]} />
+                      <Text style={[
+                        styles.suggestGroupName,
+                        section.groupId === myChurchQuery.data?.sabbath?.group_id && styles.suggestGroupNamePrimary,
+                      ]}>
+                        {section.groupName}
+                      </Text>
+                    </View>
+                    {section.members
+                      .filter((m) => m.id !== user?.id)
+                      .map((m) => (
+                        <TouchableOpacity
+                          key={m.id}
+                          style={styles.suggestMemberItem}
+                          onPress={() => handleConfirmSuggestReplacement(m.id)}
+                          disabled={suggestReplacementMutation.isPending}
+                        >
+                          <View style={styles.suggestMemberAvatar}>
+                            <Text style={styles.suggestMemberAvatarText}>
+                              {m.name.charAt(0).toUpperCase()}
+                            </Text>
+                          </View>
+                          <Text style={styles.suggestMemberName}>{m.name}</Text>
+                          <ChevronDown size={16} color="#94a3b8" style={{ transform: [{ rotate: '-90deg' }] }} />
+                        </TouchableOpacity>
+                      ))}
+                  </View>
+                ))
+              )}
+            </ScrollView>
+            <TouchableOpacity
+              style={styles.suggestCancelBtn}
+              onPress={() => {
+                setShowSuggestModal(false);
+                setSuggestingAssignmentId(null);
+              }}
+            >
+              <Text style={styles.suggestCancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -610,5 +690,123 @@ const styles = StyleSheet.create({
     fontWeight: '500' as const,
     color: '#991b1b',
     flex: 1,
+  },
+  suggestModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end' as const,
+  },
+  suggestModalContainer: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 34,
+    maxHeight: '80%' as any,
+  },
+  suggestModalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#d1d5db',
+    alignSelf: 'center' as const,
+    marginBottom: 16,
+  },
+  suggestModalHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+    marginBottom: 6,
+  },
+  suggestModalTitle: {
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: '#0f172a',
+  },
+  suggestModalSubtitle: {
+    fontSize: 13,
+    color: '#64748b',
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  suggestMembersList: {
+    maxHeight: 400,
+  },
+  suggestEmptyMembers: {
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    paddingVertical: 40,
+    gap: 12,
+  },
+  suggestEmptyText: {
+    fontSize: 14,
+    color: '#94a3b8',
+  },
+  suggestGroupHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+  },
+  suggestGroupDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#94a3b8',
+  },
+  suggestGroupDotPrimary: {
+    backgroundColor: '#1e3a8a',
+  },
+  suggestGroupName: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: '#64748b',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+  },
+  suggestGroupNamePrimary: {
+    color: '#1e3a8a',
+  },
+  suggestMemberItem: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  suggestMemberAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#e0e7ff',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    marginRight: 12,
+  },
+  suggestMemberAvatarText: {
+    fontSize: 15,
+    fontWeight: '700' as const,
+    color: '#3730a3',
+  },
+  suggestMemberName: {
+    fontSize: 15,
+    fontWeight: '500' as const,
+    color: '#1e293b',
+    flex: 1,
+  },
+  suggestCancelBtn: {
+    alignItems: 'center' as const,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9',
+    marginTop: 12,
+  },
+  suggestCancelBtnText: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: '#64748b',
   },
 });
