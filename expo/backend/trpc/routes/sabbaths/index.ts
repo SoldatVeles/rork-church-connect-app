@@ -86,6 +86,10 @@ async function checkIsChurchPastor(
   return !error && !!data;
 }
 
+// Sabbath management is allowed for:
+// - admin: globally, for any group
+// - users listed in group_pastors for the target group (any role)
+// - church_leader: only for their own home_group_id group
 async function checkCanManageSabbath(
   supabase: SupabaseAny,
   userId: string,
@@ -107,7 +111,7 @@ async function requireCanManageSabbath(
   const canManage = await checkCanManageSabbath(supabase, userId, groupId);
   if (!canManage) {
     throw new Error(
-      "Only admins or pastors of this church can manage Sabbaths"
+      "Only admins, pastors, or church leaders for this church can manage Sabbaths"
     );
   }
 }
