@@ -71,11 +71,6 @@ async function getUserProfile(supabase: SupabaseAny, userId: string) {
   };
 }
 
-async function checkIsChurchLeaderOrAbove(supabase: SupabaseAny, userId: string): Promise<boolean> {
-  const profile = await getUserProfile(supabase, userId);
-  return profile.role === "admin" || profile.role === "church_leader";
-}
-
 async function checkIsChurchPastor(
   supabase: SupabaseAny,
   userId: string,
@@ -96,9 +91,12 @@ async function checkCanManageSabbath(
   userId: string,
   groupId: string
 ): Promise<boolean> {
-  const isAdminOrLeader = await checkIsChurchLeaderOrAbove(supabase, userId);
-  if (isAdminOrLeader) return true;
-  return checkIsChurchPastor(supabase, userId, groupId);
+  const profile = await getUserProfile(supabase, userId);
+  if (profile.role === "admin") return true;
+  const isPastor = await checkIsChurchPastor(supabase, userId, groupId);
+  if (isPastor) return true;
+  if (profile.role === "church_leader" && profile.home_group_id === groupId) return true;
+  return false;
 }
 
 async function requireCanManageSabbath(
@@ -1527,7 +1525,8 @@ const getAllMembersGrouped = publicProcedure
 
 const getMyPastorGroups = publicProcedure.query(async ({ ctx }) => {
   const user = await getAuthenticatedUser(ctx);
-  console.log("[sabbaths.getMyPastorGroups] Fetching for user:", user.id);
+  const profile = await getUserProfile(ctx.supabase, user.id);
+  console.log("[sabbaths.getMyPastorGroups] Fetching for user:", user.id, "role:", profile.role, "home_group_id:", profile.home_group_id);
 
   const { data, error } = await db(ctx.supabase)
     .from("group_pastors")
@@ -1539,8 +1538,22 @@ const getMyPastorGroups = publicProcedure.query(async ({ ctx }) => {
     return [] as Array<{ id: string; group_id: string; user_id: string }>;
   }
 
-  console.log("[sabbaths.getMyPastorGroups] Found", (data || []).length, "pastor groups");
-  return (data || []) as Array<{ id: string; group_id: string; user_id: string }>;
+  const results = (data || []) as Array<{ id: string; group_id: string; user_id: string }>;
+
+  if (profile.role === "church_leader" && profile.home_group_id) {
+    const alreadyIncluded = results.some((r) => r.group_id === profile.home_group_id);
+    if (!alreadyIncluded) {
+      console.log("[sabbaths.getMyPastorGroups] Adding church_leader home group:", profile.home_group_id);
+      results.push({
+        id: `home-${profile.home_group_id}`,
+        group_id: profile.home_group_id,
+        user_id: user.id,
+      });
+    }
+  }
+
+  console.log("[sabbaths.getMyPastorGroups] Returning", results.length, "managed groups");
+  return results;
 });
 
 // ─── ROUTER ────────────────────────────────────────────────
