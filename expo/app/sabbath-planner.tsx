@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   TextInput,
   Modal,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { Stack, router } from 'expo-router';
 import {
@@ -17,6 +18,7 @@ import {
   Plus,
   Calendar,
   ChevronRight,
+  ChevronsRight,
   Sun,
   Users,
 } from 'lucide-react-native';
@@ -204,7 +206,22 @@ export default function SabbathPlannerScreen() {
     }
   }, [selectedDate, effectiveGroupId, notes, createSabbathMutation]);
 
-  const upcomingSaturdays = useMemo(() => getUpcomingSaturdays(8), []);
+  const upcomingSaturdays = useMemo(() => getUpcomingSaturdays(12), []);
+  const dateScrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    if (showCreateModal && selectedDate && dateScrollRef.current) {
+      const idx = upcomingSaturdays.findIndex((s) => formatDateKey(s) === selectedDate);
+      if (idx > 0) {
+        const chipWidth = 62;
+        const chipGap = 8;
+        const offset = Math.max(0, idx * (chipWidth + chipGap) - 30);
+        setTimeout(() => {
+          dateScrollRef.current?.scrollTo({ x: offset, animated: true });
+        }, 150);
+      }
+    }
+  }, [showCreateModal, selectedDate, upcomingSaturdays]);
 
   const groupSabbathDates = useMemo(() => {
     if (!effectiveGroupId) return [] as string[];
@@ -401,54 +418,80 @@ export default function SabbathPlannerScreen() {
             )}
 
             <View style={styles.formSection}>
-              <Text style={styles.formLabel}>Select Saturday</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.dateSelector}
-              >
-                {upcomingSaturdays.map((sat) => {
-                  const key = formatDateKey(sat);
-                  const alreadyExists = existingDates.has(key);
-                  const selected = selectedDate === key;
-                  return (
-                    <TouchableOpacity
-                      key={key}
-                      style={[
-                        styles.dateChip,
-                        selected && styles.dateChipSelected,
-                        alreadyExists && styles.dateChipDisabled,
-                      ]}
-                      onPress={() => {
-                        if (!alreadyExists) setSelectedDate(key);
-                      }}
-                      disabled={alreadyExists}
-                    >
-                      <Text
+              <View style={styles.dateLabelRow}>
+                <Text style={styles.formLabel}>Select Saturday</Text>
+                <View style={styles.scrollHint}>
+                  <Text style={styles.scrollHintText}>Swipe for more</Text>
+                  <ChevronsRight size={14} color="#94a3b8" />
+                </View>
+              </View>
+              <View style={styles.dateSelectorWrapper}>
+                <ScrollView
+                  ref={dateScrollRef}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.dateSelector}
+                  contentContainerStyle={styles.dateSelectorContent}
+                >
+                  {upcomingSaturdays.map((sat) => {
+                    const key = formatDateKey(sat);
+                    const alreadyExists = existingDates.has(key);
+                    const selected = selectedDate === key;
+                    return (
+                      <TouchableOpacity
+                        key={key}
                         style={[
-                          styles.dateChipMonth,
-                          selected && styles.dateChipMonthSelected,
-                          alreadyExists && styles.dateChipTextDisabled,
+                          styles.dateChip,
+                          selected && styles.dateChipSelected,
+                          alreadyExists && styles.dateChipDisabled,
                         ]}
+                        onPress={() => {
+                          if (!alreadyExists) setSelectedDate(key);
+                        }}
+                        disabled={alreadyExists}
+                        activeOpacity={0.7}
                       >
-                        {sat.toLocaleDateString('en-US', { month: 'short' })}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.dateChipDay,
-                          selected && styles.dateChipDaySelected,
-                          alreadyExists && styles.dateChipTextDisabled,
-                        ]}
-                      >
-                        {sat.getDate()}
-                      </Text>
-                      {alreadyExists && (
-                        <Text style={styles.dateChipExisting}>Exists</Text>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+                        <Text
+                          style={[
+                            styles.dateChipWeekday,
+                            selected && styles.dateChipWeekdaySelected,
+                            alreadyExists && styles.dateChipTextDisabled,
+                          ]}
+                        >
+                          Sat
+                        </Text>
+                        <Text
+                          style={[
+                            styles.dateChipDay,
+                            selected && styles.dateChipDaySelected,
+                            alreadyExists && styles.dateChipTextDisabled,
+                          ]}
+                        >
+                          {sat.getDate()}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.dateChipMonth,
+                            selected && styles.dateChipMonthSelected,
+                            alreadyExists && styles.dateChipTextDisabled,
+                          ]}
+                        >
+                          {sat.toLocaleDateString('en-US', { month: 'short' })}
+                        </Text>
+                        {alreadyExists && (
+                          <View style={styles.dateChipExistingBadge}>
+                            <Text style={styles.dateChipExisting}>Planned</Text>
+                          </View>
+                        )}
+                        {selected && !alreadyExists && (
+                          <View style={styles.selectedDot} />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+                <View style={styles.fadeMask} pointerEvents="none" />
+              </View>
             </View>
 
             <View style={styles.formSection}>
@@ -721,7 +764,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600' as const,
     color: '#334155',
-    marginBottom: 10,
+    marginBottom: 0,
   },
   groupSelector: {
     flexDirection: 'row' as const,
@@ -747,53 +790,120 @@ const styles = StyleSheet.create({
   groupChipTextActive: {
     color: '#fff',
   },
+  dateLabelRow: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    marginBottom: 10,
+  },
+  scrollHint: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 2,
+  },
+  scrollHintText: {
+    fontSize: 12,
+    color: '#94a3b8',
+    fontWeight: '500' as const,
+  },
+  dateSelectorWrapper: {
+    position: 'relative' as const,
+  },
   dateSelector: {
     flexDirection: 'row' as const,
   },
+  dateSelectorContent: {
+    paddingRight: 28,
+    gap: 8,
+  },
+  fadeMask: {
+    position: 'absolute' as const,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 32,
+    backgroundColor: 'transparent',
+    ...(Platform.OS === 'web'
+      ? { background: 'linear-gradient(to right, rgba(255,255,255,0), rgba(255,255,255,1))' } as any
+      : {}),
+  },
   dateChip: {
-    width: 68,
-    height: 80,
-    borderRadius: 14,
-    backgroundColor: '#f1f5f9',
+    width: 62,
+    height: 88,
+    borderRadius: 16,
+    backgroundColor: '#f8fafc',
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
-    marginRight: 10,
     borderWidth: 2,
     borderColor: '#e2e8f0',
+    paddingVertical: 6,
   },
   dateChipSelected: {
     backgroundColor: '#0f172a',
-    borderColor: '#0f172a',
+    borderColor: '#1e3a5f',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   dateChipDisabled: {
-    opacity: 0.4,
+    opacity: 0.35,
+    backgroundColor: '#f1f5f9',
+  },
+  dateChipWeekday: {
+    fontSize: 10,
+    fontWeight: '600' as const,
+    color: '#94a3b8',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+  },
+  dateChipWeekdaySelected: {
+    color: 'rgba(255,255,255,0.5)',
   },
   dateChipMonth: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600' as const,
     color: '#64748b',
     textTransform: 'uppercase' as const,
+    marginTop: 1,
   },
   dateChipMonthSelected: {
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(255,255,255,0.6)',
   },
   dateChipDay: {
     fontSize: 22,
     fontWeight: '800' as const,
     color: '#0f172a',
-    lineHeight: 28,
+    lineHeight: 26,
   },
   dateChipDaySelected: {
     color: '#fff',
   },
   dateChipTextDisabled: {
-    color: '#94a3b8',
+    color: '#b0b8c4',
+  },
+  dateChipExistingBadge: {
+    position: 'absolute' as const,
+    bottom: -1,
+    left: 0,
+    right: 0,
+    alignItems: 'center' as const,
   },
   dateChipExisting: {
-    fontSize: 9,
-    fontWeight: '600' as const,
-    color: '#94a3b8',
-    marginTop: 2,
+    fontSize: 8,
+    fontWeight: '700' as const,
+    color: '#ef4444',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.3,
+  },
+  selectedDot: {
+    position: 'absolute' as const,
+    bottom: 5,
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: '#fbbf24',
   },
   notesInput: {
     backgroundColor: '#f8fafc',
