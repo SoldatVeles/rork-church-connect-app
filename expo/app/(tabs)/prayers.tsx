@@ -40,11 +40,69 @@ export default function PrayersScreen() {
   const [expandedPrayers, setExpandedPrayers] = useState<Set<string>>(new Set());
 
   const queryClient = useQueryClient();
-  const currentChurchId = currentChurch?.id ?? null;
   const userIsAdmin = isAdmin(user);
 
+  const homeChurchQuery = useQuery({
+    queryKey: ['user-home-church', user?.id],
+    queryFn: async (): Promise<{ id: string; name: string } | null> => {
+      if (!user?.id) return null;
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('home_group_id')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError || !profile) {
+        console.warn('[Prayers] Could not fetch profile home_group_id:', profileError?.message);
+        return null;
+      }
+
+      const homeGroupId = (profile as any).home_group_id as string | null;
+
+      if (homeGroupId) {
+        const { data: group, error: groupError } = await supabase
+          .from('groups')
+          .select('id, name')
+          .eq('id', homeGroupId)
+          .single();
+
+        if (!groupError && group) {
+          console.log('[Prayers] Resolved home church:', group.name);
+          return { id: group.id as string, name: group.name as string };
+        }
+      }
+
+      const { data: memberships, error: memError } = await supabase
+        .from('group_members')
+        .select('group_id')
+        .eq('user_id', user.id)
+        .limit(1);
+
+      if (!memError && memberships && memberships.length > 0) {
+        const gid = (memberships[0] as any).group_id as string;
+        const { data: group } = await supabase
+          .from('groups')
+          .select('id, name')
+          .eq('id', gid)
+          .single();
+        if (group) {
+          console.log('[Prayers] Resolved church from group_members:', group.name);
+          return { id: group.id as string, name: group.name as string };
+        }
+      }
+
+      return null;
+    },
+    enabled: !!user?.id,
+  });
+
+  const userHomeChurch = homeChurchQuery.data ?? null;
+  const effectiveChurchId = userHomeChurch?.id ?? currentChurch?.id ?? null;
+  const effectiveChurchName = userHomeChurch?.name ?? currentChurch?.name ?? null;
+
   const allPrayersQuery = useQuery({
-    queryKey: ['prayers', currentChurchId, userIsAdmin],
+    queryKey: ['prayers', effectiveChurchId, userIsAdmin],
     queryFn: async () => {
       let query = supabase
         .from('prayers')
@@ -54,9 +112,9 @@ export default function PrayersScreen() {
         `)
         .order('created_at', { ascending: false });
 
-      if (!userIsAdmin && currentChurchId) {
-        query = query.or(`group_id.eq.${currentChurchId},is_shared_all_churches.eq.true`);
-      } else if (!userIsAdmin && !currentChurchId) {
+      if (!userIsAdmin && effectiveChurchId) {
+        query = query.or(`group_id.eq.${effectiveChurchId},is_shared_all_churches.eq.true`);
+      } else if (!userIsAdmin && !effectiveChurchId) {
         query = query.or('is_shared_all_churches.eq.true');
       }
 
@@ -173,7 +231,7 @@ export default function PrayersScreen() {
           created_by: prayerData.requestedBy,
           is_anonymous: prayerData.isAnonymous,
           is_answered: false,
-          group_id: currentChurchId,
+          group_id: effectiveChurchId,
           is_shared_all_churches: prayerData.isSharedAllChurches,
         })
         .select()
@@ -364,7 +422,7 @@ export default function PrayersScreen() {
       await queryClient.cancelQueries({ queryKey: ['prayers'] });
       await queryClient.cancelQueries({ queryKey: ['prayer_prayers'] });
 
-      const prevPrayers = queryClient.getQueryData<PrayerRequest[]>(['prayers', currentChurchId]);
+      const prevPrayers = queryClient.getQueryData<PrayerRequest[]>(['prayers', effectiveChurchId]);
       const prevLinks = queryClient.getQueryData<{ prayer_id: string; user_id: string }[]>(['prayer_prayers']);
 
       if (prevPrayers) {
@@ -373,7 +431,7 @@ export default function PrayersScreen() {
             ? { ...p, prayedBy: willPray ? [...(p.prayedBy ?? []), userId] : (p.prayedBy ?? []).filter(id => id !== userId) }
             : p,
         );
-        queryClient.setQueryData(['prayers', currentChurchId], next);
+        queryClient.setQueryData(['prayers', effectiveChurchId], next);
       }
 
       if (prevLinks) {
@@ -387,7 +445,7 @@ export default function PrayersScreen() {
     },
     onError: (err: Error, _vars, ctx) => {
       console.error('[Prayers] Toggle pray failed:', err);
-      if (ctx?.prevPrayers) queryClient.setQueryData(['prayers', currentChurchId], ctx.prevPrayers);
+      if (ctx?.prevPrayers) queryClient.setQueryData(['prayers', effectiveChurchId], ctx.prevPrayers);
       if (ctx?.prevLinks) queryClient.setQueryData(['prayer_prayers'], ctx.prevLinks);
       
       if (err.message.includes('Prayer tracking table not configured')) {
@@ -462,7 +520,7 @@ export default function PrayersScreen() {
       isSharedAllChurches: newPrayer.isSharedAllChurches,
       requestedBy: user.id,
       requestedByName: `${user.firstName} ${user.lastName}`,
-      groupId: currentChurchId,
+      groupId: effectiveChurchId,
     });
     
     createPrayerMutation.mutate({
@@ -487,7 +545,7 @@ export default function PrayersScreen() {
 
   const getScopeBadge = (prayer: PrayerRequest) => {
     if (prayer.isSharedAllChurches) return 'shared';
-    if (prayer.groupId && prayer.groupId !== currentChurchId) return 'other';
+    if (prayer.groupId && prayer.groupId !== effectiveChurchId) return 'other';
     return 'local';
   };
 
@@ -761,11 +819,11 @@ export default function PrayersScreen() {
           </View>
 
           <ScrollView style={styles.modalContent}>
-            {currentChurch && (
+            {effectiveChurchName && (
               <View style={styles.churchContextBanner}>
                 <Church size={14} color="#1e3a8a" />
                 <Text style={styles.churchContextText}>
-                  Posting to: {currentChurch.name}
+                  Posting to: {effectiveChurchName}
                 </Text>
               </View>
             )}
