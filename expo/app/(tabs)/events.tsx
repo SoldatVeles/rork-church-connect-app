@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { Calendar, MapPin, Users, Plus, Clock, AlertCircle, X, CalendarPlus, Globe, Trash2 } from 'lucide-react-native';
+import { Calendar, MapPin, Users, Plus, Clock, AlertCircle, X, CalendarPlus, Globe, Trash2, Church } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   StyleSheet,
@@ -13,6 +13,7 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Switch,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -1033,13 +1034,23 @@ export default function EventsScreen() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent}>
+          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+            {manageableChurches.length === 1 && (
+              <View style={styles.churchContextBanner}>
+                <Church size={14} color={Colors.primary} />
+                <Text style={styles.churchContextText}>
+                  Posting to: {manageableChurches[0].name}
+                </Text>
+              </View>
+            )}
+
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Title</Text>
               <TextInput
                 testID="event-title-input"
                 style={styles.textInput}
-                placeholder="Event title"
+                placeholder="Give your event a name"
+                placeholderTextColor={Colors.textPlaceholder}
                 value={form.title}
                 onChangeText={(text) => setForm(prev => ({ ...prev, title: text }))}
                 maxLength={120}
@@ -1051,80 +1062,13 @@ export default function EventsScreen() {
               <TextInput
                 testID="event-description-input"
                 style={[styles.textInput, styles.textArea]}
-                placeholder="Describe the event"
+                placeholder="Tell people what this event is about..."
+                placeholderTextColor={Colors.textPlaceholder}
                 value={form.description}
                 onChangeText={(text) => setForm(prev => ({ ...prev, description: text }))}
                 multiline
                 numberOfLines={6}
                 textAlignVertical="top"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Start Date</Text>
-              <TouchableOpacity
-                testID="event-start-date-picker"
-                style={styles.dateTimeButton}
-                onPress={() => setShowDatePicker({ field: 'startDate', mode: 'date' })}
-              >
-                <Calendar size={20} color="#64748b" />
-                <Text style={styles.dateTimeButtonText}>
-                  {formatDateDisplay(form.startDate)}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Start Time</Text>
-              <TouchableOpacity
-                testID="event-start-time-picker"
-                style={styles.dateTimeButton}
-                onPress={() => setShowDatePicker({ field: 'startTime', mode: 'time' })}
-              >
-                <Clock size={20} color="#64748b" />
-                <Text style={styles.dateTimeButtonText}>
-                  {formatTimeDisplay(form.startTime)}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>End Date</Text>
-              <TouchableOpacity
-                testID="event-end-date-picker"
-                style={styles.dateTimeButton}
-                onPress={() => setShowDatePicker({ field: 'endDate', mode: 'date' })}
-              >
-                <Calendar size={20} color="#64748b" />
-                <Text style={styles.dateTimeButtonText}>
-                  {formatDateDisplay(form.endDate)}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>End Time</Text>
-              <TouchableOpacity
-                testID="event-end-time-picker"
-                style={styles.dateTimeButton}
-                onPress={() => setShowDatePicker({ field: 'endTime', mode: 'time' })}
-              >
-                <Clock size={20} color="#64748b" />
-                <Text style={styles.dateTimeButtonText}>
-                  {formatTimeDisplay(form.endTime)}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Location</Text>
-              <TextInput
-                testID="event-location-input"
-                style={styles.textInput}
-                placeholder="Where is it?"
-                value={form.location}
-                onChangeText={(text) => setForm(prev => ({ ...prev, location: text }))}
-                maxLength={200}
               />
             </View>
 
@@ -1135,9 +1079,10 @@ export default function EventsScreen() {
                   <TouchableOpacity
                     key={key}
                     testID={`type-${key}`}
-                    style={[styles.typeChip, form.type === key && styles.typeChipActive]}
+                    style={[styles.typeChip, form.type === key && [styles.typeChipActive, { backgroundColor: eventTypeColors[key] }]]}
                     onPress={() => setForm(prev => ({ ...prev, type: key }))}
                   >
+                    <View style={[styles.typeChipDot, { backgroundColor: form.type === key ? 'rgba(255,255,255,0.8)' : eventTypeColors[key] }]} />
                     <Text style={[styles.typeChipText, form.type === key && styles.typeChipTextActive]}>
                       {eventTypeLabels[key]}
                     </Text>
@@ -1146,12 +1091,90 @@ export default function EventsScreen() {
               </View>
             </View>
 
+            <View style={styles.formDivider} />
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.formSectionHeader}>Date & Time</Text>
+              <View style={styles.dateTimeRow}>
+                <View style={styles.dateTimeHalf}>
+                  <Text style={styles.dateTimeSubLabel}>Start Date</Text>
+                  <TouchableOpacity
+                    testID="event-start-date-picker"
+                    style={styles.dateTimeButton}
+                    onPress={() => setShowDatePicker({ field: 'startDate', mode: 'date' })}
+                  >
+                    <Calendar size={16} color={Colors.textMuted} />
+                    <Text style={styles.dateTimeButtonText} numberOfLines={1}>
+                      {formatDateDisplay(form.startDate)}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.dateTimeHalf}>
+                  <Text style={styles.dateTimeSubLabel}>Start Time</Text>
+                  <TouchableOpacity
+                    testID="event-start-time-picker"
+                    style={styles.dateTimeButton}
+                    onPress={() => setShowDatePicker({ field: 'startTime', mode: 'time' })}
+                  >
+                    <Clock size={16} color={Colors.textMuted} />
+                    <Text style={styles.dateTimeButtonText} numberOfLines={1}>
+                      {formatTimeDisplay(form.startTime)}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <View style={styles.dateTimeRow}>
+                <View style={styles.dateTimeHalf}>
+                  <Text style={styles.dateTimeSubLabel}>End Date</Text>
+                  <TouchableOpacity
+                    testID="event-end-date-picker"
+                    style={styles.dateTimeButton}
+                    onPress={() => setShowDatePicker({ field: 'endDate', mode: 'date' })}
+                  >
+                    <Calendar size={16} color={Colors.textMuted} />
+                    <Text style={styles.dateTimeButtonText} numberOfLines={1}>
+                      {formatDateDisplay(form.endDate)}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.dateTimeHalf}>
+                  <Text style={styles.dateTimeSubLabel}>End Time</Text>
+                  <TouchableOpacity
+                    testID="event-end-time-picker"
+                    style={styles.dateTimeButton}
+                    onPress={() => setShowDatePicker({ field: 'endTime', mode: 'time' })}
+                  >
+                    <Clock size={16} color={Colors.textMuted} />
+                    <Text style={styles.dateTimeButtonText} numberOfLines={1}>
+                      {formatTimeDisplay(form.endTime)}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.formDivider} />
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Location</Text>
+              <TextInput
+                testID="event-location-input"
+                style={styles.textInput}
+                placeholder="Where will this take place?"
+                placeholderTextColor={Colors.textPlaceholder}
+                value={form.location}
+                onChangeText={(text) => setForm(prev => ({ ...prev, location: text }))}
+                maxLength={200}
+              />
+            </View>
+
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Max Attendees (optional)</Text>
               <TextInput
                 testID="event-maxAttendees-input"
                 style={styles.textInput}
-                placeholder="e.g. 100"
+                placeholder="Leave empty for unlimited"
+                placeholderTextColor={Colors.textPlaceholder}
                 value={form.maxAttendees ?? ''}
                 onChangeText={(text) => setForm(prev => ({ ...prev, maxAttendees: text.replace(/[^0-9]/g, '') }))}
                 keyboardType="numeric"
@@ -1178,30 +1201,27 @@ export default function EventsScreen() {
               </View>
             )}
 
-            <View style={styles.inputGroup}>
-              <TouchableOpacity
-                testID="share-all-churches-toggle"
-                style={styles.shareToggleRow}
-                onPress={() => setForm(prev => ({ ...prev, isSharedAllChurches: !prev.isSharedAllChurches }))}
-                activeOpacity={0.7}
-              >
-                <View style={styles.shareToggleInfo}>
-                  <Globe size={18} color={form.isSharedAllChurches ? '#6366f1' : '#94a3b8'} />
-                  <View>
-                    <Text style={styles.shareToggleLabel}>Share with all churches</Text>
-                    <Text style={styles.shareToggleHint}>Visible to members of every church</Text>
+            <View style={styles.formDivider} />
+
+            <View style={styles.switchGroup}>
+              <View style={styles.switchRow}>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.shareLabelRow}>
+                    <Globe size={16} color="#2563eb" />
+                    <Text style={styles.switchLabel}>Share with all churches</Text>
                   </View>
+                  <Text style={styles.switchDescription}>
+                    Visible to members of all church groups
+                  </Text>
                 </View>
-                <View style={[
-                  styles.shareToggleTrack,
-                  form.isSharedAllChurches && styles.shareToggleTrackActive,
-                ]}>
-                  <View style={[
-                    styles.shareToggleThumb,
-                    form.isSharedAllChurches && styles.shareToggleThumbActive,
-                  ]} />
-                </View>
-              </TouchableOpacity>
+                <Switch
+                  testID="share-all-churches-toggle"
+                  value={form.isSharedAllChurches}
+                  onValueChange={(value) => setForm(prev => ({ ...prev, isSharedAllChurches: value }))}
+                  trackColor={{ false: '#e2e8f0', true: '#2563eb' }}
+                  thumbColor={form.isSharedAllChurches ? 'white' : '#f4f4f5'}
+                />
+              </View>
             </View>
 
             <TouchableOpacity
@@ -1217,11 +1237,8 @@ export default function EventsScreen() {
               {createMutation.isPending ? (
                 <ActivityIndicator size="small" color="white" />
               ) : (
-                <Plus size={20} color="white" />
+                <Text style={styles.createButtonBottomText}>Create Event</Text>
               )}
-              <Text style={styles.createButtonBottomText}>
-                {createMutation.isPending ? 'Creating Event...' : 'Create Event'}
-              </Text>
             </TouchableOpacity>
 
             <View style={{ height: 40 }} />
@@ -1762,42 +1779,114 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   typeChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-    backgroundColor: '#f1f5f9',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.surfaceSecondary,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
   },
   typeChipActive: {
-    backgroundColor: '#1e3a8a',
+    borderColor: 'transparent',
+  },
+  typeChipDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   typeChipText: {
     fontSize: 14,
-    color: '#334155',
+    fontWeight: '500' as const,
+    color: Colors.textTertiary,
   },
   typeChipTextActive: {
     color: 'white',
+    fontWeight: '600' as const,
   },
-  inputHelp: {
+  formDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginBottom: Spacing.xxl,
+  },
+  formSectionHeader: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.md,
+  },
+  dateTimeRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  dateTimeHalf: {
+    flex: 1,
+  },
+  dateTimeSubLabel: {
     fontSize: 12,
-    color: '#64748b',
-    marginTop: 4,
-    fontStyle: 'italic',
+    fontWeight: '500' as const,
+    color: Colors.textMuted,
+    marginBottom: 6,
   },
   dateTimeButton: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    paddingHorizontal: 16,
+    backgroundColor: Colors.background,
+    borderRadius: Radius.lg,
+    paddingHorizontal: 12,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: Colors.border,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
   dateTimeButtonText: {
-    fontSize: 16,
-    color: '#1e293b',
+    fontSize: 14,
+    color: Colors.textSecondary,
     flex: 1,
+  },
+  churchContextBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.primaryLight,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    marginBottom: Spacing.xl,
+    borderWidth: 1,
+    borderColor: Colors.primaryBorder,
+  },
+  churchContextText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: Colors.primary,
+  },
+  switchGroup: {
+    marginBottom: Spacing.xxl,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  switchLabel: {
+    fontSize: 16,
+    fontWeight: '500' as const,
+    color: Colors.textSecondary,
+  },
+  switchDescription: {
+    fontSize: 14,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  shareLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
   },
   loadingContainer: {
     flex: 1,
@@ -1881,10 +1970,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   createButtonBottom: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
     backgroundColor: Colors.primary,
     borderRadius: Radius.xl,
     paddingVertical: Spacing.lg,
@@ -1924,51 +2011,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  shareToggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  shareToggleInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  shareToggleLabel: {
-    fontSize: 15,
-    fontWeight: '600' as const,
-    color: '#1e293b',
-  },
-  shareToggleHint: {
-    fontSize: 12,
-    color: '#94a3b8',
-    marginTop: 2,
-  },
-  shareToggleTrack: {
-    width: 48,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#cbd5e1',
-    justifyContent: 'center',
-    paddingHorizontal: 2,
-  },
-  shareToggleTrackActive: {
-    backgroundColor: '#6366f1',
-  },
-  shareToggleThumb: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'white',
-  },
-  shareToggleThumbActive: {
-    alignSelf: 'flex-end',
-  },
+
 });
