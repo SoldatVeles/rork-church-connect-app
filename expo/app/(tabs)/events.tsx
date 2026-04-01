@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { Calendar, MapPin, Users, Plus, Clock, AlertCircle, X, CalendarPlus, Globe, Trash2, Church } from 'lucide-react-native';
+import { Calendar, MapPin, Users, Plus, Clock, AlertCircle, X, CalendarPlus, Globe, Trash2, Church as ChurchIcon } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   StyleSheet,
@@ -1037,7 +1037,7 @@ export default function EventsScreen() {
           <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
             {manageableChurches.length === 1 && (
               <View style={styles.churchContextBanner}>
-                <Church size={14} color={Colors.primary} />
+                <ChurchIcon size={14} color={Colors.primary} />
                 <Text style={styles.churchContextText}>
                   Posting to: {manageableChurches[0].name}
                 </Text>
