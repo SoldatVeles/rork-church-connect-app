@@ -160,11 +160,26 @@ export default function EventsScreen() {
         return [];
       }
 
-      const { data, error } = await query;
+      let { data, error } = await query;
 
       if (error) {
-        console.error('[Events] Failed to fetch events:', error);
-        throw new Error(error.message ?? 'Failed to load events');
+        console.error('[Events] Failed to fetch events:', JSON.stringify(error));
+        if (!userIsAdmin && currentChurchId && error.message?.includes('is_shared_all_churches')) {
+          console.log('[Events] is_shared_all_churches column missing, falling back to group_id filter');
+          const fallback = await supabase
+            .from('events')
+            .select('*')
+            .eq('group_id', currentChurchId)
+            .order('start_at', { ascending: true });
+          if (fallback.error) {
+            console.error('[Events] Fallback also failed:', JSON.stringify(fallback.error));
+            throw new Error(fallback.error.message ?? 'Failed to load events');
+          }
+          data = fallback.data;
+          error = null;
+        } else {
+          throw new Error(error.message ?? 'Failed to load events');
+        }
       }
 
       const rows = (data ?? []) as any[];

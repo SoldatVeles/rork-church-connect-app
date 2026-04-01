@@ -252,8 +252,26 @@ export default function HomeScreen() {
         return [];
       }
 
-      const { data, error } = await query;
-      if (error) throw new Error(error.message);
+      let { data, error } = await query;
+
+      if (error) {
+        console.error('[Home] Failed to fetch events:', JSON.stringify(error));
+        if (!userIsAdmin && currentChurchId && error.message?.includes('is_shared_all_churches')) {
+          console.log('[Home] is_shared_all_churches column missing, falling back to group_id filter');
+          const fallback = await supabase
+            .from('events')
+            .select('*')
+            .eq('group_id', currentChurchId)
+            .order('start_at', { ascending: true });
+          if (fallback.error) {
+            throw new Error(fallback.error.message ?? 'Failed to load events');
+          }
+          data = fallback.data;
+          error = null;
+        } else {
+          throw new Error(error.message ?? 'Failed to load events');
+        }
+      }
       const rows = (data || []) as any[];
       console.log('[Home] Raw event rows fetched:', rows.length);
       const rawDetails = rows.map((r: any) => ({
