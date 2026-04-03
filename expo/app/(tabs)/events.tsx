@@ -1095,57 +1095,71 @@ export default function EventsScreen() {
 
             <View style={styles.inputGroup}>
               <Text style={styles.formSectionHeader}>Date & Time</Text>
-              <View style={styles.dateTimeRow}>
-                <View style={styles.dateTimeHalf}>
-                  <Text style={styles.dateTimeSubLabel}>Start Date</Text>
+
+              <View style={styles.dtCard}>
+                <View style={styles.dtCardLabel}>
+                  <View style={styles.dtCardDot} />
+                  <Text style={styles.dtCardLabelText}>Starts</Text>
+                </View>
+                <View style={styles.dtCardFields}>
                   <TouchableOpacity
                     testID="event-start-date-picker"
-                    style={styles.dateTimeButton}
+                    style={styles.dtFieldButton}
                     onPress={() => setShowDatePicker({ field: 'startDate', mode: 'date' })}
+                    activeOpacity={0.7}
                   >
-                    <Calendar size={16} color={Colors.textMuted} />
-                    <Text style={styles.dateTimeButtonText} numberOfLines={1}>
+                    <Calendar size={18} color={Colors.primary} />
+                    <Text style={styles.dtFieldValue} numberOfLines={1}>
                       {formatDateDisplay(form.startDate)}
                     </Text>
                   </TouchableOpacity>
-                </View>
-                <View style={styles.dateTimeHalf}>
-                  <Text style={styles.dateTimeSubLabel}>Start Time</Text>
                   <TouchableOpacity
                     testID="event-start-time-picker"
-                    style={styles.dateTimeButton}
+                    style={styles.dtFieldButtonCompact}
                     onPress={() => setShowDatePicker({ field: 'startTime', mode: 'time' })}
+                    activeOpacity={0.7}
                   >
-                    <Clock size={16} color={Colors.textMuted} />
-                    <Text style={styles.dateTimeButtonText} numberOfLines={1}>
+                    <Clock size={18} color={Colors.primary} />
+                    <Text style={styles.dtFieldValue} numberOfLines={1}>
                       {formatTimeDisplay(form.startTime)}
                     </Text>
                   </TouchableOpacity>
                 </View>
               </View>
-              <View style={styles.dateTimeRow}>
-                <View style={styles.dateTimeHalf}>
-                  <Text style={styles.dateTimeSubLabel}>End Date</Text>
+
+              <View style={styles.dtConnector}>
+                <View style={styles.dtConnectorLine} />
+                <View style={styles.dtConnectorArrow}>
+                  <Text style={styles.dtConnectorArrowText}>to</Text>
+                </View>
+                <View style={styles.dtConnectorLine} />
+              </View>
+
+              <View style={styles.dtCard}>
+                <View style={styles.dtCardLabel}>
+                  <View style={[styles.dtCardDot, styles.dtCardDotEnd]} />
+                  <Text style={styles.dtCardLabelText}>Ends</Text>
+                </View>
+                <View style={styles.dtCardFields}>
                   <TouchableOpacity
                     testID="event-end-date-picker"
-                    style={styles.dateTimeButton}
+                    style={styles.dtFieldButton}
                     onPress={() => setShowDatePicker({ field: 'endDate', mode: 'date' })}
+                    activeOpacity={0.7}
                   >
-                    <Calendar size={16} color={Colors.textMuted} />
-                    <Text style={styles.dateTimeButtonText} numberOfLines={1}>
+                    <Calendar size={18} color={Colors.textTertiary} />
+                    <Text style={styles.dtFieldValue} numberOfLines={1}>
                       {formatDateDisplay(form.endDate)}
                     </Text>
                   </TouchableOpacity>
-                </View>
-                <View style={styles.dateTimeHalf}>
-                  <Text style={styles.dateTimeSubLabel}>End Time</Text>
                   <TouchableOpacity
                     testID="event-end-time-picker"
-                    style={styles.dateTimeButton}
+                    style={styles.dtFieldButtonCompact}
                     onPress={() => setShowDatePicker({ field: 'endTime', mode: 'time' })}
+                    activeOpacity={0.7}
                   >
-                    <Clock size={16} color={Colors.textMuted} />
-                    <Text style={styles.dateTimeButtonText} numberOfLines={1}>
+                    <Clock size={18} color={Colors.textTertiary} />
+                    <Text style={styles.dtFieldValue} numberOfLines={1}>
                       {formatTimeDisplay(form.endTime)}
                     </Text>
                   </TouchableOpacity>
@@ -1817,35 +1831,89 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginBottom: Spacing.md,
   },
-  dateTimeRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
-  },
-  dateTimeHalf: {
-    flex: 1,
-  },
-  dateTimeSubLabel: {
-    fontSize: 12,
-    fontWeight: '500' as const,
-    color: Colors.textMuted,
-    marginBottom: 6,
-  },
-  dateTimeButton: {
+  dtCard: {
     backgroundColor: Colors.background,
-    borderRadius: Radius.lg,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    borderRadius: Radius.xl,
+    padding: Spacing.lg,
     borderWidth: 1,
     borderColor: Colors.border,
+  },
+  dtCardLabel: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    marginBottom: Spacing.md,
   },
-  dateTimeButtonText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
+  dtCardDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.primary,
+  },
+  dtCardDotEnd: {
+    backgroundColor: Colors.textTertiary,
+  },
+  dtCardLabelText: {
+    fontSize: 13,
+    fontWeight: '700' as const,
+    color: Colors.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  dtCardFields: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  dtFieldButton: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    minHeight: 50,
+  },
+  dtFieldButtonCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    minHeight: 50,
+  },
+  dtFieldValue: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: Colors.textSecondary,
+  },
+  dtConnector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  dtConnectorLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.border,
+  },
+  dtConnectorArrow: {
+    paddingHorizontal: 12,
+    paddingVertical: 2,
+  },
+  dtConnectorArrowText: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: Colors.textPlaceholder,
+    textTransform: 'lowercase',
   },
   churchContextBanner: {
     flexDirection: 'row',
