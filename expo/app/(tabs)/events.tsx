@@ -131,6 +131,9 @@ export default function EventsScreen() {
     mode: 'date' | 'time';
   }>({ field: null, mode: 'date' });
 
+  const [webDateText, setWebDateText] = useState<string>('');
+  const [webTimeText, setWebTimeText] = useState<string>('');
+
   const filterOptions = useMemo<{ key: EventType | 'all'; label: string; accent: string }[]>(() => {
     return [
       { key: 'all', label: 'All', accent: '#1e293b' },
@@ -598,10 +601,41 @@ export default function EventsScreen() {
     }
   };
 
+  const openPickerForField = useCallback((field: 'startDate' | 'startTime' | 'endDate' | 'endTime', mode: 'date' | 'time') => {
+    if (Platform.OS === 'web') {
+      if (mode === 'date') {
+        setWebDateText(form[field].toISOString().split('T')[0]);
+      } else {
+        const h = form[field].getHours().toString().padStart(2, '0');
+        const m = form[field].getMinutes().toString().padStart(2, '0');
+        setWebTimeText(`${h}:${m}`);
+      }
+    }
+    setShowDatePicker({ field, mode });
+  }, [form]);
+
   const closeDatePicker = useCallback(() => {
     console.log('[Events] Closing date picker');
+    const { field, mode } = showDatePicker;
+    if (Platform.OS === 'web' && field) {
+      if (mode === 'date') {
+        const parts = webDateText.split('-').map(Number);
+        if (parts.length === 3 && parts[0] >= 2000 && parts[1] >= 1 && parts[1] <= 12 && parts[2] >= 1 && parts[2] <= 31) {
+          const updated = new Date(form[field]);
+          updated.setFullYear(parts[0], parts[1] - 1, parts[2]);
+          setForm(prev => ({ ...prev, [field]: new Date(updated) }));
+        }
+      } else {
+        const parts = webTimeText.split(':').map(Number);
+        if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1]) && parts[0] >= 0 && parts[0] <= 23 && parts[1] >= 0 && parts[1] <= 59) {
+          const updated = new Date(form[field]);
+          updated.setHours(parts[0], parts[1]);
+          setForm(prev => ({ ...prev, [field]: new Date(updated) }));
+        }
+      }
+    }
     setShowDatePicker({ field: null, mode: 'date' });
-  }, []);
+  }, [showDatePicker, webDateText, webTimeText, form]);
 
   const formatDateDisplay = (date: Date) => {
     return date.toLocaleDateString('en-US', {
@@ -1092,9 +1126,11 @@ export default function EventsScreen() {
                     ]}
                     onPress={() => {
                       console.log('[Events] Start date picker pressed');
-                      setShowDatePicker(prev =>
-                        prev.field === 'startDate' ? { field: null, mode: 'date' } : { field: 'startDate', mode: 'date' }
-                      );
+                      if (showDatePicker.field === 'startDate') {
+                        closeDatePicker();
+                      } else {
+                        openPickerForField('startDate', 'date');
+                      }
                     }}
                     activeOpacity={0.7}
                   >
@@ -1111,9 +1147,11 @@ export default function EventsScreen() {
                     ]}
                     onPress={() => {
                       console.log('[Events] Start time picker pressed');
-                      setShowDatePicker(prev =>
-                        prev.field === 'startTime' ? { field: null, mode: 'date' } : { field: 'startTime', mode: 'time' }
-                      );
+                      if (showDatePicker.field === 'startTime') {
+                        closeDatePicker();
+                      } else {
+                        openPickerForField('startTime', 'time');
+                      }
                     }}
                     activeOpacity={0.7}
                   >
@@ -1126,34 +1164,27 @@ export default function EventsScreen() {
                 {(showDatePicker.field === 'startDate' || showDatePicker.field === 'startTime') && (
                   <View style={styles.inlinePickerContainer}>
                     {Platform.OS === 'web' ? (
-                      <TextInput
-                        testID="web-datetime-input"
-                        style={styles.webDateInput}
-                        value={
-                          showDatePicker.field === 'startDate'
-                            ? form.startDate.toISOString().split('T')[0]
-                            : form.startTime.toTimeString().slice(0, 5)
-                        }
-                        placeholder={showDatePicker.mode === 'date' ? 'YYYY-MM-DD' : 'HH:MM'}
-                        placeholderTextColor={Colors.textPlaceholder}
-                        onChangeText={(value) => {
-                          if (!showDatePicker.field) return;
-                          const current = new Date(form[showDatePicker.field]);
-                          if (showDatePicker.mode === 'date') {
-                            const parts = value.split('-').map(Number);
-                            if (parts.length === 3 && parts[0] > 2000) {
-                              current.setFullYear(parts[0], parts[1] - 1, parts[2]);
-                              setForm(prev => ({ ...prev, [showDatePicker.field!]: new Date(current) }));
+                      <View style={styles.webPickerWrap}>
+                        <Text style={styles.webPickerLabel}>
+                          {showDatePicker.mode === 'date' ? 'Enter date (YYYY-MM-DD)' : 'Enter time (HH:MM, 24h)'}
+                        </Text>
+                        <TextInput
+                          testID="web-datetime-input"
+                          style={styles.webDateInput}
+                          value={showDatePicker.mode === 'date' ? webDateText : webTimeText}
+                          placeholder={showDatePicker.mode === 'date' ? '2026-04-06' : '14:30'}
+                          placeholderTextColor={Colors.textPlaceholder}
+                          onChangeText={(value) => {
+                            if (showDatePicker.mode === 'date') {
+                              setWebDateText(value);
+                            } else {
+                              setWebTimeText(value);
                             }
-                          } else {
-                            const parts = value.split(':').map(Number);
-                            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-                              current.setHours(parts[0], parts[1]);
-                              setForm(prev => ({ ...prev, [showDatePicker.field!]: new Date(current) }));
-                            }
-                          }
-                        }}
-                      />
+                          }}
+                          keyboardType={showDatePicker.mode === 'date' ? 'default' : 'numbers-and-punctuation'}
+                          autoFocus
+                        />
+                      </View>
                     ) : (
                       <DateTimePicker
                         testID="startDateTimePicker"
@@ -1163,7 +1194,11 @@ export default function EventsScreen() {
                         onChange={(evt, date) => {
                           console.log('[Events] Start picker changed:', date);
                           if (Platform.OS === 'android') {
+                            if (date && showDatePicker.field) {
+                              setForm(prev => ({ ...prev, [showDatePicker.field!]: date }));
+                            }
                             setShowDatePicker({ field: null, mode: 'date' });
+                            return;
                           }
                           if (date && showDatePicker.field) {
                             setForm(prev => ({ ...prev, [showDatePicker.field!]: date }));
@@ -1205,9 +1240,11 @@ export default function EventsScreen() {
                     ]}
                     onPress={() => {
                       console.log('[Events] End date picker pressed');
-                      setShowDatePicker(prev =>
-                        prev.field === 'endDate' ? { field: null, mode: 'date' } : { field: 'endDate', mode: 'date' }
-                      );
+                      if (showDatePicker.field === 'endDate') {
+                        closeDatePicker();
+                      } else {
+                        openPickerForField('endDate', 'date');
+                      }
                     }}
                     activeOpacity={0.7}
                   >
@@ -1224,9 +1261,11 @@ export default function EventsScreen() {
                     ]}
                     onPress={() => {
                       console.log('[Events] End time picker pressed');
-                      setShowDatePicker(prev =>
-                        prev.field === 'endTime' ? { field: null, mode: 'date' } : { field: 'endTime', mode: 'time' }
-                      );
+                      if (showDatePicker.field === 'endTime') {
+                        closeDatePicker();
+                      } else {
+                        openPickerForField('endTime', 'time');
+                      }
                     }}
                     activeOpacity={0.7}
                   >
@@ -1239,34 +1278,27 @@ export default function EventsScreen() {
                 {(showDatePicker.field === 'endDate' || showDatePicker.field === 'endTime') && (
                   <View style={styles.inlinePickerContainer}>
                     {Platform.OS === 'web' ? (
-                      <TextInput
-                        testID="web-datetime-input-end"
-                        style={styles.webDateInput}
-                        value={
-                          showDatePicker.field === 'endDate'
-                            ? form.endDate.toISOString().split('T')[0]
-                            : form.endTime.toTimeString().slice(0, 5)
-                        }
-                        placeholder={showDatePicker.mode === 'date' ? 'YYYY-MM-DD' : 'HH:MM'}
-                        placeholderTextColor={Colors.textPlaceholder}
-                        onChangeText={(value) => {
-                          if (!showDatePicker.field) return;
-                          const current = new Date(form[showDatePicker.field]);
-                          if (showDatePicker.mode === 'date') {
-                            const parts = value.split('-').map(Number);
-                            if (parts.length === 3 && parts[0] > 2000) {
-                              current.setFullYear(parts[0], parts[1] - 1, parts[2]);
-                              setForm(prev => ({ ...prev, [showDatePicker.field!]: new Date(current) }));
+                      <View style={styles.webPickerWrap}>
+                        <Text style={styles.webPickerLabel}>
+                          {showDatePicker.mode === 'date' ? 'Enter date (YYYY-MM-DD)' : 'Enter time (HH:MM, 24h)'}
+                        </Text>
+                        <TextInput
+                          testID="web-datetime-input-end"
+                          style={styles.webDateInput}
+                          value={showDatePicker.mode === 'date' ? webDateText : webTimeText}
+                          placeholder={showDatePicker.mode === 'date' ? '2026-04-06' : '14:30'}
+                          placeholderTextColor={Colors.textPlaceholder}
+                          onChangeText={(value) => {
+                            if (showDatePicker.mode === 'date') {
+                              setWebDateText(value);
+                            } else {
+                              setWebTimeText(value);
                             }
-                          } else {
-                            const parts = value.split(':').map(Number);
-                            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-                              current.setHours(parts[0], parts[1]);
-                              setForm(prev => ({ ...prev, [showDatePicker.field!]: new Date(current) }));
-                            }
-                          }
-                        }}
-                      />
+                          }}
+                          keyboardType={showDatePicker.mode === 'date' ? 'default' : 'numbers-and-punctuation'}
+                          autoFocus
+                        />
+                      </View>
                     ) : (
                       <DateTimePicker
                         testID="endDateTimePicker"
@@ -1276,7 +1308,11 @@ export default function EventsScreen() {
                         onChange={(evt, date) => {
                           console.log('[Events] End picker changed:', date);
                           if (Platform.OS === 'android') {
+                            if (date && showDatePicker.field) {
+                              setForm(prev => ({ ...prev, [showDatePicker.field!]: date }));
+                            }
                             setShowDatePicker({ field: null, mode: 'date' });
+                            return;
                           }
                           if (date && showDatePicker.field) {
                             setForm(prev => ({ ...prev, [showDatePicker.field!]: date }));
@@ -2038,17 +2074,28 @@ const styles = StyleSheet.create({
   iosSpinnerPicker: {
     height: 216,
   },
+  webPickerWrap: {
+    padding: 16,
+    gap: 8,
+  },
+  webPickerLabel: {
+    fontSize: 13,
+    fontWeight: '500' as const,
+    color: Colors.textMuted,
+    marginBottom: 4,
+  },
   webDateInput: {
     backgroundColor: Colors.background,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.lg,
-    fontSize: 18,
+    fontSize: 20,
+    fontWeight: '600' as const,
     color: Colors.textSecondary,
     textAlign: 'center' as const,
-    margin: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    letterSpacing: 1,
   },
   pickerDoneButton: {
     alignItems: 'center' as const,
