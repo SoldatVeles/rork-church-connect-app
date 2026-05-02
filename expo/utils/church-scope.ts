@@ -49,12 +49,14 @@ export function canManageSabbathForGroup(
   groupId: string
 ): boolean {
   if (isAdmin(ctx.user)) return true;
+  if (isChurchLeaderLevel(ctx.user)) return true;
   if (ctx.pastorGroupIds.includes(groupId)) return true;
   return false;
 }
 
 export function canManageAnySabbath(ctx: ChurchScopeContext): boolean {
   if (isAdmin(ctx.user)) return true;
+  if (isChurchLeaderLevel(ctx.user)) return true;
   if (ctx.pastorGroupIds.length > 0) return true;
   return false;
 }
