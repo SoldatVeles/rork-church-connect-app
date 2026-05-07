@@ -92,32 +92,10 @@ export default function SabbathPlannerScreen() {
   const { user } = useAuth();
   const trpcUtils = trpc.useUtils();
 
-  const profileQuery = useQuery({
-    queryKey: ['profile-home-group', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return null;
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('home_group_id')
-        .eq('id', user.id)
-        .maybeSingle();
-      if (error) {
-        console.warn('[SabbathPlanner] Error fetching profile home group:', error.message);
-        return null;
-      }
-      return (data?.home_group_id as string | null) ?? null;
-    },
-    enabled: !!user?.id,
-  });
-  const userHomeGroupId = profileQuery.data ?? null;
-
   const pastorGroupsQuery = trpc.sabbaths.getMyPastorGroups.useQuery();
   const pastorGroups = useMemo(() => pastorGroupsQuery.data ?? [], [pastorGroupsQuery.data]);
   const pastorGroupIds = useMemo(() => pastorGroups.map((gp) => gp.group_id as string), [pastorGroups]);
-  const churchScope = useMemo(
-    () => buildChurchScope(user, userHomeGroupId, pastorGroupIds),
-    [user, userHomeGroupId, pastorGroupIds]
-  );
+  const churchScope = useMemo(() => buildChurchScope(user, null, pastorGroupIds), [user, pastorGroupIds]);
 
   const sabbathsQuery = trpc.sabbaths.getAll.useQuery();
   const sabbaths = useMemo(() => sabbathsQuery.data ?? [], [sabbathsQuery.data]);
@@ -125,7 +103,7 @@ export default function SabbathPlannerScreen() {
 
   const createSabbathMutation = trpc.sabbaths.createDraft.useMutation({
     onSuccess: () => {
-      console.log('[SabbathPlanner] createDraft success, invalidating');
+      console.log('[SabbathPlanner] tRPC createDraft success, invalidating');
       void trpcUtils.sabbaths.invalidate();
     },
   });
@@ -147,7 +125,7 @@ export default function SabbathPlannerScreen() {
         .from('groups')
         .select('id, name');
       if (error) {
-        console.warn('[SabbathPlanner] Error fetching groups:', error.message);
+        console.error('[SabbathPlanner] Error fetching groups:', error.message);
         return [];
       }
       return (data || []) as { id: string; name: string }[];
@@ -160,21 +138,8 @@ export default function SabbathPlannerScreen() {
   const availableGroups = useMemo(() => {
     const groups = groupsQuery.data || [];
     if (checkIsAdmin(user)) return groups;
-    // For non-admins, only show groups they can manage. Build from
-    // pastor groups + church_leader home group if missing in `groups`.
-    const manageableIds = new Set<string>();
-    for (const g of groups) {
-      if (canManageSabbathForGroup(churchScope, g.id)) manageableIds.add(g.id);
-    }
-    if (userHomeGroupId && user?.role === 'church_leader') manageableIds.add(userHomeGroupId);
-    for (const id of pastorGroupIds) manageableIds.add(id);
-
-    const byId = new Map<string, { id: string; name: string }>();
-    for (const g of groups) byId.set(g.id, g);
-    return Array.from(manageableIds).map(
-      (id) => byId.get(id) ?? { id, name: 'My Church' }
-    );
-  }, [groupsQuery.data, churchScope, user, userHomeGroupId, pastorGroupIds]);
+    return groups.filter((g) => canManageSabbathForGroup(churchScope, g.id));
+  }, [groupsQuery.data, churchScope, user]);
 
   const groupNameMap = useMemo(() => {
     const map = new Map<string, string>();

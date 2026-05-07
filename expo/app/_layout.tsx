@@ -12,20 +12,7 @@ import { trpc, trpcClient } from "@/lib/trpc";
 
 void SplashScreen.preventAutoHideAsync();
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
-      staleTime: 30_000,
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: false,
-    },
-    mutations: {
-      retry: 0,
-    },
-  },
-});
+const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   const { isLoading, isAuthenticated } = useAuth();

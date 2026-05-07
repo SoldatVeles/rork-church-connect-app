@@ -27,8 +27,6 @@ import { useRouter } from 'expo-router';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/providers/auth-provider';
 import { canManageAnySabbath, buildChurchScope } from '@/utils/church-scope';
-import { supabase } from '@/lib/supabase';
-import { useQuery } from '@tanstack/react-query';
 
 import type {
   SabbathAssignment,
@@ -285,22 +283,7 @@ export default function SabbathScreen() {
   const pastorGroupIds = useMemo(() => (pastorGroupsQuery.data ?? []).map((g: any) => g.group_id as string), [pastorGroupsQuery.data]);
   const [activeTab, setActiveTab] = useState<TabKey>('myChurch');
 
-  const profileHomeQuery = useQuery({
-    queryKey: ['profile-home-group', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return null;
-      const { data } = await supabase
-        .from('profiles')
-        .select('home_group_id')
-        .eq('id', user.id)
-        .maybeSingle();
-      return (data?.home_group_id as string | null) ?? null;
-    },
-    enabled: !!user?.id,
-  });
-  const userHomeGroupId = profileHomeQuery.data ?? null;
-
-  const churchScope = buildChurchScope(user, userHomeGroupId, pastorGroupIds);
+  const churchScope = buildChurchScope(user, null, pastorGroupIds);
   const canManage = canManageAnySabbath(churchScope);
 
   const myChurchQuery = trpc.sabbaths.getMyChurchUpcoming.useQuery(undefined, {
