@@ -30,17 +30,17 @@ export function canManageGroupData(
   groupId: string
 ): boolean {
   if (isAdmin(ctx.user)) return true;
-  if (isChurchLeaderLevel(ctx.user)) return true;
+  if (ctx.user?.role === 'church_leader' && ctx.userHomeGroupId === groupId) return true;
   if (isPastorLevel(ctx.user) && ctx.pastorGroupIds.includes(groupId)) return true;
   return false;
 }
 
 export function canDeleteGroupContent(
   ctx: ChurchScopeContext,
-  _groupId: string
+  groupId: string
 ): boolean {
   if (isAdmin(ctx.user)) return true;
-  if (isChurchLeaderLevel(ctx.user)) return true;
+  if (ctx.user?.role === 'church_leader' && ctx.userHomeGroupId === groupId) return true;
   return false;
 }
 
@@ -49,14 +49,14 @@ export function canManageSabbathForGroup(
   groupId: string
 ): boolean {
   if (isAdmin(ctx.user)) return true;
-  if (isChurchLeaderLevel(ctx.user)) return true;
+  if (ctx.user?.role === 'church_leader' && ctx.userHomeGroupId === groupId) return true;
   if (ctx.pastorGroupIds.includes(groupId)) return true;
   return false;
 }
 
 export function canManageAnySabbath(ctx: ChurchScopeContext): boolean {
   if (isAdmin(ctx.user)) return true;
-  if (isChurchLeaderLevel(ctx.user)) return true;
+  if (ctx.user?.role === 'church_leader' && ctx.userHomeGroupId) return true;
   if (ctx.pastorGroupIds.length > 0) return true;
   return false;
 }

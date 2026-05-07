@@ -819,14 +819,18 @@ const createDraft = publicProcedure
       throw new Error("Sabbath date must be a Saturday");
     }
 
+    const writer = ctx.supabaseAdmin ?? ctx.supabase;
+
     console.log(
       "[sabbaths.createDraft] Creating draft for group:",
       input.groupId,
       "date:",
-      input.sabbathDate
+      input.sabbathDate,
+      "| using service role:",
+      Boolean(ctx.supabaseAdmin && ctx.supabaseAdmin !== ctx.supabase)
     );
 
-    const { data: existing } = await db(ctx.supabase)
+    const { data: existing } = await db(writer)
       .from("sabbaths")
       .select("id")
       .eq("group_id", input.groupId)
@@ -837,7 +841,7 @@ const createDraft = publicProcedure
       throw new Error("A Sabbath already exists for this church on this date");
     }
 
-    const { data: sabbath, error: insertError } = await db(ctx.supabase)
+    const { data: sabbath, error: insertError } = await db(writer)
       .from("sabbaths")
       .insert({
         group_id: input.groupId,
@@ -862,7 +866,7 @@ const createDraft = publicProcedure
       status: "pending",
     }));
 
-    const { error: assignError } = await db(ctx.supabase)
+    const { error: assignError } = await db(writer)
       .from("sabbath_assignments")
       .insert(assignmentRows);
 
@@ -1574,9 +1578,18 @@ const suggestReplacement = publicProcedure
   });
 
 const getAll = publicProcedure.query(async ({ ctx }) => {
-  await getAuthenticatedUser(ctx);
-  console.log("[sabbaths.getAll] Fetching all sabbaths");
-  const { data, error } = await db(ctx.supabase)
+  const user = await getAuthenticatedUser(ctx);
+  const profile = await getUserProfile(ctx.supabase, user.id);
+  const reader = ctx.supabaseAdmin ?? ctx.supabase;
+
+  console.log(
+    "[sabbaths.getAll] Fetching all sabbaths for user:",
+    user.id,
+    "role:",
+    profile.role
+  );
+
+  const { data, error } = await db(reader)
     .from("sabbaths")
     .select("*")
     .order("sabbath_date", { ascending: false });
@@ -1584,8 +1597,40 @@ const getAll = publicProcedure.query(async ({ ctx }) => {
     console.error("[sabbaths.getAll] Error:", error);
     throw new Error(error.message);
   }
-  console.log("[sabbaths.getAll] Returning", (data || []).length, "sabbaths");
-  return (data || []) as Sabbath[];
+
+  const all = (data || []) as Sabbath[];
+
+  // Admins see everything. Others see published/cancelled globally,
+  // plus drafts for groups they manage.
+  if (profile.role === "admin") {
+    console.log("[sabbaths.getAll] Admin returning", all.length, "sabbaths");
+    return all;
+  }
+
+  const { data: pastorRows } = await db(reader)
+    .from("group_pastors")
+    .select("group_id")
+    .eq("user_id", user.id);
+  const managedGroupIds = new Set<string>(
+    (pastorRows ?? []).map((r: any) => r.group_id as string)
+  );
+  if (profile.role === "church_leader" && profile.home_group_id) {
+    managedGroupIds.add(profile.home_group_id);
+  }
+
+  const visible = all.filter((s) => {
+    if (s.status !== "draft") return true;
+    return managedGroupIds.has(s.group_id);
+  });
+
+  console.log(
+    "[sabbaths.getAll] Returning",
+    visible.length,
+    "of",
+    all.length,
+    "sabbaths (filtered drafts)"
+  );
+  return visible;
 });
 
 const deleteSabbath = publicProcedure

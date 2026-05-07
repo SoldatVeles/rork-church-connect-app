@@ -231,7 +231,20 @@ export default function HomeScreen() {
   const userIsAdmin = isAdmin(user);
   const pastorGroupsQuery = trpc.sabbaths.getMyPastorGroups.useQuery();
   const pastorGroupIds = useMemo(() => (pastorGroupsQuery.data ?? []).map((g: any) => g.group_id as string), [pastorGroupsQuery.data]);
-  const canManageSabbath = canManageAnySabbath(buildChurchScope(user, null, pastorGroupIds));
+  const profileHomeQuery = useQuery({
+    queryKey: ['profile-home-group', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const { data } = await supabase
+        .from('profiles')
+        .select('home_group_id')
+        .eq('id', user.id)
+        .maybeSingle();
+      return (data?.home_group_id as string | null) ?? null;
+    },
+    enabled: !!user?.id,
+  });
+  const canManageSabbath = canManageAnySabbath(buildChurchScope(user, profileHomeQuery.data ?? null, pastorGroupIds));
   const [showNotifications, setShowNotifications] = useState(false);
   const bellButtonRef = useRef<View>(null);
   const [bellPosition, setBellPosition] = useState({ x: 0, y: 0 });
