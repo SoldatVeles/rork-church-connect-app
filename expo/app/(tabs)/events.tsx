@@ -131,9 +131,6 @@ export default function EventsScreen() {
     mode: 'date' | 'time';
   }>({ field: null, mode: 'date' });
 
-  const [webDateText, setWebDateText] = useState<string>('');
-  const [webTimeText, setWebTimeText] = useState<string>('');
-
   const filterOptions = useMemo<{ key: EventType | 'all'; label: string; accent: string }[]>(() => {
     return [
       { key: 'all', label: 'All', accent: '#1e293b' },
@@ -601,41 +598,26 @@ export default function EventsScreen() {
     }
   };
 
-  const openPickerForField = useCallback((field: 'startDate' | 'startTime' | 'endDate' | 'endTime', mode: 'date' | 'time') => {
-    if (Platform.OS === 'web') {
-      if (mode === 'date') {
-        setWebDateText(form[field].toISOString().split('T')[0]);
-      } else {
-        const h = form[field].getHours().toString().padStart(2, '0');
-        const m = form[field].getMinutes().toString().padStart(2, '0');
-        setWebTimeText(`${h}:${m}`);
-      }
+  const handleDateTimeChange = useCallback((_event: any, selectedDate?: Date) => {
+    console.log('[Events] DateTimePicker change:', { selectedDate, field: showDatePicker.field });
+    
+    if (Platform.OS === 'android') {
+      setShowDatePicker({ field: null, mode: 'date' });
     }
-    setShowDatePicker({ field, mode });
-  }, [form]);
+    
+    if (selectedDate && showDatePicker.field) {
+      console.log('[Events] Updating field:', showDatePicker.field, 'with date:', selectedDate);
+      setForm(prev => ({
+        ...prev,
+        [showDatePicker.field!]: selectedDate
+      }));
+    }
+  }, [showDatePicker.field]);
 
   const closeDatePicker = useCallback(() => {
     console.log('[Events] Closing date picker');
-    const { field, mode } = showDatePicker;
-    if (Platform.OS === 'web' && field) {
-      if (mode === 'date') {
-        const parts = webDateText.split('-').map(Number);
-        if (parts.length === 3 && parts[0] >= 2000 && parts[1] >= 1 && parts[1] <= 12 && parts[2] >= 1 && parts[2] <= 31) {
-          const updated = new Date(form[field]);
-          updated.setFullYear(parts[0], parts[1] - 1, parts[2]);
-          setForm(prev => ({ ...prev, [field]: new Date(updated) }));
-        }
-      } else {
-        const parts = webTimeText.split(':').map(Number);
-        if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1]) && parts[0] >= 0 && parts[0] <= 23 && parts[1] >= 0 && parts[1] <= 59) {
-          const updated = new Date(form[field]);
-          updated.setHours(parts[0], parts[1]);
-          setForm(prev => ({ ...prev, [field]: new Date(updated) }));
-        }
-      }
-    }
     setShowDatePicker({ field: null, mode: 'date' });
-  }, [showDatePicker, webDateText, webTimeText, form]);
+  }, []);
 
   const formatDateDisplay = (date: Date) => {
     return date.toLocaleDateString('en-US', {
@@ -1120,18 +1102,8 @@ export default function EventsScreen() {
                 <View style={styles.dtCardFields}>
                   <TouchableOpacity
                     testID="event-start-date-picker"
-                    style={[
-                      styles.dtFieldButton,
-                      showDatePicker.field === 'startDate' && styles.dtFieldButtonActive,
-                    ]}
-                    onPress={() => {
-                      console.log('[Events] Start date picker pressed');
-                      if (showDatePicker.field === 'startDate') {
-                        closeDatePicker();
-                      } else {
-                        openPickerForField('startDate', 'date');
-                      }
-                    }}
+                    style={styles.dtFieldButton}
+                    onPress={() => setShowDatePicker({ field: 'startDate', mode: 'date' })}
                     activeOpacity={0.7}
                   >
                     <Calendar size={18} color={Colors.primary} />
@@ -1141,18 +1113,8 @@ export default function EventsScreen() {
                   </TouchableOpacity>
                   <TouchableOpacity
                     testID="event-start-time-picker"
-                    style={[
-                      styles.dtFieldButtonCompact,
-                      showDatePicker.field === 'startTime' && styles.dtFieldButtonActive,
-                    ]}
-                    onPress={() => {
-                      console.log('[Events] Start time picker pressed');
-                      if (showDatePicker.field === 'startTime') {
-                        closeDatePicker();
-                      } else {
-                        openPickerForField('startTime', 'time');
-                      }
-                    }}
+                    style={styles.dtFieldButtonCompact}
+                    onPress={() => setShowDatePicker({ field: 'startTime', mode: 'time' })}
                     activeOpacity={0.7}
                   >
                     <Clock size={18} color={Colors.primary} />
@@ -1161,61 +1123,6 @@ export default function EventsScreen() {
                     </Text>
                   </TouchableOpacity>
                 </View>
-                {(showDatePicker.field === 'startDate' || showDatePicker.field === 'startTime') && (
-                  <View style={styles.inlinePickerContainer}>
-                    {Platform.OS === 'web' ? (
-                      <View style={styles.webPickerWrap}>
-                        <Text style={styles.webPickerLabel}>
-                          {showDatePicker.mode === 'date' ? 'Enter date (YYYY-MM-DD)' : 'Enter time (HH:MM, 24h)'}
-                        </Text>
-                        <TextInput
-                          testID="web-datetime-input"
-                          style={styles.webDateInput}
-                          value={showDatePicker.mode === 'date' ? webDateText : webTimeText}
-                          placeholder={showDatePicker.mode === 'date' ? '2026-04-06' : '14:30'}
-                          placeholderTextColor={Colors.textPlaceholder}
-                          onChangeText={(value) => {
-                            if (showDatePicker.mode === 'date') {
-                              setWebDateText(value);
-                            } else {
-                              setWebTimeText(value);
-                            }
-                          }}
-                          keyboardType={showDatePicker.mode === 'date' ? 'default' : 'numbers-and-punctuation'}
-                          autoFocus
-                        />
-                      </View>
-                    ) : (
-                      <DateTimePicker
-                        testID="startDateTimePicker"
-                        value={showDatePicker.field ? form[showDatePicker.field] : new Date()}
-                        mode={showDatePicker.mode}
-                        is24Hour={false}
-                        onChange={(evt, date) => {
-                          console.log('[Events] Start picker changed:', date);
-                          if (Platform.OS === 'android') {
-                            if (date && showDatePicker.field) {
-                              setForm(prev => ({ ...prev, [showDatePicker.field!]: date }));
-                            }
-                            setShowDatePicker({ field: null, mode: 'date' });
-                            return;
-                          }
-                          if (date && showDatePicker.field) {
-                            setForm(prev => ({ ...prev, [showDatePicker.field!]: date }));
-                          }
-                        }}
-                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                        style={Platform.OS === 'ios' ? styles.iosSpinnerPicker : undefined}
-                      />
-                    )}
-                    <TouchableOpacity
-                      style={styles.pickerDoneButton}
-                      onPress={closeDatePicker}
-                    >
-                      <Text style={styles.pickerDoneText}>Done</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
               </View>
 
               <View style={styles.dtConnector}>
@@ -1234,18 +1141,8 @@ export default function EventsScreen() {
                 <View style={styles.dtCardFields}>
                   <TouchableOpacity
                     testID="event-end-date-picker"
-                    style={[
-                      styles.dtFieldButton,
-                      showDatePicker.field === 'endDate' && styles.dtFieldButtonActive,
-                    ]}
-                    onPress={() => {
-                      console.log('[Events] End date picker pressed');
-                      if (showDatePicker.field === 'endDate') {
-                        closeDatePicker();
-                      } else {
-                        openPickerForField('endDate', 'date');
-                      }
-                    }}
+                    style={styles.dtFieldButton}
+                    onPress={() => setShowDatePicker({ field: 'endDate', mode: 'date' })}
                     activeOpacity={0.7}
                   >
                     <Calendar size={18} color={Colors.textTertiary} />
@@ -1255,18 +1152,8 @@ export default function EventsScreen() {
                   </TouchableOpacity>
                   <TouchableOpacity
                     testID="event-end-time-picker"
-                    style={[
-                      styles.dtFieldButtonCompact,
-                      showDatePicker.field === 'endTime' && styles.dtFieldButtonActive,
-                    ]}
-                    onPress={() => {
-                      console.log('[Events] End time picker pressed');
-                      if (showDatePicker.field === 'endTime') {
-                        closeDatePicker();
-                      } else {
-                        openPickerForField('endTime', 'time');
-                      }
-                    }}
+                    style={styles.dtFieldButtonCompact}
+                    onPress={() => setShowDatePicker({ field: 'endTime', mode: 'time' })}
                     activeOpacity={0.7}
                   >
                     <Clock size={18} color={Colors.textTertiary} />
@@ -1275,61 +1162,6 @@ export default function EventsScreen() {
                     </Text>
                   </TouchableOpacity>
                 </View>
-                {(showDatePicker.field === 'endDate' || showDatePicker.field === 'endTime') && (
-                  <View style={styles.inlinePickerContainer}>
-                    {Platform.OS === 'web' ? (
-                      <View style={styles.webPickerWrap}>
-                        <Text style={styles.webPickerLabel}>
-                          {showDatePicker.mode === 'date' ? 'Enter date (YYYY-MM-DD)' : 'Enter time (HH:MM, 24h)'}
-                        </Text>
-                        <TextInput
-                          testID="web-datetime-input-end"
-                          style={styles.webDateInput}
-                          value={showDatePicker.mode === 'date' ? webDateText : webTimeText}
-                          placeholder={showDatePicker.mode === 'date' ? '2026-04-06' : '14:30'}
-                          placeholderTextColor={Colors.textPlaceholder}
-                          onChangeText={(value) => {
-                            if (showDatePicker.mode === 'date') {
-                              setWebDateText(value);
-                            } else {
-                              setWebTimeText(value);
-                            }
-                          }}
-                          keyboardType={showDatePicker.mode === 'date' ? 'default' : 'numbers-and-punctuation'}
-                          autoFocus
-                        />
-                      </View>
-                    ) : (
-                      <DateTimePicker
-                        testID="endDateTimePicker"
-                        value={showDatePicker.field ? form[showDatePicker.field] : new Date()}
-                        mode={showDatePicker.mode}
-                        is24Hour={false}
-                        onChange={(evt, date) => {
-                          console.log('[Events] End picker changed:', date);
-                          if (Platform.OS === 'android') {
-                            if (date && showDatePicker.field) {
-                              setForm(prev => ({ ...prev, [showDatePicker.field!]: date }));
-                            }
-                            setShowDatePicker({ field: null, mode: 'date' });
-                            return;
-                          }
-                          if (date && showDatePicker.field) {
-                            setForm(prev => ({ ...prev, [showDatePicker.field!]: date }));
-                          }
-                        }}
-                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                        style={Platform.OS === 'ios' ? styles.iosSpinnerPicker : undefined}
-                      />
-                    )}
-                    <TouchableOpacity
-                      style={styles.pickerDoneButton}
-                      onPress={closeDatePicker}
-                    >
-                      <Text style={styles.pickerDoneText}>Done</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
               </View>
             </View>
 
@@ -1424,7 +1256,88 @@ export default function EventsScreen() {
             <View style={{ height: 40 }} />
           </ScrollView>
 
-
+          {Platform.OS !== 'android' && showDatePicker.field && (
+            <Modal
+              visible={true}
+              transparent
+              animationType="slide"
+              onRequestClose={closeDatePicker}
+            >
+              <TouchableOpacity
+                style={styles.pickerModalOverlay}
+                activeOpacity={1}
+                onPress={closeDatePicker}
+              >
+                <View style={styles.pickerModalSheet}>
+                  <View style={styles.pickerModalHeader}>
+                    <TouchableOpacity onPress={closeDatePicker} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                      <Text style={styles.pickerModalCancel}>Cancel</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.pickerModalTitle}>
+                      {showDatePicker.mode === 'date' ? 'Select Date' : 'Select Time'}
+                    </Text>
+                    <TouchableOpacity onPress={closeDatePicker} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                      <Text style={styles.pickerModalDone}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {Platform.OS === 'web' ? (
+                    <View style={styles.webPickerBody}>
+                      <input
+                        type={showDatePicker.mode === 'date' ? 'date' : 'time'}
+                        value={showDatePicker.mode === 'date'
+                          ? (showDatePicker.field ? form[showDatePicker.field].toISOString().split('T')[0] : '')
+                          : (showDatePicker.field ? form[showDatePicker.field].toTimeString().slice(0, 5) : '')
+                        }
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (!showDatePicker.field) return;
+                          const current = new Date(form[showDatePicker.field]);
+                          if (showDatePicker.mode === 'date') {
+                            const [year, month, day] = value.split('-').map(Number);
+                            current.setFullYear(year, month - 1, day);
+                          } else {
+                            const [hours, minutes] = value.split(':').map(Number);
+                            current.setHours(hours, minutes);
+                          }
+                          setForm(prev => ({ ...prev, [showDatePicker.field!]: new Date(current) }));
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: 16,
+                          fontSize: 18,
+                          borderRadius: 12,
+                          border: '1.5px solid #e2e8f0',
+                          backgroundColor: '#f8fafc',
+                          outline: 'none',
+                          textAlign: 'center' as const,
+                        }}
+                      />
+                    </View>
+                  ) : (
+                    <DateTimePicker
+                      testID="dateTimePicker"
+                      value={showDatePicker.field ? form[showDatePicker.field] : new Date()}
+                      mode={showDatePicker.mode}
+                      is24Hour={false}
+                      onChange={handleDateTimeChange}
+                      display="spinner"
+                      style={styles.iosSpinnerPicker}
+                    />
+                  )}
+                </View>
+              </TouchableOpacity>
+            </Modal>
+          )}
+          {Platform.OS === 'android' && showDatePicker.field && (
+            <DateTimePicker
+              testID="dateTimePicker"
+              value={showDatePicker.field ? form[showDatePicker.field] : new Date()}
+              mode={showDatePicker.mode}
+              is24Hour={false}
+              onChange={handleDateTimeChange}
+              display="default"
+            />
+          )}
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
@@ -2063,55 +1976,47 @@ const styles = StyleSheet.create({
     color: Colors.textPlaceholder,
     textAlign: 'center',
   },
-  inlinePickerContainer: {
-    marginTop: 12,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.primaryBorder,
-    overflow: 'hidden',
+  pickerModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'flex-end',
+  },
+  pickerModalSheet: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 40,
+  },
+  pickerModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#e2e8f0',
+  },
+  pickerModalCancel: {
+    fontSize: 16,
+    color: '#64748b',
+    fontWeight: '500' as const,
+  },
+  pickerModalTitle: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: '#1e293b',
+  },
+  pickerModalDone: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: '#1e3a8a',
   },
   iosSpinnerPicker: {
     height: 216,
   },
-  webPickerWrap: {
-    padding: 16,
-    gap: 8,
-  },
-  webPickerLabel: {
-    fontSize: 13,
-    fontWeight: '500' as const,
-    color: Colors.textMuted,
-    marginBottom: 4,
-  },
-  webDateInput: {
-    backgroundColor: Colors.background,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.lg,
-    fontSize: 20,
-    fontWeight: '600' as const,
-    color: Colors.textSecondary,
-    textAlign: 'center' as const,
-    borderWidth: 1.5,
-    borderColor: Colors.primary,
-    letterSpacing: 1,
-  },
-  pickerDoneButton: {
-    alignItems: 'center' as const,
-    paddingVertical: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-    backgroundColor: Colors.primaryLight,
-  },
-  pickerDoneText: {
-    fontSize: 16,
-    fontWeight: '600' as const,
-    color: Colors.primary,
-  },
-  dtFieldButtonActive: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primaryLight,
+  webPickerBody: {
+    paddingHorizontal: 24,
+    paddingVertical: 28,
   },
   createButtonBottom: {
     alignItems: 'center',
