@@ -391,9 +391,10 @@ async function resolveEffectiveHomeChurchId(
 const getMyChurchUpcoming = publicProcedure.query(async ({ ctx }) => {
   const user = await getAuthenticatedUser(ctx);
   const profile = await getUserProfile(ctx.supabase, user.id);
+  const reader = ctx.supabaseAdmin ?? ctx.supabase;
 
   const effectiveGroupId = await resolveEffectiveHomeChurchId(
-    ctx.supabase,
+    reader,
     user.id,
     profile.home_group_id
   );
@@ -426,7 +427,7 @@ const getMyChurchUpcoming = publicProcedure.query(async ({ ctx }) => {
     ? ["draft", "published", "cancelled"]
     : ["published", "cancelled"];
 
-  const { data: sabbath, error } = await db(ctx.supabase)
+  const { data: sabbath, error } = await db(reader)
     .from("sabbaths")
     .select("*")
     .eq("group_id", effectiveGroupId)
@@ -449,7 +450,7 @@ const getMyChurchUpcoming = publicProcedure.query(async ({ ctx }) => {
     return null;
   }
 
-  const { data: group } = await db(ctx.supabase)
+  const { data: group } = await db(reader)
     .from("groups")
     .select("id, name")
     .eq("id", effectiveGroupId)
@@ -467,14 +468,17 @@ const getMyChurchUpcoming = publicProcedure.query(async ({ ctx }) => {
 
 const getSwitzerlandUpcomingByDate = publicProcedure.query(async ({ ctx }) => {
   await getAuthenticatedUser(ctx);
+  const reader = ctx.supabaseAdmin ?? ctx.supabase;
   const today = getTodayDateString();
 
   console.log(
     "[sabbaths.getSwitzerlandUpcomingByDate] Fetching upcoming Sabbaths from",
-    today
+    today,
+    "| using service role:",
+    Boolean(ctx.supabaseAdmin && ctx.supabaseAdmin !== ctx.supabase)
   );
 
-  const { data: sabbaths, error } = await db(ctx.supabase)
+  const { data: sabbaths, error } = await db(reader)
     .from("sabbaths")
     .select("*")
     .gte("sabbath_date", today)
@@ -493,7 +497,7 @@ const getSwitzerlandUpcomingByDate = publicProcedure.query(async ({ ctx }) => {
   const groupIds = [
     ...new Set((sabbaths as Sabbath[]).map((s: Sabbath) => s.group_id)),
   ];
-  const { data: groups } = await db(ctx.supabase)
+  const { data: groups } = await db(reader)
     .from("groups")
     .select("id, name")
     .in("id", groupIds);
@@ -544,10 +548,11 @@ const getSabbathDetail = publicProcedure
   .query(async ({ input, ctx }) => {
     const user = await getAuthenticatedUser(ctx);
     const profile = await getUserProfile(ctx.supabase, user.id);
+    const reader = ctx.supabaseAdmin ?? ctx.supabase;
 
     console.log("[sabbaths.getSabbathDetail] Fetching sabbath:", input.sabbathId);
 
-    const { data: sabbath, error: sabbathError } = await db(ctx.supabase)
+    const { data: sabbath, error: sabbathError } = await db(reader)
       .from("sabbaths")
       .select("*")
       .eq("id", input.sabbathId)
@@ -560,7 +565,7 @@ const getSabbathDetail = publicProcedure
 
     const typedSabbath = sabbath as Sabbath;
 
-    const { data: group } = await db(ctx.supabase)
+    const { data: group } = await db(reader)
       .from("groups")
       .select("id, name")
       .eq("id", typedSabbath.group_id)
@@ -576,13 +581,13 @@ const getSabbathDetail = publicProcedure
       typedSabbath.group_id
     );
     const effectiveGroupId = await resolveEffectiveHomeChurchId(
-      ctx.supabase,
+      reader,
       user.id,
       profile.home_group_id
     );
     const isHomeChurch = effectiveGroupId === typedSabbath.group_id;
 
-    const { data: assignmentsRaw } = await db(ctx.supabase)
+    const { data: assignmentsRaw } = await db(reader)
       .from("sabbath_assignments")
       .select("*")
       .eq("sabbath_id", input.sabbathId);
@@ -608,7 +613,7 @@ const getSabbathDetail = publicProcedure
 
       let profileMap = new Map<string, string>();
       if (userIds.length > 0) {
-        const { data: profiles } = await db(ctx.supabase)
+        const { data: profiles } = await db(reader)
           .from("profiles")
           .select("id, full_name, display_name")
           .in("id", userIds);
@@ -636,7 +641,7 @@ const getSabbathDetail = publicProcedure
     let attendingCount: number | null = null;
     let myAttendanceStatus: string | null = null;
 
-    const { data: myAttendanceRecord } = await db(ctx.supabase)
+    const { data: myAttendanceRecord } = await db(reader)
       .from("sabbath_attendance")
       .select("*")
       .eq("sabbath_id", input.sabbathId)
@@ -648,7 +653,7 @@ const getSabbathDetail = publicProcedure
     }
 
     if (shouldShowAttendees) {
-      const { data: attendanceRaw } = await db(ctx.supabase)
+      const { data: attendanceRaw } = await db(reader)
         .from("sabbath_attendance")
         .select("*")
         .eq("sabbath_id", input.sabbathId);
@@ -658,7 +663,7 @@ const getSabbathDetail = publicProcedure
         let attendeeMap = new Map<string, string>();
 
         if (attendeeIds.length > 0) {
-          const { data: attendeeProfiles } = await db(ctx.supabase)
+          const { data: attendeeProfiles } = await db(reader)
             .from("profiles")
             .select("id, full_name, display_name")
             .in("id", attendeeIds);
