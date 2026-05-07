@@ -24,14 +24,14 @@ import {
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/providers/auth-provider';
 import { canManageAnySabbath, canManageSabbathForGroup, buildChurchScope } from '@/utils/church-scope';
 import { isAdmin as checkIsAdmin } from '@/utils/permissions';
 import { trpc } from '@/lib/trpc';
 import { supabase } from '@/lib/supabase';
 import type { Sabbath, SabbathStatus } from '@/types/sabbath';
-import { STATUS_LABELS } from '@/types/sabbath';
+import { STATUS_LABELS, ALL_ROLES } from '@/types/sabbath';
 import { getNextUnplannedSaturday } from '@/utils/sabbath';
 
 function getNextSaturday(): Date {
@@ -101,9 +101,67 @@ export default function SabbathPlannerScreen() {
   const sabbaths = useMemo(() => sabbathsQuery.data ?? [], [sabbathsQuery.data]);
   const isLoading = sabbathsQuery.isLoading;
 
-  const createSabbathMutation = trpc.sabbaths.createDraft.useMutation({
+  const createSabbathMutation = useMutation({
+    mutationFn: async (input: { groupId: string; sabbathDate: string; notes: string | null }) => {
+      if (!user?.id) throw new Error('You must be signed in to create a Sabbath.');
+
+      const dateObj = new Date(input.sabbathDate + 'T00:00:00');
+      if (dateObj.getDay() !== 6) {
+        throw new Error('Sabbath date must be a Saturday');
+      }
+
+      const { data: existing, error: existingErr } = await supabase
+        .from('sabbaths')
+        .select('id')
+        .eq('group_id', input.groupId)
+        .eq('sabbath_date', input.sabbathDate)
+        .maybeSingle();
+      if (existingErr) {
+        console.error('[SabbathPlanner] existing check error:', existingErr.message);
+        throw new Error(existingErr.message);
+      }
+      if (existing) {
+        throw new Error('A Sabbath already exists for this church on this date');
+      }
+
+      const { data: sabbath, error: insertError } = await supabase
+        .from('sabbaths')
+        .insert({
+          group_id: input.groupId,
+          sabbath_date: input.sabbathDate,
+          status: 'draft',
+          notes: input.notes,
+          created_by: user.id,
+          updated_by: user.id,
+        })
+        .select()
+        .single();
+
+      if (insertError || !sabbath) {
+        console.error('[SabbathPlanner] insert sabbath error:', insertError?.message);
+        throw new Error(insertError?.message ?? 'Failed to create Sabbath');
+      }
+
+      const assignmentRows = ALL_ROLES.map((role) => ({
+        sabbath_id: (sabbath as Sabbath).id,
+        role,
+        user_id: null,
+        status: 'pending',
+      }));
+
+      const { error: assignError } = await supabase
+        .from('sabbath_assignments')
+        .insert(assignmentRows);
+
+      if (assignError) {
+        console.error('[SabbathPlanner] insert assignments error:', assignError.message);
+        throw new Error(assignError.message);
+      }
+
+      return sabbath as Sabbath;
+    },
     onSuccess: () => {
-      console.log('[SabbathPlanner] tRPC createDraft success, invalidating');
+      console.log('[SabbathPlanner] createDraft success, invalidating');
       void trpcUtils.sabbaths.invalidate();
     },
   });
