@@ -21,6 +21,15 @@ export const trpcClient = trpc.createClient({
     httpLink({
       url: `${getBaseUrl()}/api/trpc`,
       transformer: superjson,
+      fetch: async (input, init) => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15_000);
+        try {
+          return await fetch(input as RequestInfo, { ...init, signal: controller.signal });
+        } finally {
+          clearTimeout(timeout);
+        }
+      },
       headers: async () => {
         const { data } = await supabase.auth.getSession();
         const token = data.session?.access_token;
