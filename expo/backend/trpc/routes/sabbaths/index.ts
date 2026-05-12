@@ -884,7 +884,7 @@ const updateSabbath = publicProcedure
   .mutation(async ({ input, ctx }) => {
     const user = await getAuthenticatedUser(ctx);
 
-    const { data: sabbath, error: fetchError } = await db(ctx.supabase)
+    const { data: sabbath, error: fetchError } = await db(ctx.supabaseAdmin)
       .from("sabbaths")
       .select("*")
       .eq("id", input.sabbathId)
@@ -900,7 +900,8 @@ const updateSabbath = publicProcedure
       throw new Error("Cancelled Sabbaths cannot be updated");
     }
 
-    await requireCanManageSabbath(ctx.supabase, user.id, typedSabbath.group_id);
+    await requireCanManageSabbath(ctx.supabaseAdmin, user.id, typedSabbath.group_id);
+    console.log("[sabbaths.updateSabbath] Permission OK — using admin client for writes. hasServiceRoleAccess:", ctx.hasServiceRoleAccess);
 
     const updateData: Record<string, any> = {
       updated_by: user.id,
@@ -912,7 +913,7 @@ const updateSabbath = publicProcedure
         throw new Error("Sabbath date must be a Saturday");
       }
 
-      const { data: existing } = await db(ctx.supabase)
+      const { data: existing } = await db(ctx.supabaseAdmin)
         .from("sabbaths")
         .select("id")
         .eq("group_id", typedSabbath.group_id)
@@ -933,7 +934,7 @@ const updateSabbath = publicProcedure
       updateData.notes = input.notes;
     }
 
-    const { data: updated, error: updateError } = await db(ctx.supabase)
+    const { data: updated, error: updateError } = await db(ctx.supabaseAdmin)
       .from("sabbaths")
       .update(updateData)
       .eq("id", input.sabbathId)
@@ -946,9 +947,9 @@ const updateSabbath = publicProcedure
     }
 
     if (typedSabbath.status === "published") {
-      const groupName = await getGroupName(ctx.supabase, typedSabbath.group_id);
+      const groupName = await getGroupName(ctx.supabaseAdmin, typedSabbath.group_id);
       const dateLabel = formatSabbathDate(typedSabbath.sabbath_date);
-      await notifyChurchMembers(ctx.supabase, typedSabbath.group_id, {
+      await notifyChurchMembers(ctx.supabaseAdmin, typedSabbath.group_id, {
         type: "sabbath_updated",
         title: "Sabbath Updated",
         body: `The Sabbath on ${dateLabel} at ${groupName} has been updated.`,
@@ -973,7 +974,7 @@ const assignRole = publicProcedure
   .mutation(async ({ input, ctx }) => {
     const user = await getAuthenticatedUser(ctx);
 
-    const { data: sabbath } = await db(ctx.supabase)
+    const { data: sabbath } = await db(ctx.supabaseAdmin)
       .from("sabbaths")
       .select("group_id, status")
       .eq("id", input.sabbathId)
@@ -983,9 +984,10 @@ const assignRole = publicProcedure
       throw new Error("Sabbath not found");
     }
 
-    await requireCanManageSabbath(ctx.supabase, user.id, (sabbath as any).group_id);
+    await requireCanManageSabbath(ctx.supabaseAdmin, user.id, (sabbath as any).group_id);
+    console.log("[sabbaths.assignRole] Permission OK — using admin client for writes. hasServiceRoleAccess:", ctx.hasServiceRoleAccess);
 
-    const { data: assignment, error } = await db(ctx.supabase)
+    const { data: assignment, error } = await db(ctx.supabaseAdmin)
       .from("sabbath_assignments")
       .update({
         user_id: input.userId,
@@ -1003,8 +1005,8 @@ const assignRole = publicProcedure
       throw new Error(error.message);
     }
 
-    const groupName = await getGroupName(ctx.supabase, (sabbath as any).group_id);
-    await createNotification(ctx.supabase, {
+    const groupName = await getGroupName(ctx.supabaseAdmin, (sabbath as any).group_id);
+    await createNotification(ctx.supabaseAdmin, {
       type: "sabbath_assignment",
       title: "New Sabbath Role Assignment",
       body: `You have been assigned as ${roleLabel(input.role)} at ${groupName}.`,
@@ -1208,7 +1210,7 @@ const cancel = publicProcedure
   .mutation(async ({ input, ctx }) => {
     const user = await getAuthenticatedUser(ctx);
 
-    const { data: sabbath } = await db(ctx.supabase)
+    const { data: sabbath } = await db(ctx.supabaseAdmin)
       .from("sabbaths")
       .select("*")
       .eq("id", input.sabbathId)
@@ -1224,9 +1226,10 @@ const cancel = publicProcedure
       throw new Error("Sabbath is already cancelled");
     }
 
-    await requireCanManageSabbath(ctx.supabase, user.id, typedSabbath.group_id);
+    await requireCanManageSabbath(ctx.supabaseAdmin, user.id, typedSabbath.group_id);
+    console.log("[sabbaths.cancel] Permission OK — using admin client for writes. hasServiceRoleAccess:", ctx.hasServiceRoleAccess);
 
-    const { data: updated, error } = await db(ctx.supabase)
+    const { data: updated, error } = await db(ctx.supabaseAdmin)
       .from("sabbaths")
       .update({
         status: "cancelled",
@@ -1244,9 +1247,9 @@ const cancel = publicProcedure
       throw new Error(error.message);
     }
 
-    const groupName = await getGroupName(ctx.supabase, typedSabbath.group_id);
+    const groupName = await getGroupName(ctx.supabaseAdmin, typedSabbath.group_id);
     const cancelDateLabel = formatSabbathDate(typedSabbath.sabbath_date);
-    await notifyChurchMembers(ctx.supabase, typedSabbath.group_id, {
+    await notifyChurchMembers(ctx.supabaseAdmin, typedSabbath.group_id, {
       type: "sabbath_cancelled",
       title: "Sabbath Cancelled",
       body: `The Sabbath on ${cancelDateLabel} at ${groupName} has been cancelled.${input.cancellationReason ? " Reason: " + input.cancellationReason : ""}`,
@@ -1254,7 +1257,7 @@ const cancel = publicProcedure
       createdBy: user.id,
     });
     if (typedSabbath.status === "published") {
-      const { data: cancelAssignments } = await db(ctx.supabase)
+      const { data: cancelAssignments } = await db(ctx.supabaseAdmin)
         .from("sabbath_assignments")
         .select("user_id")
         .eq("sabbath_id", input.sabbathId)
@@ -1269,7 +1272,7 @@ const cancel = publicProcedure
           group_id: typedSabbath.group_id,
           created_by: user.id,
         }));
-        await createNotificationBatch(ctx.supabase, cancelNotifs);
+        await createNotificationBatch(ctx.supabaseAdmin, cancelNotifs);
       }
     }
     console.log("[sabbaths.cancel] Cancelled sabbath:", input.sabbathId, "— notifications sent");
