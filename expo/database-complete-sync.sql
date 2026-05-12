@@ -90,6 +90,21 @@ ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
 -- Allowed roles
+-- If role column uses the user_role ENUM, normalize it to TEXT so the CHECK
+-- constraint can hold all role values the app uses (incl. 'visitor').
+DO $
+DECLARE
+  col_type TEXT;
+BEGIN
+  SELECT data_type INTO col_type
+  FROM information_schema.columns
+  WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'role';
+
+  IF col_type = 'USER-DEFINED' THEN
+    ALTER TABLE public.profiles ALTER COLUMN role TYPE TEXT USING role::TEXT;
+  END IF;
+END $;
+
 ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
 ALTER TABLE public.profiles
   ADD CONSTRAINT profiles_role_check
