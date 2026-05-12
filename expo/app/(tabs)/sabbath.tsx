@@ -179,7 +179,7 @@ function MyChurchSection({
     return (
       <EmptyState
         icon={<Calendar size={40} color="#cbd5e1" />}
-        title="No upcoming Sabbath planned."
+        title="No upcoming Sabbath"
         message="There are no upcoming Sabbaths planned for your home church yet."
       />
     );
@@ -255,8 +255,8 @@ function SwitzerlandSection({ dateGroups, isLoading, error, onAttend, onViewDeta
     return (
       <EmptyState
         icon={<MapPin size={40} color="#cbd5e1" />}
-        title="No published upcoming Sabbaths."
-        message="There are no published upcoming Sabbaths scheduled in Switzerland yet."
+        title="No upcoming Sabbaths"
+        message="There are no published Sabbaths scheduled in Switzerland yet."
       />
     );
   }

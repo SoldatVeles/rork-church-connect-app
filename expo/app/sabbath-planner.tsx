@@ -106,13 +106,6 @@ export default function SabbathPlannerScreen() {
       console.log('[SabbathPlanner] tRPC createDraft success, invalidating');
       void trpcUtils.sabbaths.invalidate();
     },
-    onError: (err) => {
-      console.error('[SabbathPlanner] createDraft mutation error:', {
-        message: err?.message,
-        data: (err as any)?.data,
-        shape: (err as any)?.shape,
-      });
-    },
   });
   const isCreatingSabbath = createSabbathMutation.isPending;
 
@@ -195,21 +188,12 @@ export default function SabbathPlannerScreen() {
       return;
     }
 
-    const payload = {
-      groupId: effectiveGroupId,
-      sabbathDate: selectedDate,
-      notes: notes.trim() || null,
-    };
-    console.log('[SabbathPlanner] createDraft DEBUG', {
-      userId: user?.id,
-      userRole: (user as any)?.role,
-      selectedGroupId: effectiveGroupId,
-      selectedDate,
-      payload,
-    });
-
     try {
-      const result = await createSabbathMutation.mutateAsync(payload);
+      const result = await createSabbathMutation.mutateAsync({
+        groupId: effectiveGroupId,
+        sabbathDate: selectedDate,
+        notes: notes.trim() || null,
+      });
       console.log('[SabbathPlanner] Created sabbath:', result.id);
       setShowCreateModal(false);
       setSelectedDate(null);
@@ -217,18 +201,8 @@ export default function SabbathPlannerScreen() {
       setSelectedGroupId(null);
       router.push({ pathname: '/sabbath-detail' as any, params: { sabbathId: result.id } });
     } catch (err: any) {
-      const serverMessage =
-        err?.data?.message ||
-        err?.shape?.message ||
-        err?.message ||
-        'Failed to create Sabbath plan.';
-      console.error('[SabbathPlanner] Create error:', {
-        message: err?.message,
-        data: err?.data,
-        shape: err?.shape,
-        cause: err?.cause,
-      });
-      Alert.alert('Could not create Sabbath', serverMessage);
+      console.error('[SabbathPlanner] Create error:', err);
+      Alert.alert('Error', err.message || 'Failed to create Sabbath plan.');
     }
   }, [selectedDate, effectiveGroupId, notes, createSabbathMutation]);
 
