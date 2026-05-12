@@ -7,8 +7,10 @@ import { supabase } from "@/lib/supabase";
 export const trpc = createTRPCReact<AppRouter>();
 
 const getBaseUrl = () => {
-  if (process.env.EXPO_PUBLIC_RORK_API_BASE_URL) {
-    return process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+  const raw = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+  if (raw && raw.length > 0) {
+    // strip trailing slashes to avoid `//api/trpc`
+    return raw.replace(/\/+$/, "");
   }
 
   throw new Error(
@@ -16,11 +18,51 @@ const getBaseUrl = () => {
   );
 };
 
+const TRPC_URL = `${getBaseUrl()}/api/trpc`;
+console.log("[tRPC] Base URL:", TRPC_URL);
+
+/**
+ * Custom fetch that surfaces real network/server error details instead
+ * of the generic "Failed to fetch" message. Logs URL, status, and body
+ * on failure so we can diagnose backend vs network issues.
+ */
+const trpcFetch: typeof fetch = async (input, init) => {
+  const url = typeof input === "string" ? input : (input as Request).url;
+  try {
+    const res = await fetch(input, init);
+    if (!res.ok) {
+      const cloned = res.clone();
+      let bodyText = "";
+      try {
+        bodyText = await cloned.text();
+      } catch {}
+      console.error(
+        "[tRPC] HTTP error",
+        res.status,
+        url,
+        bodyText?.slice(0, 500)
+      );
+    }
+    return res;
+  } catch (err: any) {
+    console.error(
+      "[tRPC] Network failure for",
+      url,
+      "—",
+      err?.message ?? err
+    );
+    throw new Error(
+      `Network request failed (${err?.message ?? "unknown"}) — check EXPO_PUBLIC_RORK_API_BASE_URL and that the API is reachable at ${TRPC_URL}`
+    );
+  }
+};
+
 export const trpcClient = trpc.createClient({
   links: [
     httpLink({
-      url: `${getBaseUrl()}/api/trpc`,
+      url: TRPC_URL,
       transformer: superjson,
+      fetch: trpcFetch,
       headers: async () => {
         const { data } = await supabase.auth.getSession();
         const token = data.session?.access_token;
