@@ -1,6 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { Calendar, MapPin, Users, Plus, Clock, AlertCircle, X, CalendarPlus } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
   StyleSheet,
   Text,
@@ -107,6 +108,9 @@ export default function EventsScreen() {
 
   const listQuery = useQuery({
     queryKey: ['events', currentChurchId, userIsAdmin],
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    staleTime: 0,
     queryFn: async () => {
       console.log('[Events] Fetching events from database, churchId:', currentChurchId);
       
@@ -255,9 +259,10 @@ export default function EventsScreen() {
       console.log('[Events] Insert succeeded, created event:', data.id);
       return true;
     },
-    onSuccess: () => {
-      console.log('[Events] Mutation success, invalidating queries');
-      void queryClient.invalidateQueries({ queryKey: ['events'] });
+    onSuccess: async () => {
+      console.log('[Events] Mutation success, invalidating + refetching events');
+      await queryClient.invalidateQueries({ queryKey: ['events'] });
+      await listQuery.refetch();
       const now = new Date();
       setForm({
         title: '',
@@ -278,6 +283,14 @@ export default function EventsScreen() {
       Alert.alert('Error', (error as Error).message ?? 'Failed to create event. Please try again.');
     },
   });
+
+  useFocusEffect(
+    useCallback(() => {
+      console.log('[Events] Screen focused, refetching events');
+      void listQuery.refetch();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+  );
 
   const allEvents = useMemo<Event[]>(() => listQuery.data ?? [], [listQuery.data]);
 
