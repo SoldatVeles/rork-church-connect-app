@@ -24,14 +24,13 @@ import {
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/providers/auth-provider';
 import { canManageAnySabbath, canManageSabbathForGroup, buildChurchScope } from '@/utils/church-scope';
 import { isAdmin as checkIsAdmin } from '@/utils/permissions';
-import { trpc } from '@/lib/trpc';
 import { supabase } from '@/lib/supabase';
 import type { Sabbath, SabbathStatus } from '@/types/sabbath';
-import { STATUS_LABELS } from '@/types/sabbath';
+import { STATUS_LABELS, ALL_ROLES } from '@/types/sabbath';
 import { getNextUnplannedSaturday } from '@/utils/sabbath';
 
 function getNextSaturday(): Date {
@@ -90,21 +89,115 @@ type FilterType = 'all' | 'upcoming' | 'past' | 'draft' | 'published' | 'cancell
 export default function SabbathPlannerScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const trpcUtils = trpc.useUtils();
+  const queryClient = useQueryClient();
 
-  const pastorGroupsQuery = trpc.sabbaths.getMyPastorGroups.useQuery();
+  const pastorGroupsQuery = useQuery({
+    queryKey: ['sabbath-pastor-groups', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [] as { id: string; group_id: string; user_id: string }[];
+      const { data, error } = await supabase
+        .from('group_pastors')
+        .select('id, group_id, user_id')
+        .eq('user_id', user.id);
+      if (error) {
+        console.error('[SabbathPlanner] pastor groups error:', error.message);
+        return [] as { id: string; group_id: string; user_id: string }[];
+      }
+      const results = (data || []) as { id: string; group_id: string; user_id: string }[];
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, home_group_id')
+        .eq('id', user.id)
+        .maybeSingle();
+      const profileRole = (profile as any)?.role as string | undefined;
+      const homeGroupId = (profile as any)?.home_group_id as string | null | undefined;
+      if (profileRole === 'church_leader' && homeGroupId) {
+        const already = results.some((r) => r.group_id === homeGroupId);
+        if (!already) {
+          results.push({ id: `home-${homeGroupId}`, group_id: homeGroupId, user_id: user.id });
+        }
+      }
+      return results;
+    },
+    enabled: !!user?.id,
+    staleTime: 30_000,
+  });
   const pastorGroups = useMemo(() => pastorGroupsQuery.data ?? [], [pastorGroupsQuery.data]);
   const pastorGroupIds = useMemo(() => pastorGroups.map((gp) => gp.group_id as string), [pastorGroups]);
   const churchScope = useMemo(() => buildChurchScope(user, null, pastorGroupIds), [user, pastorGroupIds]);
 
-  const sabbathsQuery = trpc.sabbaths.getAll.useQuery();
+  const sabbathsQuery = useQuery({
+    queryKey: ['sabbaths-all'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('sabbaths')
+        .select('*')
+        .order('sabbath_date', { ascending: false });
+      if (error) {
+        console.error('[SabbathPlanner] getAll error:', error.message);
+        throw new Error(error.message);
+      }
+      return (data || []) as Sabbath[];
+    },
+    staleTime: 10_000,
+  });
   const sabbaths = useMemo(() => sabbathsQuery.data ?? [], [sabbathsQuery.data]);
   const isLoading = sabbathsQuery.isLoading;
 
-  const createSabbathMutation = trpc.sabbaths.createDraft.useMutation({
+  const createSabbathMutation = useMutation({
+    mutationFn: async (input: { groupId: string; sabbathDate: string; notes: string | null }) => {
+      if (!user?.id) throw new Error('Not authenticated');
+      const dateObj = new Date(input.sabbathDate + 'T00:00:00');
+      if (dateObj.getDay() !== 6) {
+        throw new Error('Sabbath date must be a Saturday');
+      }
+
+      const { data: existing } = await supabase
+        .from('sabbaths')
+        .select('id')
+        .eq('group_id', input.groupId)
+        .eq('sabbath_date', input.sabbathDate)
+        .maybeSingle();
+      if (existing) {
+        throw new Error('A Sabbath already exists for this church on this date');
+      }
+
+      const { data: sabbath, error: insertError } = await supabase
+        .from('sabbaths')
+        .insert({
+          group_id: input.groupId,
+          sabbath_date: input.sabbathDate,
+          status: 'draft',
+          notes: input.notes,
+          created_by: user.id,
+          updated_by: user.id,
+        })
+        .select()
+        .single();
+      if (insertError || !sabbath) {
+        console.error('[SabbathPlanner] insert error:', insertError);
+        throw new Error(insertError?.message ?? 'Failed to create Sabbath');
+      }
+
+      const assignmentRows = ALL_ROLES.map((role) => ({
+        sabbath_id: (sabbath as any).id,
+        role,
+        user_id: null,
+        status: 'pending',
+      }));
+      const { error: assignError } = await supabase
+        .from('sabbath_assignments')
+        .insert(assignmentRows);
+      if (assignError) {
+        console.warn('[SabbathPlanner] assignment rows error:', assignError.message);
+      }
+
+      return sabbath as Sabbath;
+    },
     onSuccess: () => {
-      console.log('[SabbathPlanner] tRPC createDraft success, invalidating');
-      void trpcUtils.sabbaths.invalidate();
+      console.log('[SabbathPlanner] createDraft success, invalidating');
+      void queryClient.invalidateQueries({ queryKey: ['sabbaths-all'] });
     },
   });
   const isCreatingSabbath = createSabbathMutation.isPending;
