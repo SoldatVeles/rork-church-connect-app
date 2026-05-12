@@ -10,14 +10,11 @@ import {
   Dimensions,
   ActivityIndicator,
 } from 'react-native';
-import { Bell, Calendar, Heart, MessageCircle, X, Trash2, BookOpen, CheckCheck } from 'lucide-react-native';
+import { Bell, Calendar, Heart, MessageCircle, X, Trash2 } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
-import { useChurch } from '@/providers/church-provider';
-import { isAdmin as checkIsAdmin } from '@/utils/permissions';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Colors, Shadow, Radius, Spacing } from '@/constants/theme';
 
 interface NotificationDropdownProps {
   visible: boolean;
@@ -32,27 +29,17 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   anchorPosition,
 }) => {
   const { user } = useAuth();
-  const { currentChurch } = useChurch();
-  const currentChurchId = currentChurch?.id ?? null;
-  const userIsAdmin = checkIsAdmin(user);
 
   const notificationsQuery = useQuery({
-    queryKey: ['notifications', user?.id, currentChurchId, userIsAdmin],
+    queryKey: ['notifications', user?.id],
     queryFn: async () => {
-      if (!user?.id) return [];
       let query = supabase
         .from('notifications')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (userIsAdmin) {
-        // Admin sees all
-      } else {
-        const filters = [`user_id.eq.${user.id}`];
-        if (currentChurchId) {
-          filters.push(`group_id.eq.${currentChurchId}`);
-        }
-        query = query.or(filters.join(','));
+      if (user?.id) {
+        query = query.or(`user_id.eq.${user.id},user_id.is.null`);
       }
 
       const { data, error } = await query;
@@ -64,7 +51,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
         type: notification.type,
         title: notification.title,
         message: notification.body || '',
-        isRead: !!notification.is_read,
+        isRead: false,
         createdAt: new Date(notification.created_at),
       }));
     },
@@ -73,45 +60,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   
   const markReadMutation = useMutation({
     mutationFn: async (data: { id: string }) => {
-      console.log('[NotificationDropdown] Marking notification as read:', data.id);
-      const { error } = await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('id', data.id);
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: () => {
-      void notificationsQuery.refetch();
-    },
-  });
-
-  const markAllReadMutation = useMutation({
-    mutationFn: async () => {
-      if (!user?.id) return;
-      console.log('[NotificationDropdown] Marking all as read for user:', user.id);
-      if (userIsAdmin) {
-        const { error } = await supabase
-          .from('notifications')
-          .update({ is_read: true })
-          .eq('is_read', false);
-        if (error) throw new Error(error.message);
-      } else {
-        const { error: errDirect } = await supabase
-          .from('notifications')
-          .update({ is_read: true })
-          .eq('user_id', user.id)
-          .eq('is_read', false);
-        if (errDirect) throw new Error(errDirect.message);
-        if (currentChurchId) {
-          const { error: errGroup } = await supabase
-            .from('notifications')
-            .update({ is_read: true })
-            .eq('group_id', currentChurchId)
-            .is('user_id', null)
-            .eq('is_read', false);
-          if (errGroup) throw new Error(errGroup.message);
-        }
-      }
+      console.log('Mark read not implemented yet:', data.id);
     },
     onSuccess: () => {
       void notificationsQuery.refetch();
@@ -128,14 +77,6 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
         return <Heart size={20} color="#ef4444" />;
       case 'announcement':
         return <MessageCircle size={20} color="#10b981" />;
-      case 'sabbath_published':
-      case 'sabbath_updated':
-      case 'sabbath_cancelled':
-      case 'sabbath_assignment':
-      case 'sabbath_reassigned':
-      case 'sabbath_assignment_cancelled':
-      case 'sabbath_response':
-        return <BookOpen size={20} color="#8b5cf6" />;
       default:
         return <Bell size={20} color="#6b7280" />;
     }
@@ -155,16 +96,8 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
       case 'prayer':
         router.push('/(tabs)/prayers');
         break;
-      case 'sabbath_published':
-      case 'sabbath_updated':
-      case 'sabbath_cancelled':
-      case 'sabbath_assignment':
-      case 'sabbath_reassigned':
-      case 'sabbath_assignment_cancelled':
-      case 'sabbath_response':
-        router.push('/(tabs)/sabbath');
-        break;
       default:
+        // Stay on current screen for announcements
         break;
     }
     
@@ -199,26 +132,9 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
 
   const clearAllMutation = useMutation({
     mutationFn: async () => {
-      if (!user?.id) return;
-      console.log('[NotificationDropdown] Clearing notifications for user:', user.id, 'admin:', userIsAdmin);
-      if (userIsAdmin) {
-        const { error } = await supabase.from('notifications').delete().not('id', 'is', null);
-        if (error) throw new Error(error.message);
-      } else {
-        const { error: errDirect } = await supabase
-          .from('notifications')
-          .delete()
-          .eq('user_id', user.id);
-        if (errDirect) throw new Error(errDirect.message);
-        if (currentChurchId) {
-          const { error: errGroup } = await supabase
-            .from('notifications')
-            .delete()
-            .eq('group_id', currentChurchId)
-            .is('user_id', null);
-          if (errGroup) throw new Error(errGroup.message);
-        }
-      }
+      console.log('Clearing all notifications');
+      const { error } = await supabase.from('notifications').delete().not('id', 'is', null);
+      if (error) throw new Error(error.message);
     },
     onSuccess: () => notificationsQuery.refetch(),
   });
@@ -251,16 +167,9 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
           <View style={styles.dropdownHeader}>
             <Text style={styles.dropdownTitle}>Notifications</Text>
             {notifications.length > 0 && (
-              <View style={styles.headerActions}>
-                {notifications.some(n => !n.isRead) && (
-                  <TouchableOpacity onPress={() => markAllReadMutation.mutate()} accessibilityRole="button" testID="mark-all-read-notifications">
-                    <CheckCheck size={20} color="#3b82f6" />
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity onPress={() => clearAllMutation.mutate()} accessibilityRole="button" testID="clear-all-notifications">
-                  <Trash2 size={20} color="#ef4444" />
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity onPress={() => clearAllMutation.mutate()} accessibilityRole="button" testID="clear-all-notifications">
+                <Trash2 size={20} color="#ef4444" />
+              </TouchableOpacity>
             )}
           </View>
 
@@ -345,16 +254,9 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
             <Text style={styles.modalTitle}>Notifications</Text>
             <View style={styles.modalHeaderActions}>
               {notifications.length > 0 && (
-                <View style={styles.headerActions}>
-                  {notifications.some(n => !n.isRead) && (
-                    <TouchableOpacity onPress={() => markAllReadMutation.mutate()} style={styles.markAllButton}>
-                      <CheckCheck size={20} color="#3b82f6" />
-                    </TouchableOpacity>
-                  )}
-                  <TouchableOpacity onPress={() => clearAllMutation.mutate()} style={styles.markAllButton}>
-                    <Trash2 size={20} color="#ef4444" />
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity onPress={() => clearAllMutation.mutate()} style={styles.markAllButton}>
+                  <Trash2 size={20} color="#ef4444" />
+                </TouchableOpacity>
               )}
               <TouchableOpacity onPress={onClose}>
                 <X size={24} color="#6b7280" />
@@ -421,6 +323,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
 };
 
 const styles = StyleSheet.create({
+  // Web styles
   webOverlay: {
     position: 'absolute',
     top: 0,
@@ -431,9 +334,13 @@ const styles = StyleSheet.create({
   },
   webDropdown: {
     position: 'absolute',
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
-    ...Shadow.lg,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
     width: 360,
     maxHeight: 480,
     zIndex: 999,
@@ -442,72 +349,72 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: Spacing.lg,
+    padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: '#e5e7eb',
   },
   dropdownTitle: {
     fontSize: 18,
-    fontWeight: '600' as const,
-    color: Colors.textSecondary,
+    fontWeight: '600',
+    color: '#1e293b',
   },
   notificationsList: {
     maxHeight: 400,
   },
   notificationItem: {
     flexDirection: 'row',
-    padding: Spacing.md,
+    padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
+    borderBottomColor: '#f3f4f6',
   },
   unreadNotification: {
-    backgroundColor: Colors.infoLight,
+    backgroundColor: '#eff6ff',
   },
   notificationIcon: {
     width: 40,
     height: 40,
-    borderRadius: Radius.pill,
-    backgroundColor: Colors.surfaceSecondary,
+    borderRadius: 20,
+    backgroundColor: '#f3f4f6',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: Spacing.md,
+    marginRight: 12,
   },
   notificationContent: {
     flex: 1,
   },
   notificationTitle: {
     fontSize: 14,
-    fontWeight: '500' as const,
-    color: Colors.textSecondary,
+    fontWeight: '500',
+    color: '#1e293b',
     marginBottom: 4,
   },
   unreadText: {
-    fontWeight: '600' as const,
+    fontWeight: '600',
   },
   notificationMessage: {
     fontSize: 13,
-    color: Colors.textMuted,
+    color: '#64748b',
     marginBottom: 4,
     lineHeight: 18,
   },
   notificationTime: {
     fontSize: 12,
-    color: Colors.textPlaceholder,
+    color: '#94a3b8',
   },
   itemDeleteButton: {
     padding: 6,
     alignSelf: 'center',
   },
   viewAllButton: {
-    padding: Spacing.lg,
+    padding: 16,
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: '#e5e7eb',
   },
   viewAllText: {
     fontSize: 14,
-    color: Colors.info,
-    fontWeight: '500' as const,
+    color: '#3b82f6',
+    fontWeight: '500',
   },
   loadingContainer: {
     padding: 40,
@@ -521,9 +428,11 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: Colors.textPlaceholder,
-    marginTop: Spacing.md,
+    color: '#94a3b8',
+    marginTop: 12,
   },
+
+  // Mobile Modal styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -533,7 +442,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalContent: {
-    backgroundColor: Colors.surface,
+    backgroundColor: 'white',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '80%',
@@ -543,36 +452,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: Spacing.xl,
+    padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: '#e5e7eb',
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: '600' as const,
-    color: Colors.textSecondary,
+    fontWeight: '600',
+    color: '#1e293b',
   },
   modalHeaderActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.md,
+    gap: 12,
   },
   markAllButton: {
     padding: 4,
-  },
-  headerActions: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: Spacing.md,
   },
   modalNotificationsList: {
     flex: 1,
   },
   modalNotificationItem: {
     flexDirection: 'row',
-    padding: Spacing.lg,
+    padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
+    borderBottomColor: '#f3f4f6',
   },
 });
 

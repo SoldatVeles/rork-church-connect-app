@@ -1,7 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { CheckCircle, XCircle } from 'lucide-react-native';
-import { Colors, Shadow, Radius, Spacing } from '@/constants/theme';
 
 interface SabbathAttendanceActionsProps {
   sabbathId: string;
@@ -66,17 +65,21 @@ export function SabbathAttendanceActions({ sabbathId, currentStatus, onAttend, i
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
-    padding: Spacing.xl,
-    marginBottom: Spacing.md,
-    ...Shadow.sm,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
   sectionHeading: {
     fontSize: 15,
     fontWeight: '700' as const,
-    color: Colors.textTertiary,
-    marginBottom: Spacing.sm,
+    color: '#334155',
+    marginBottom: 8,
   },
   attendanceRow: {
     flexDirection: 'row',
@@ -89,23 +92,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 12,
-    borderRadius: Radius.md,
+    borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#ffffff',
   },
   attendanceButtonActive: {
-    backgroundColor: Colors.successDark,
-    borderColor: Colors.successDark,
+    backgroundColor: '#166534',
+    borderColor: '#166534',
   },
   notAttendingButtonActive: {
-    backgroundColor: Colors.dangerDark,
-    borderColor: Colors.dangerDark,
+    backgroundColor: '#991b1b',
+    borderColor: '#991b1b',
   },
   attendanceButtonText: {
     fontSize: 14,
     fontWeight: '600' as const,
-    color: Colors.textTertiary,
+    color: '#475569',
   },
   attendanceButtonTextActive: {
     color: '#ffffff',

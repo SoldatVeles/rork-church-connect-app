@@ -10,7 +10,6 @@ export interface User {
   phone?: string;
   joinedAt: Date;
   createdAt?: string;
-  homeGroupId?: string | null;
 }
 
 export type UserRole = 'admin' | 'church_leader' | 'pastor' | 'member' | 'visitor';

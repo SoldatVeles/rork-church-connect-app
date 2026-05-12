@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { Calendar, MapPin, Users, Plus, Clock, AlertCircle, X, CalendarPlus, Globe, Trash2, Church as ChurchIcon } from 'lucide-react-native';
+import { Calendar, MapPin, Users, Plus, Clock, AlertCircle, X, CalendarPlus } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   StyleSheet,
@@ -13,21 +13,17 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
-  Switch,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '@/providers/auth-provider';
 import { useChurch } from '@/providers/church-provider';
-import type { Church } from '@/providers/church-provider';
 import { isAdmin } from '@/utils/permissions';
-import { buildChurchScope, canManageEventsForGroup, canManageAnyEvent } from '@/utils/church-scope';
 import type { Event, EventType } from '@/types/event';
 import { supabase } from '@/lib/supabase';
 import { addEventToCalendar } from '@/utils/calendar-sync';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Colors, Shadow, Radius, Spacing } from '@/constants/theme';
 
 const allowedEventTypes: EventType[] = ['bible_study', 'youth', 'special', 'conference'];
 
@@ -45,17 +41,13 @@ const eventTypeLabels: Record<EventType, string> = {
   conference: 'Conference',
 };
 
-const resolveRawType = (row: any): string => {
-  const eventType = row.event_type;
-  const legacyType = row.type;
-  if (typeof eventType === 'string' && eventType.length > 0) return eventType;
-  if (typeof legacyType === 'string' && legacyType.length > 0) return legacyType;
-  return 'bible_study';
-};
-
-const normalizeEventType = (value: string): EventType | null => {
-  if (value === 'sabbath' || value === 'prayer_meeting') return null;
-  if (allowedEventTypes.includes(value as EventType)) return value as EventType;
+const normalizeEventType = (value: unknown): EventType | null => {
+  if (value === 'sabbath') {
+    return null;
+  }
+  if (allowedEventTypes.includes(value as EventType)) {
+    return value as EventType;
+  }
   console.log('[Events] Normalized unexpected event type to bible_study:', value);
   return 'bible_study';
 };
@@ -64,38 +56,11 @@ const fallbackEventImage = 'https://images.unsplash.com/photo-1530023367847-a683
 
 export default function EventsScreen() {
   const { user, isAuthenticated, isLoading } = useAuth();
-  const { currentChurch, availableChurches } = useChurch();
+  const { currentChurch } = useChurch();
   const currentChurchId = currentChurch?.id ?? null;
   const userIsAdmin = isAdmin(user);
-
-  const pastorGroupsQuery = useQuery({
-    queryKey: ['pastor-groups-for-events', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return [];
-      const { data, error } = await supabase
-        .from('group_members')
-        .select('group_id')
-        .eq('user_id', user.id)
-        .eq('role', 'pastor');
-      if (error) {
-        console.warn('[Events] Error fetching pastor groups:', error.message);
-        return [];
-      }
-      return (data || []).map((r: any) => r.group_id as string);
-    },
-    enabled: !!user?.id,
-  });
-  const pastorGroupIds = useMemo(() => pastorGroupsQuery.data ?? [], [pastorGroupsQuery.data]);
-  const churchScope = useMemo(() => buildChurchScope(user, currentChurchId, pastorGroupIds), [user, currentChurchId, pastorGroupIds]);
-  const canManageEvents = canManageAnyEvent(churchScope);
-
-  const manageableChurches = useMemo<Church[]>(() => {
-    if (!availableChurches || availableChurches.length === 0) return [];
-    if (userIsAdmin) return availableChurches;
-    return availableChurches.filter((c) => canManageEventsForGroup(churchScope, c.id));
-  }, [availableChurches, userIsAdmin, churchScope]);
-
-  console.log('[Events] Auth state:', { user: user?.id, isAuthenticated, isLoading, churchId: currentChurchId, canManageEvents });
+  
+  console.log('[Events] Auth state:', { user: user?.id, isAuthenticated, isLoading, churchId: currentChurchId });
   const [selectedFilter, setSelectedFilter] = useState<EventType | 'all'>('all');
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [showDetailsModal, setShowDetailsModal] = useState<boolean>(false);
@@ -110,8 +75,6 @@ export default function EventsScreen() {
     location: string;
     type: EventType;
     maxAttendees?: string;
-    groupId: string | null;
-    isSharedAllChurches: boolean;
   }>({
     title: '',
     description: '',
@@ -122,8 +85,6 @@ export default function EventsScreen() {
     location: '',
     type: 'bible_study',
     maxAttendees: '',
-    groupId: currentChurchId,
-    isSharedAllChurches: false,
   });
 
   const [showDatePicker, setShowDatePicker] = useState<{
@@ -152,90 +113,59 @@ export default function EventsScreen() {
       let query = supabase
         .from('events')
         .select('*')
+        .neq('event_type', 'sabbath')
         .order('start_at', { ascending: true });
 
       if (!userIsAdmin && currentChurchId) {
-        query = query.or(`group_id.eq.${currentChurchId},is_shared_all_churches.eq.true`);
+        query = query.eq('group_id', currentChurchId);
       } else if (!userIsAdmin && !currentChurchId) {
         console.log('[Events] Non-admin user has no church, returning empty');
         return [];
       }
 
-      let { data, error } = await query;
+      const { data, error } = await query;
 
       if (error) {
-        console.error('[Events] Failed to fetch events:', JSON.stringify(error));
-        if (!userIsAdmin && currentChurchId && error.message?.includes('is_shared_all_churches')) {
-          console.log('[Events] is_shared_all_churches column missing, falling back to group_id filter');
-          const fallback = await supabase
-            .from('events')
-            .select('*')
-            .eq('group_id', currentChurchId)
-            .order('start_at', { ascending: true });
-          if (fallback.error) {
-            console.error('[Events] Fallback also failed:', JSON.stringify(fallback.error));
-            throw new Error(fallback.error.message ?? 'Failed to load events');
+        console.error('[Events] Failed to fetch events:', error);
+        throw new Error(error.message ?? 'Failed to load events');
+      }
+
+      console.log('[Events] Fetched events:', data);
+      
+      const sanitizedEvents = (data as any[])
+        .map((event: any) => {
+          const rawType = (event.type ?? event.event_type ?? 'bible_study') as string;
+
+          if (rawType === 'prayer_meeting' || rawType === 'sabbath') {
+            console.log('[Events] Skipping non-event entry in events feed:', event.id, rawType);
+            return null;
           }
-          data = fallback.data;
-          error = null;
-        } else {
-          throw new Error(error.message ?? 'Failed to load events');
-        }
-      }
 
-      const rows = (data ?? []) as any[];
-      console.log('[Events] Raw rows fetched:', rows.length);
-      const rawDetails = rows.map((r: any) => ({
-        id: r.id,
-        title: r.title,
-        event_type: r.event_type,
-        type: r.type,
-        group_id: r.group_id,
-        start_at: r.start_at,
-        created_at: r.created_at,
-      }));
-      console.log('[Events] Raw row details:', JSON.stringify(rawDetails));
+          const start = event.start_at ? new Date(event.start_at) : new Date();
+          const end = event.end_at ? new Date(event.end_at) : undefined;
+          const registeredUsersSafe: string[] = Array.isArray(event?.registered_users)
+            ? (event.registered_users as string[])
+            : [];
 
-      const sanitizedEvents: Event[] = [];
-      for (const event of rows) {
-        const rawType = resolveRawType(event);
-        const normalized = normalizeEventType(rawType);
-        console.log('[Events] Row', event.id, '| event_type:', event.event_type, '| type:', event.type, '| resolved:', rawType, '| normalized:', normalized);
+          return {
+            id: event.id,
+            title: event.title,
+            description: event.description ?? '',
+            date: start,
+            endDate: end,
+            location: event.location ?? '',
+            type: normalizeEventType(rawType)!,
+            maxAttendees: event.max_attendees ?? undefined,
+            currentAttendees: event.current_attendees ?? 0,
+            registeredUsers: registeredUsersSafe,
+            isRegistrationOpen: event.is_registration_open ?? true,
+            createdBy: event.created_by,
+            imageUrl: event.image_url ?? undefined,
+            createdAt: new Date(event.created_at ?? new Date().toISOString()),
+          } as Event;
+        })
+        .filter((item): item is Event => item !== null);
 
-        if (!normalized) {
-          console.log('[Events] Skipping excluded type:', rawType, 'for event', event.id);
-          continue;
-        }
-
-        const start = event.start_at ? new Date(event.start_at) : new Date();
-        const end = event.end_at ? new Date(event.end_at) : undefined;
-        const registeredUsersSafe: string[] = Array.isArray(event?.registered_users)
-          ? (event.registered_users as string[])
-          : [];
-
-        sanitizedEvents.push({
-          id: event.id,
-          title: event.title,
-          description: event.description ?? '',
-          date: start,
-          endDate: end,
-          location: event.location ?? '',
-          type: normalized,
-          maxAttendees: event.max_attendees ?? undefined,
-          currentAttendees: event.current_attendees ?? 0,
-          registeredUsers: registeredUsersSafe,
-          isRegistrationOpen: event.is_registration_open ?? true,
-          createdBy: event.created_by,
-          imageUrl: event.image_url ?? undefined,
-          createdAt: new Date(event.created_at ?? new Date().toISOString()),
-          groupId: event.group_id ?? null,
-          isSharedAllChurches: event.is_shared_all_churches ?? false,
-        } as Event);
-      }
-
-      console.log('[Events] Final sanitized events count:', sanitizedEvents.length);
-      console.log('[Events] Sanitized event ids:', sanitizedEvents.map(e => e.id));
-      console.log('[Events] Skipped count:', rows.length - sanitizedEvents.length);
       return sanitizedEvents;
     },
   });
@@ -252,8 +182,6 @@ export default function EventsScreen() {
       type: EventType;
       maxAttendees?: number;
       createdBy: string;
-      groupId: string | null;
-      isSharedAllChurches: boolean;
     }) => {
       console.log('[Events] mutationFn called with:', eventData);
 
@@ -285,8 +213,7 @@ export default function EventsScreen() {
         is_registration_open: true,
         current_attendees: 0,
         registered_users: [],
-        group_id: eventData.groupId,
-        is_shared_all_churches: eventData.isSharedAllChurches ?? false,
+        group_id: currentChurchId,
       };
 
       console.log('[Events] Inserting event with data:', JSON.stringify(insertData, null, 2));
@@ -341,9 +268,7 @@ export default function EventsScreen() {
         endTime: now,
         location: '',
         type: 'bible_study',
-        maxAttendees: '',
-        groupId: currentChurchId,
-        isSharedAllChurches: false,
+        maxAttendees: ''
       });
       setShowAddModal(false);
       Alert.alert('Success', 'Event has been created successfully!');
@@ -455,31 +380,6 @@ export default function EventsScreen() {
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: async ({ eventId }: { eventId: string }) => {
-      console.log('[Events] Delete mutation called for', eventId);
-      const { error } = await supabase
-        .from('events')
-        .delete()
-        .eq('id', eventId);
-      if (error) {
-        console.error('[Events] Delete failed:', error);
-        throw new Error(error.message ?? 'Failed to delete event');
-      }
-      return true;
-    },
-    onSuccess: () => {
-      console.log('[Events] Delete mutation success');
-      void queryClient.invalidateQueries({ queryKey: ['events'] });
-      void queryClient.invalidateQueries({ queryKey: ['home-events'] });
-      Alert.alert('Deleted', 'The event has been removed.');
-    },
-    onError: (error) => {
-      console.error('[Events] Delete mutation error:', error);
-      Alert.alert('Error', (error as Error).message ?? 'Could not delete event.');
-    },
-  });
-
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('en-US', {
       weekday: 'short',
@@ -582,8 +482,6 @@ export default function EventsScreen() {
       type: form.type,
       maxAttendees: form.maxAttendees ? Number(form.maxAttendees) : undefined,
       createdBy: user.id,
-      groupId: form.groupId,
-      isSharedAllChurches: form.isSharedAllChurches,
     };
 
     console.log('[Events] Creating event with payload:', JSON.stringify(payload, null, 2));
@@ -598,13 +496,15 @@ export default function EventsScreen() {
     }
   };
 
-  const handleDateTimeChange = useCallback((_event: any, selectedDate?: Date) => {
-    console.log('[Events] DateTimePicker change:', { selectedDate, field: showDatePicker.field });
+  const handleDateTimeChange = (event: any, selectedDate?: Date) => {
+    console.log('[Events] DateTimePicker change:', { event, selectedDate, field: showDatePicker.field });
     
+    // On Android, the picker automatically closes after selection
     if (Platform.OS === 'android') {
       setShowDatePicker({ field: null, mode: 'date' });
     }
     
+    // Update the form if a date was selected and we have a field
     if (selectedDate && showDatePicker.field) {
       console.log('[Events] Updating field:', showDatePicker.field, 'with date:', selectedDate);
       setForm(prev => ({
@@ -612,12 +512,12 @@ export default function EventsScreen() {
         [showDatePicker.field!]: selectedDate
       }));
     }
-  }, [showDatePicker.field]);
+  };
 
-  const closeDatePicker = useCallback(() => {
+  const closeDatePicker = () => {
     console.log('[Events] Closing date picker');
     setShowDatePicker({ field: null, mode: 'date' });
-  }, []);
+  };
 
   const formatDateDisplay = (date: Date) => {
     return date.toLocaleDateString('en-US', {
@@ -643,19 +543,13 @@ export default function EventsScreen() {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <Text style={styles.title}>Church Events</Text>
-          {canManageEvents && (
-            <TouchableOpacity
-              testID="add-event-button"
-              style={styles.addButton}
-              onPress={() => {
-                const defaultGroup = manageableChurches.length > 0 ? manageableChurches[0].id : currentChurchId;
-                setForm(prev => ({ ...prev, groupId: defaultGroup }));
-                setShowAddModal(true);
-              }}
-            >
-              <Plus size={20} color="white" />
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            testID="add-event-button"
+            style={styles.addButton}
+            onPress={() => setShowAddModal(true)}
+          >
+            <Plus size={20} color="white" />
+          </TouchableOpacity>
         </View>
         
         <View style={styles.filtersContainer}>
@@ -761,13 +655,6 @@ export default function EventsScreen() {
               </View>
             </View>
 
-            {event.isSharedAllChurches && (
-              <View style={styles.sharedBadgeRow}>
-                <Globe size={12} color="#6366f1" />
-                <Text style={styles.sharedBadgeText}>Shared with all churches</Text>
-              </View>
-            )}
-
             <View style={styles.eventActions}>
               {event.isRegistrationOpen && (
                 <TouchableOpacity
@@ -807,22 +694,6 @@ export default function EventsScreen() {
               >
                 <Text style={styles.detailsButtonText}>View Details</Text>
               </TouchableOpacity>
-
-              {event.groupId && canManageEventsForGroup(churchScope, event.groupId) && (
-                <TouchableOpacity
-                  testID={`delete-event-button-${event.id}`}
-                  style={styles.deleteButton}
-                  onPress={() => {
-                    Alert.alert('Delete Event', 'Are you sure you want to delete this event?', [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Delete', style: 'destructive', onPress: () => deleteMutation.mutate({ eventId: event.id }) },
-                    ]);
-                  }}
-                  disabled={deleteMutation.isPending}
-                >
-                  <Trash2 size={16} color="#ef4444" />
-                </TouchableOpacity>
-              )}
             </View>
           </View>
           ))
@@ -1032,23 +903,13 @@ export default function EventsScreen() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-            {manageableChurches.length === 1 && (
-              <View style={styles.churchContextBanner}>
-                <ChurchIcon size={14} color={Colors.primary} />
-                <Text style={styles.churchContextText}>
-                  Posting to: {manageableChurches[0].name}
-                </Text>
-              </View>
-            )}
-
+          <ScrollView style={styles.modalContent}>
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Title</Text>
               <TextInput
                 testID="event-title-input"
                 style={styles.textInput}
-                placeholder="Give your event a name"
-                placeholderTextColor={Colors.textPlaceholder}
+                placeholder="Event title"
                 value={form.title}
                 onChangeText={(text) => setForm(prev => ({ ...prev, title: text }))}
                 maxLength={120}
@@ -1060,13 +921,80 @@ export default function EventsScreen() {
               <TextInput
                 testID="event-description-input"
                 style={[styles.textInput, styles.textArea]}
-                placeholder="Tell people what this event is about..."
-                placeholderTextColor={Colors.textPlaceholder}
+                placeholder="Describe the event"
                 value={form.description}
                 onChangeText={(text) => setForm(prev => ({ ...prev, description: text }))}
                 multiline
                 numberOfLines={6}
                 textAlignVertical="top"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Start Date</Text>
+              <TouchableOpacity
+                testID="event-start-date-picker"
+                style={styles.dateTimeButton}
+                onPress={() => setShowDatePicker({ field: 'startDate', mode: 'date' })}
+              >
+                <Calendar size={20} color="#64748b" />
+                <Text style={styles.dateTimeButtonText}>
+                  {formatDateDisplay(form.startDate)}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Start Time</Text>
+              <TouchableOpacity
+                testID="event-start-time-picker"
+                style={styles.dateTimeButton}
+                onPress={() => setShowDatePicker({ field: 'startTime', mode: 'time' })}
+              >
+                <Clock size={20} color="#64748b" />
+                <Text style={styles.dateTimeButtonText}>
+                  {formatTimeDisplay(form.startTime)}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>End Date</Text>
+              <TouchableOpacity
+                testID="event-end-date-picker"
+                style={styles.dateTimeButton}
+                onPress={() => setShowDatePicker({ field: 'endDate', mode: 'date' })}
+              >
+                <Calendar size={20} color="#64748b" />
+                <Text style={styles.dateTimeButtonText}>
+                  {formatDateDisplay(form.endDate)}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>End Time</Text>
+              <TouchableOpacity
+                testID="event-end-time-picker"
+                style={styles.dateTimeButton}
+                onPress={() => setShowDatePicker({ field: 'endTime', mode: 'time' })}
+              >
+                <Clock size={20} color="#64748b" />
+                <Text style={styles.dateTimeButtonText}>
+                  {formatTimeDisplay(form.endTime)}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Location</Text>
+              <TextInput
+                testID="event-location-input"
+                style={styles.textInput}
+                placeholder="Where is it?"
+                value={form.location}
+                onChangeText={(text) => setForm(prev => ({ ...prev, location: text }))}
+                maxLength={200}
               />
             </View>
 
@@ -1077,10 +1005,9 @@ export default function EventsScreen() {
                   <TouchableOpacity
                     key={key}
                     testID={`type-${key}`}
-                    style={[styles.typeChip, form.type === key && [styles.typeChipActive, { backgroundColor: eventTypeColors[key] }]]}
+                    style={[styles.typeChip, form.type === key && styles.typeChipActive]}
                     onPress={() => setForm(prev => ({ ...prev, type: key }))}
                   >
-                    <View style={[styles.typeChipDot, { backgroundColor: form.type === key ? 'rgba(255,255,255,0.8)' : eventTypeColors[key] }]} />
                     <Text style={[styles.typeChipText, form.type === key && styles.typeChipTextActive]}>
                       {eventTypeLabels[key]}
                     </Text>
@@ -1089,151 +1016,16 @@ export default function EventsScreen() {
               </View>
             </View>
 
-            <View style={styles.formDivider} />
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.formSectionHeader}>Date & Time</Text>
-
-              <View style={styles.dtCard}>
-                <View style={styles.dtCardLabel}>
-                  <View style={styles.dtCardDot} />
-                  <Text style={styles.dtCardLabelText}>Starts</Text>
-                </View>
-                <View style={styles.dtCardFields}>
-                  <TouchableOpacity
-                    testID="event-start-date-picker"
-                    style={styles.dtFieldButton}
-                    onPress={() => setShowDatePicker({ field: 'startDate', mode: 'date' })}
-                    activeOpacity={0.7}
-                  >
-                    <Calendar size={18} color={Colors.primary} />
-                    <Text style={styles.dtFieldValue} numberOfLines={1}>
-                      {formatDateDisplay(form.startDate)}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    testID="event-start-time-picker"
-                    style={styles.dtFieldButtonCompact}
-                    onPress={() => setShowDatePicker({ field: 'startTime', mode: 'time' })}
-                    activeOpacity={0.7}
-                  >
-                    <Clock size={18} color={Colors.primary} />
-                    <Text style={styles.dtFieldValue} numberOfLines={1}>
-                      {formatTimeDisplay(form.startTime)}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <View style={styles.dtConnector}>
-                <View style={styles.dtConnectorLine} />
-                <View style={styles.dtConnectorArrow}>
-                  <Text style={styles.dtConnectorArrowText}>to</Text>
-                </View>
-                <View style={styles.dtConnectorLine} />
-              </View>
-
-              <View style={styles.dtCard}>
-                <View style={styles.dtCardLabel}>
-                  <View style={[styles.dtCardDot, styles.dtCardDotEnd]} />
-                  <Text style={styles.dtCardLabelText}>Ends</Text>
-                </View>
-                <View style={styles.dtCardFields}>
-                  <TouchableOpacity
-                    testID="event-end-date-picker"
-                    style={styles.dtFieldButton}
-                    onPress={() => setShowDatePicker({ field: 'endDate', mode: 'date' })}
-                    activeOpacity={0.7}
-                  >
-                    <Calendar size={18} color={Colors.textTertiary} />
-                    <Text style={styles.dtFieldValue} numberOfLines={1}>
-                      {formatDateDisplay(form.endDate)}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    testID="event-end-time-picker"
-                    style={styles.dtFieldButtonCompact}
-                    onPress={() => setShowDatePicker({ field: 'endTime', mode: 'time' })}
-                    activeOpacity={0.7}
-                  >
-                    <Clock size={18} color={Colors.textTertiary} />
-                    <Text style={styles.dtFieldValue} numberOfLines={1}>
-                      {formatTimeDisplay(form.endTime)}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.formDivider} />
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Location</Text>
-              <TextInput
-                testID="event-location-input"
-                style={styles.textInput}
-                placeholder="Where will this take place?"
-                placeholderTextColor={Colors.textPlaceholder}
-                value={form.location}
-                onChangeText={(text) => setForm(prev => ({ ...prev, location: text }))}
-                maxLength={200}
-              />
-            </View>
-
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Max Attendees (optional)</Text>
               <TextInput
                 testID="event-maxAttendees-input"
                 style={styles.textInput}
-                placeholder="Leave empty for unlimited"
-                placeholderTextColor={Colors.textPlaceholder}
+                placeholder="e.g. 100"
                 value={form.maxAttendees ?? ''}
                 onChangeText={(text) => setForm(prev => ({ ...prev, maxAttendees: text.replace(/[^0-9]/g, '') }))}
                 keyboardType="numeric"
               />
-            </View>
-
-            {manageableChurches.length > 1 && (
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Church Group</Text>
-                <View style={styles.typesWrap}>
-                  {manageableChurches.map((church) => (
-                    <TouchableOpacity
-                      key={church.id}
-                      testID={`church-${church.id}`}
-                      style={[styles.typeChip, form.groupId === church.id && styles.typeChipActive]}
-                      onPress={() => setForm(prev => ({ ...prev, groupId: church.id }))}
-                    >
-                      <Text style={[styles.typeChipText, form.groupId === church.id && styles.typeChipTextActive]}>
-                        {church.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            <View style={styles.formDivider} />
-
-            <View style={styles.switchGroup}>
-              <View style={styles.switchRow}>
-                <View style={{ flex: 1 }}>
-                  <View style={styles.shareLabelRow}>
-                    <Globe size={16} color="#2563eb" />
-                    <Text style={styles.switchLabel}>Share with all churches</Text>
-                  </View>
-                  <Text style={styles.switchDescription}>
-                    Visible to members of all church groups
-                  </Text>
-                </View>
-                <Switch
-                  testID="share-all-churches-toggle"
-                  value={form.isSharedAllChurches}
-                  onValueChange={(value) => setForm(prev => ({ ...prev, isSharedAllChurches: value }))}
-                  trackColor={{ false: '#e2e8f0', true: '#2563eb' }}
-                  thumbColor={form.isSharedAllChurches ? 'white' : '#f4f4f5'}
-                />
-              </View>
             </View>
 
             <TouchableOpacity
@@ -1249,71 +1041,81 @@ export default function EventsScreen() {
               {createMutation.isPending ? (
                 <ActivityIndicator size="small" color="white" />
               ) : (
-                <Text style={styles.createButtonBottomText}>Create Event</Text>
+                <Plus size={20} color="white" />
               )}
+              <Text style={styles.createButtonBottomText}>
+                {createMutation.isPending ? 'Creating Event...' : 'Create Event'}
+              </Text>
             </TouchableOpacity>
 
             <View style={{ height: 40 }} />
           </ScrollView>
 
-          {Platform.OS !== 'android' && showDatePicker.field && (
-            <Modal
-              visible={true}
-              transparent
-              animationType="slide"
-              onRequestClose={closeDatePicker}
-            >
-              <TouchableOpacity
-                style={styles.pickerModalOverlay}
-                activeOpacity={1}
-                onPress={closeDatePicker}
-              >
-                <View style={styles.pickerModalSheet}>
-                  <View style={styles.pickerModalHeader}>
-                    <TouchableOpacity onPress={closeDatePicker} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-                      <Text style={styles.pickerModalCancel}>Cancel</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.pickerModalTitle}>
-                      {showDatePicker.mode === 'date' ? 'Select Date' : 'Select Time'}
-                    </Text>
-                    <TouchableOpacity onPress={closeDatePicker} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-                      <Text style={styles.pickerModalDone}>Done</Text>
-                    </TouchableOpacity>
-                  </View>
-                  {Platform.OS === 'web' ? (
-                    <View style={styles.webPickerBody}>
+          {showDatePicker.field && (
+            <>
+              {Platform.OS === 'web' ? (
+                <View style={styles.datePickerOverlay}>
+                  <View style={styles.datePickerContainer}>
+                    <View style={styles.datePickerHeader}>
+                      <TouchableOpacity onPress={closeDatePicker}>
+                        <Text style={styles.datePickerCancel}>Cancel</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.datePickerTitle}>
+                        Select {showDatePicker.mode === 'date' ? 'Date' : 'Time'}
+                      </Text>
+                      <TouchableOpacity onPress={closeDatePicker}>
+                        <Text style={styles.datePickerDone}>Done</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.webDatePickerContainer}>
                       <input
                         type={showDatePicker.mode === 'date' ? 'date' : 'time'}
-                        value={showDatePicker.mode === 'date'
+                        value={showDatePicker.mode === 'date' 
                           ? (showDatePicker.field ? form[showDatePicker.field].toISOString().split('T')[0] : '')
                           : (showDatePicker.field ? form[showDatePicker.field].toTimeString().slice(0, 5) : '')
                         }
                         onChange={(e) => {
                           const value = e.target.value;
-                          if (!showDatePicker.field) return;
-                          const current = new Date(form[showDatePicker.field]);
-                          if (showDatePicker.mode === 'date') {
-                            const [year, month, day] = value.split('-').map(Number);
-                            current.setFullYear(year, month - 1, day);
+                          let newDate: Date;
+                          
+                          if (showDatePicker.field) {
+                            if (showDatePicker.mode === 'date') {
+                              const [year, month, day] = value.split('-').map(Number);
+                              newDate = new Date(form[showDatePicker.field]);
+                              newDate.setFullYear(year, month - 1, day);
+                            } else {
+                              const [hours, minutes] = value.split(':').map(Number);
+                              newDate = new Date(form[showDatePicker.field]);
+                              newDate.setHours(hours, minutes);
+                            }
                           } else {
-                            const [hours, minutes] = value.split(':').map(Number);
-                            current.setHours(hours, minutes);
+                            return;
                           }
-                          setForm(prev => ({ ...prev, [showDatePicker.field!]: new Date(current) }));
+                          
+                          setForm(prev => ({
+                            ...prev,
+                            [showDatePicker.field!]: newDate
+                          }));
                         }}
-                        style={{
-                          width: '100%',
-                          padding: 16,
-                          fontSize: 18,
-                          borderRadius: 12,
-                          border: '1.5px solid #e2e8f0',
-                          backgroundColor: '#f8fafc',
-                          outline: 'none',
-                          textAlign: 'center' as const,
-                        }}
+                        style={styles.webDateInput}
                       />
                     </View>
-                  ) : (
+                  </View>
+                </View>
+              ) : Platform.OS === 'ios' ? (
+                <View style={styles.datePickerOverlay}>
+                  <View style={styles.datePickerContainer}>
+                    <View style={styles.datePickerHeader}>
+                      <TouchableOpacity onPress={closeDatePicker}>
+                        <Text style={styles.datePickerCancel}>Cancel</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.datePickerTitle}>
+                        Select {showDatePicker.mode === 'date' ? 'Date' : 'Time'}
+                      </Text>
+                      <TouchableOpacity onPress={closeDatePicker}>
+                        <Text style={styles.datePickerDone}>Done</Text>
+                      </TouchableOpacity>
+                    </View>
                     <DateTimePicker
                       testID="dateTimePicker"
                       value={showDatePicker.field ? form[showDatePicker.field] : new Date()}
@@ -1321,22 +1123,21 @@ export default function EventsScreen() {
                       is24Hour={false}
                       onChange={handleDateTimeChange}
                       display="spinner"
-                      style={styles.iosSpinnerPicker}
+                      style={styles.datePicker}
                     />
-                  )}
+                  </View>
                 </View>
-              </TouchableOpacity>
-            </Modal>
-          )}
-          {Platform.OS === 'android' && showDatePicker.field && (
-            <DateTimePicker
-              testID="dateTimePicker"
-              value={showDatePicker.field ? form[showDatePicker.field] : new Date()}
-              mode={showDatePicker.mode}
-              is24Hour={false}
-              onChange={handleDateTimeChange}
-              display="default"
-            />
+              ) : (
+                <DateTimePicker
+                  testID="dateTimePicker"
+                  value={showDatePicker.field ? form[showDatePicker.field] : new Date()}
+                  mode={showDatePicker.mode}
+                  is24Hour={false}
+                  onChange={handleDateTimeChange}
+                  display="default"
+                />
+              )}
+            </>
           )}
         </SafeAreaView>
       </Modal>
@@ -1347,32 +1148,32 @@ export default function EventsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#f8fafc',
   },
   header: {
-    backgroundColor: Colors.surface,
+    backgroundColor: 'white',
     paddingTop: 60,
-    paddingHorizontal: Spacing.xxl,
-    paddingBottom: Spacing.lg,
+    paddingHorizontal: 24,
+    paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: '#e2e8f0',
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.lg,
+    marginBottom: 16,
   },
   title: {
-    fontSize: 20,
-    fontWeight: '700' as const,
-    color: Colors.textPrimary,
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1e293b',
   },
   addButton: {
-    backgroundColor: Colors.primary,
+    backgroundColor: '#1e3a8a',
     width: 40,
     height: 40,
-    borderRadius: Radius.pill,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1421,14 +1222,18 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: Spacing.xxl,
+    padding: 24,
   },
   eventCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
-    padding: Spacing.xl,
-    marginBottom: Spacing.lg,
-    ...Shadow.sm,
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   eventHeader: {
     marginBottom: 16,
@@ -1440,35 +1245,35 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   eventTypeBadge: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    borderRadius: Radius.xs,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
   eventTypeBadgeText: {
     fontSize: 12,
-    fontWeight: '600' as const,
+    fontWeight: '600',
     color: 'white',
   },
   registeredBadge: {
-    backgroundColor: Colors.successLight,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    borderRadius: Radius.xs,
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
   registeredBadgeText: {
     fontSize: 12,
-    fontWeight: '600' as const,
+    fontWeight: '600',
     color: '#16a34a',
   },
   eventTitle: {
-    fontSize: 16,
-    fontWeight: '700' as const,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.sm,
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 8,
   },
   eventDescription: {
     fontSize: 14,
-    color: Colors.textMuted,
+    color: '#64748b',
     lineHeight: 20,
   },
   eventDetails: {
@@ -1490,34 +1295,34 @@ const styles = StyleSheet.create({
   },
   registerButton: {
     flex: 1,
-    backgroundColor: Colors.primary,
+    backgroundColor: '#1e3a8a',
     paddingVertical: 12,
-    borderRadius: Radius.md,
+    borderRadius: 8,
     alignItems: 'center',
   },
   registeredButton: {
-    backgroundColor: Colors.success,
+    backgroundColor: '#16a34a',
   },
   registerButtonText: {
     fontSize: 14,
-    fontWeight: '600' as const,
+    fontWeight: '600',
     color: 'white',
   },
   registeredButtonText: {
     color: 'white',
   },
   detailsButton: {
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: Radius.md,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#d1d5db',
     alignItems: 'center',
   },
   detailsButtonText: {
     fontSize: 14,
-    fontWeight: '600' as const,
-    color: Colors.textTertiary,
+    fontWeight: '600',
+    color: '#374151',
   },
   spacer: {
     height: 40,
@@ -1724,56 +1529,56 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: Colors.surface,
+    backgroundColor: 'white',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.xxl,
-    paddingVertical: Spacing.lg,
+    paddingHorizontal: 24,
+    paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: '#e2e8f0',
   },
   modalCancelText: {
     fontSize: 16,
-    color: Colors.textMuted,
+    color: '#64748b',
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: '600' as const,
-    color: Colors.textSecondary,
+    fontWeight: '600',
+    color: '#1e293b',
   },
   modalSubmitText: {
     fontSize: 16,
-    fontWeight: '600' as const,
-    color: Colors.primary,
+    fontWeight: '600',
+    color: '#1e3a8a',
   },
   modalSubmitTextDisabled: {
-    color: Colors.textPlaceholder,
+    color: '#94a3b8',
   },
   modalContent: {
     flex: 1,
-    padding: Spacing.xxl,
+    padding: 24,
   },
   inputGroup: {
-    marginBottom: Spacing.xxl,
+    marginBottom: 24,
   },
   inputLabel: {
-    fontSize: 15,
-    fontWeight: '600' as const,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.sm,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 8,
   },
   textInput: {
-    backgroundColor: Colors.background,
-    borderRadius: Radius.lg,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     fontSize: 16,
-    color: Colors.textSecondary,
+    color: '#1e293b',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#e2e8f0',
   },
   textArea: {
     height: 120,
@@ -1785,280 +1590,140 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   typeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surfaceSecondary,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: '#f1f5f9',
   },
   typeChipActive: {
-    borderColor: 'transparent',
-  },
-  typeChipDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    backgroundColor: '#1e3a8a',
   },
   typeChipText: {
     fontSize: 14,
-    fontWeight: '500' as const,
-    color: Colors.textTertiary,
+    color: '#334155',
   },
   typeChipTextActive: {
     color: 'white',
-    fontWeight: '600' as const,
   },
-  formDivider: {
-    height: 1,
-    backgroundColor: Colors.border,
-    marginBottom: Spacing.xxl,
-  },
-  formSectionHeader: {
-    fontSize: 15,
-    fontWeight: '600' as const,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.md,
-  },
-  dtCard: {
-    backgroundColor: Colors.background,
-    borderRadius: Radius.xl,
-    padding: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  dtCardLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: Spacing.md,
-  },
-  dtCardDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.primary,
-  },
-  dtCardDotEnd: {
-    backgroundColor: Colors.textTertiary,
-  },
-  dtCardLabelText: {
-    fontSize: 13,
-    fontWeight: '700' as const,
-    color: Colors.textTertiary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  dtCardFields: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  dtFieldButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    minHeight: 50,
-  },
-  dtFieldButtonCompact: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    minHeight: 50,
-  },
-  dtFieldValue: {
-    fontSize: 15,
-    fontWeight: '600' as const,
-    color: Colors.textSecondary,
-  },
-  dtConnector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-  },
-  dtConnectorLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.border,
-  },
-  dtConnectorArrow: {
-    paddingHorizontal: 12,
-    paddingVertical: 2,
-  },
-  dtConnectorArrowText: {
+  inputHelp: {
     fontSize: 12,
-    fontWeight: '600' as const,
-    color: Colors.textPlaceholder,
-    textTransform: 'lowercase',
+    color: '#64748b',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
-  churchContextBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: Colors.primaryLight,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: Radius.md,
-    marginBottom: Spacing.xl,
+  dateTimeButton: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderWidth: 1,
-    borderColor: Colors.primaryBorder,
-  },
-  churchContextText: {
-    fontSize: 13,
-    fontWeight: '600' as const,
-    color: Colors.primary,
-  },
-  switchGroup: {
-    marginBottom: Spacing.xxl,
-  },
-  switchRow: {
+    borderColor: '#e2e8f0',
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
   },
-  switchLabel: {
+  dateTimeButtonText: {
     fontSize: 16,
-    fontWeight: '500' as const,
-    color: Colors.textSecondary,
-  },
-  switchDescription: {
-    fontSize: 14,
-    color: Colors.textMuted,
-    marginTop: 2,
-  },
-  shareLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 2,
+    color: '#1e293b',
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 80,
+    paddingVertical: 60,
   },
   loadingText: {
-    fontSize: 14,
-    color: Colors.textMuted,
+    fontSize: 16,
+    color: '#64748b',
     marginTop: 12,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 80,
-    gap: 8,
+    paddingVertical: 60,
+    gap: 6,
   },
   emptyText: {
-    fontSize: 16,
-    fontWeight: '600' as const,
-    color: Colors.textTertiary,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1e293b',
   },
   emptySubtext: {
     fontSize: 14,
-    color: Colors.textPlaceholder,
+    color: '#64748b',
     textAlign: 'center',
   },
-  pickerModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  datePickerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
-  pickerModalSheet: {
-    backgroundColor: '#ffffff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: 40,
+  datePickerContainer: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingBottom: 34,
   },
-  pickerModalHeader: {
+  datePickerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
-  pickerModalCancel: {
+  datePickerCancel: {
     fontSize: 16,
     color: '#64748b',
-    fontWeight: '500' as const,
   },
-  pickerModalTitle: {
+  datePickerTitle: {
     fontSize: 16,
-    fontWeight: '600' as const,
+    fontWeight: '600',
     color: '#1e293b',
   },
-  pickerModalDone: {
+  datePickerDone: {
     fontSize: 16,
-    fontWeight: '600' as const,
+    fontWeight: '600',
     color: '#1e3a8a',
   },
-  iosSpinnerPicker: {
-    height: 216,
+  datePicker: {
+    height: 200,
   },
-  webPickerBody: {
-    paddingHorizontal: 24,
-    paddingVertical: 28,
+  webDatePickerContainer: {
+    padding: 20,
+  },
+  webDateInput: {
+    width: '100%',
+    padding: 12,
+    fontSize: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
   },
   createButtonBottom: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.primary,
-    borderRadius: Radius.xl,
-    paddingVertical: Spacing.lg,
-    marginTop: Spacing.sm,
+    gap: 10,
+    backgroundColor: '#1e3a8a',
+    borderRadius: 14,
+    paddingVertical: 16,
+    marginTop: 8,
   },
   createButtonBottomDisabled: {
-    backgroundColor: Colors.textPlaceholder,
+    backgroundColor: '#94a3b8',
   },
   createButtonBottomText: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700' as const,
     color: 'white',
   },
-  sharedBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    backgroundColor: '#eef2ff',
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-  },
-  sharedBadgeText: {
-    fontSize: 11,
-    fontWeight: '600' as const,
-    color: '#6366f1',
-  },
-  deleteButton: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: '#fecaca',
-    backgroundColor: '#fef2f2',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
 });

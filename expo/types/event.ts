@@ -12,9 +12,6 @@ export interface Event {
   imageUrl?: string;
   isRegistrationOpen: boolean;
   registeredUsers: string[];
-  createdAt?: Date;
-  groupId?: string | null;
-  isSharedAllChurches?: boolean;
 }
 
 export type EventType = 'bible_study' | 'youth' | 'special' | 'conference';

@@ -95,7 +95,7 @@ export default function SabbathPlannerScreen() {
   const pastorGroupsQuery = trpc.sabbaths.getMyPastorGroups.useQuery();
   const pastorGroups = useMemo(() => pastorGroupsQuery.data ?? [], [pastorGroupsQuery.data]);
   const pastorGroupIds = useMemo(() => pastorGroups.map((gp) => gp.group_id as string), [pastorGroups]);
-  const churchScope = useMemo(() => buildChurchScope(user, user?.homeGroupId ?? null, pastorGroupIds), [user, pastorGroupIds]);
+  const churchScope = useMemo(() => buildChurchScope(user, null, pastorGroupIds), [user, pastorGroupIds]);
 
   const sabbathsQuery = trpc.sabbaths.getAll.useQuery();
   const sabbaths = useMemo(() => sabbathsQuery.data ?? [], [sabbathsQuery.data]);

@@ -192,8 +192,6 @@ export type Database = {
           title: string;
           body: string | null;
           link_path: string | null;
-          user_id: string | null;
-          group_id: string | null;
           created_by: string | null;
           created_at: string;
         };
@@ -203,8 +201,6 @@ export type Database = {
           title: string;
           body?: string | null;
           link_path?: string | null;
-          user_id?: string | null;
-          group_id?: string | null;
           created_by?: string | null;
           created_at?: string;
         };
@@ -214,8 +210,6 @@ export type Database = {
           title?: string;
           body?: string | null;
           link_path?: string | null;
-          user_id?: string | null;
-          group_id?: string | null;
           created_by?: string | null;
           created_at?: string;
         };

@@ -19,7 +19,6 @@ import NotificationDropdown from '@/components/NotificationDropdown';
 import { supabase } from '@/lib/supabase';
 import { useQuery } from '@tanstack/react-query';
 import { trpc } from '@/lib/trpc';
-import { Colors, Shadow, Radius, Spacing } from '@/constants/theme';
 
 const bibleVerses = [
   {
@@ -231,7 +230,7 @@ export default function HomeScreen() {
   const userIsAdmin = isAdmin(user);
   const pastorGroupsQuery = trpc.sabbaths.getMyPastorGroups.useQuery();
   const pastorGroupIds = useMemo(() => (pastorGroupsQuery.data ?? []).map((g: any) => g.group_id as string), [pastorGroupsQuery.data]);
-  const canManageSabbath = canManageAnySabbath(buildChurchScope(user, user?.homeGroupId ?? null, pastorGroupIds));
+  const canManageSabbath = canManageAnySabbath(buildChurchScope(user, null, pastorGroupIds));
   const [showNotifications, setShowNotifications] = useState(false);
   const bellButtonRef = useRef<View>(null);
   const [bellPosition, setBellPosition] = useState({ x: 0, y: 0 });
@@ -243,62 +242,19 @@ export default function HomeScreen() {
       let query = supabase
         .from('events')
         .select('*')
+        .neq('event_type', 'sabbath')
         .order('start_at', { ascending: true });
 
       if (!userIsAdmin && currentChurchId) {
-        query = query.or(`group_id.eq.${currentChurchId},is_shared_all_churches.eq.true`);
+        query = query.eq('group_id', currentChurchId);
       } else if (!userIsAdmin && !currentChurchId) {
         console.log('[Home] Non-admin user has no church, returning empty events');
         return [];
       }
 
-      let { data, error } = await query;
-
-      if (error) {
-        console.error('[Home] Failed to fetch events:', JSON.stringify(error));
-        if (!userIsAdmin && currentChurchId && error.message?.includes('is_shared_all_churches')) {
-          console.log('[Home] is_shared_all_churches column missing, falling back to group_id filter');
-          const fallback = await supabase
-            .from('events')
-            .select('*')
-            .eq('group_id', currentChurchId)
-            .order('start_at', { ascending: true });
-          if (fallback.error) {
-            throw new Error(fallback.error.message ?? 'Failed to load events');
-          }
-          data = fallback.data;
-          error = null;
-        } else {
-          throw new Error(error.message ?? 'Failed to load events');
-        }
-      }
-      const rows = (data || []) as any[];
-      console.log('[Home] Raw event rows fetched:', rows.length);
-      const rawDetails = rows.map((r: any) => ({
-        id: r.id,
-        title: r.title,
-        event_type: r.event_type,
-        type: r.type,
-        group_id: r.group_id,
-        start_at: r.start_at,
-        created_at: r.created_at,
-      }));
-      console.log('[Home] Raw event row details:', JSON.stringify(rawDetails));
-
-      const filtered = rows.filter((e: any) => {
-        const eventType = typeof e.event_type === 'string' && e.event_type.length > 0 ? e.event_type : null;
-        const legacyType = typeof e.type === 'string' && e.type.length > 0 ? e.type : null;
-        const resolved = eventType ?? legacyType ?? 'bible_study';
-        const dominated = resolved === 'sabbath' || resolved === 'prayer_meeting';
-        if (dominated) {
-          console.log('[Home] Excluding event', e.id, '| resolved type:', resolved);
-        }
-        return !dominated;
-      });
-      console.log('[Home] Filtered events count:', filtered.length);
-      console.log('[Home] Filtered event ids:', filtered.map((e: any) => e.id));
-      console.log('[Home] Excluded count:', rows.length - filtered.length);
-      return filtered;
+      const { data, error } = await query;
+      if (error) throw new Error(error.message);
+      return data || [];
     },
   });
 
@@ -359,21 +315,14 @@ export default function HomeScreen() {
   const activeRequestsCount = prayersActiveQuery.data?.length ?? 0;
   const membersCount = usersQuery.data?.length ?? 0;
   const notificationsCountQuery = useQuery({
-    queryKey: ['notifications', 'count', user?.id, currentChurchId, userIsAdmin],
+    queryKey: ['notifications', 'count', user?.id],
     queryFn: async () => {
-      if (!user?.id) return 0;
       let query = supabase
         .from('notifications')
         .select('*', { count: 'exact', head: true });
 
-      if (userIsAdmin) {
-        // Admin sees all
-      } else {
-        const filters = [`user_id.eq.${user.id}`];
-        if (currentChurchId) {
-          filters.push(`group_id.eq.${currentChurchId}`);
-        }
-        query = query.or(filters.join(','));
+      if (user?.id) {
+        query = query.or(`user_id.eq.${user.id},user_id.is.null`);
       }
 
       const { count, error } = await query;
@@ -563,12 +512,12 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#f8fafc',
   },
   header: {
     paddingTop: 60,
-    paddingBottom: Spacing.xxl,
-    paddingHorizontal: Spacing.xxl,
+    paddingBottom: 24,
+    paddingHorizontal: 24,
   },
   headerContent: {
     flexDirection: 'row',
@@ -581,7 +530,7 @@ const styles = StyleSheet.create({
   },
   userName: {
     fontSize: 24,
-    fontWeight: '700' as const,
+    fontWeight: 'bold',
     color: 'white',
     marginTop: 4,
   },
@@ -592,147 +541,151 @@ const styles = StyleSheet.create({
   },
   notificationButton: {
     position: 'relative',
-    padding: Spacing.sm,
-    width: 40,
-    height: 40,
-    borderRadius: Radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 8,
   },
   notificationBadge: {
     position: 'absolute',
-    top: 2,
-    right: 2,
-    backgroundColor: Colors.danger,
+    top: 4,
+    right: 4,
+    backgroundColor: '#ef4444',
     borderRadius: 10,
-    minWidth: 18,
-    height: 18,
+    minWidth: 20,
+    height: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: Colors.primary,
   },
   notificationBadgeText: {
     color: 'white',
-    fontSize: 10,
-    fontWeight: '700' as const,
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   content: {
     flex: 1,
-    padding: Spacing.xxl,
+    padding: 24,
   },
   quickActions: {
-    marginBottom: Spacing.xxxl,
+    marginBottom: 32,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700' as const,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.lg,
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 16,
   },
   actionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.md,
+    gap: 16,
   },
   actionCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
-    padding: Spacing.xl,
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 20,
     width: '47%',
     alignItems: 'center',
-    ...Shadow.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   actionIcon: {
     width: 48,
     height: 48,
-    borderRadius: Radius.lg,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: Spacing.md,
+    marginBottom: 12,
   },
   actionTitle: {
     fontSize: 14,
-    fontWeight: '600' as const,
-    color: Colors.textSecondary,
+    fontWeight: '600',
+    color: '#1e293b',
     textAlign: 'center',
-    marginBottom: Spacing.xs,
+    marginBottom: 4,
   },
   actionSubtitle: {
     fontSize: 12,
-    color: Colors.textMuted,
+    color: '#64748b',
     textAlign: 'center',
   },
   announcements: {
-    marginBottom: Spacing.xxxl,
+    marginBottom: 32,
   },
   announcementCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
-    padding: Spacing.lg,
-    marginBottom: Spacing.md,
-    ...Shadow.sm,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   urgentBadge: {
-    backgroundColor: Colors.dangerLight,
-    borderColor: Colors.dangerBorder,
+    backgroundColor: '#fef2f2',
+    borderColor: '#fecaca',
     borderWidth: 1,
-    borderRadius: Radius.xs,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     alignSelf: 'flex-start',
-    marginBottom: Spacing.sm,
+    marginBottom: 8,
   },
   urgentBadgeText: {
     fontSize: 10,
-    fontWeight: '700' as const,
+    fontWeight: 'bold',
     color: '#dc2626',
   },
   announcementTitle: {
     fontSize: 16,
-    fontWeight: '600' as const,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.sm,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 8,
   },
   announcementContent: {
     fontSize: 14,
-    color: Colors.textTertiary,
+    color: '#475569',
     lineHeight: 20,
-    marginBottom: Spacing.sm,
+    marginBottom: 8,
   },
   announcementTime: {
     fontSize: 12,
-    color: Colors.textPlaceholder,
+    color: '#94a3b8',
   },
   todayVerse: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
-    padding: Spacing.xl,
-    ...Shadow.sm,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   verseHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Spacing.md,
+    marginBottom: 12,
   },
   verseTitle: {
     fontSize: 16,
-    fontWeight: '600' as const,
-    color: Colors.primary,
-    marginLeft: Spacing.sm,
+    fontWeight: '600',
+    color: '#1e3a8a',
+    marginLeft: 8,
   },
   verseText: {
     fontSize: 16,
     color: '#374151',
     lineHeight: 24,
     fontStyle: 'italic',
-    marginBottom: Spacing.sm,
+    marginBottom: 8,
   },
   verseReference: {
     fontSize: 14,
-    fontWeight: '600' as const,
-    color: Colors.primary,
+    fontWeight: '600',
+    color: '#1e3a8a',
     textAlign: 'right',
   },
   spacer: {

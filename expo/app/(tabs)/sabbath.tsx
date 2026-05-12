@@ -22,7 +22,6 @@ import {
   Modal,
 } from 'react-native';
 import { Users, ChevronDown, RefreshCw } from 'lucide-react-native';
-import { Colors, Shadow, Radius, Spacing } from '@/constants/theme';
 import { useRouter } from 'expo-router';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/providers/auth-provider';
@@ -283,7 +282,7 @@ export default function SabbathScreen() {
   const pastorGroupIds = useMemo(() => (pastorGroupsQuery.data ?? []).map((g: any) => g.group_id as string), [pastorGroupsQuery.data]);
   const [activeTab, setActiveTab] = useState<TabKey>('myChurch');
 
-  const churchScope = buildChurchScope(user, user?.homeGroupId ?? null, pastorGroupIds);
+  const churchScope = buildChurchScope(user, null, pastorGroupIds);
   const canManage = canManageAnySabbath(churchScope);
 
   const myChurchQuery = trpc.sabbaths.getMyChurchUpcoming.useQuery(undefined, {
@@ -558,15 +557,15 @@ export default function SabbathScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#f1f5f9',
   },
   header: {
-    backgroundColor: Colors.surface,
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.lg,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: '#e2e8f0',
   },
   headerRow: {
     flexDirection: 'row',
@@ -580,18 +579,18 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700' as const,
-    color: Colors.textPrimary,
+    color: '#0f172a',
   },
   planButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: Colors.primary,
+    backgroundColor: '#1e3a8a',
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: Radius.md,
+    borderRadius: 10,
   },
   planButtonText: {
     fontSize: 13,
@@ -600,8 +599,8 @@ const styles = StyleSheet.create({
   },
   segmentContainer: {
     flexDirection: 'row',
-    backgroundColor: Colors.surfaceSecondary,
-    borderRadius: Radius.lg,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 12,
     padding: 3,
   },
   segmentButton: {
@@ -614,12 +613,12 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   segmentButtonActive: {
-    backgroundColor: Colors.primary,
+    backgroundColor: '#1e3a8a',
   },
   segmentLabel: {
     fontSize: 14,
     fontWeight: '600' as const,
-    color: Colors.textMuted,
+    color: '#64748b',
   },
   segmentLabelActive: {
     color: '#ffffff',
@@ -642,33 +641,37 @@ const styles = StyleSheet.create({
   centerStateTitle: {
     fontSize: 18,
     fontWeight: '600' as const,
-    color: Colors.textTertiary,
+    color: '#334155',
     marginTop: 16,
     textAlign: 'center' as const,
   },
   centerStateText: {
     fontSize: 14,
-    color: Colors.textPlaceholder,
+    color: '#94a3b8',
     marginTop: 8,
     textAlign: 'center' as const,
     lineHeight: 20,
   },
   card: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
-    padding: Spacing.xl,
-    marginBottom: Spacing.md,
-    ...Shadow.sm,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
   sabbathDate: {
     fontSize: 20,
     fontWeight: '700' as const,
-    color: Colors.textPrimary,
+    color: '#0f172a',
     marginBottom: 4,
   },
   notesText: {
     fontSize: 14,
-    color: Colors.textMuted,
+    color: '#64748b',
     marginTop: 6,
     lineHeight: 20,
   },
@@ -676,16 +679,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: Colors.dangerLight,
-    borderRadius: Radius.md,
+    backgroundColor: '#fef2f2',
+    borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 14,
-    marginTop: Spacing.md,
+    marginTop: 12,
   },
   cancelledText: {
     fontSize: 14,
     fontWeight: '500' as const,
-    color: Colors.dangerDark,
+    color: '#991b1b',
     flex: 1,
   },
   suggestModalOverlay: {
@@ -694,11 +697,11 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end' as const,
   },
   suggestModalContainer: {
-    backgroundColor: Colors.surface,
+    backgroundColor: '#ffffff',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.md,
+    paddingHorizontal: 20,
+    paddingTop: 12,
     paddingBottom: 34,
     maxHeight: '80%' as any,
   },
@@ -708,7 +711,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: '#d1d5db',
     alignSelf: 'center' as const,
-    marginBottom: Spacing.lg,
+    marginBottom: 16,
   },
   suggestModalHeader: {
     flexDirection: 'row' as const,
@@ -719,12 +722,12 @@ const styles = StyleSheet.create({
   suggestModalTitle: {
     fontSize: 18,
     fontWeight: '700' as const,
-    color: Colors.textPrimary,
+    color: '#0f172a',
   },
   suggestModalSubtitle: {
     fontSize: 13,
-    color: Colors.textMuted,
-    marginBottom: Spacing.lg,
+    color: '#64748b',
+    marginBottom: 16,
     lineHeight: 18,
   },
   suggestMembersList: {
@@ -778,7 +781,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Colors.indigoLight,
+    backgroundColor: '#e0e7ff',
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     marginRight: 12,
@@ -786,24 +789,24 @@ const styles = StyleSheet.create({
   suggestMemberAvatarText: {
     fontSize: 15,
     fontWeight: '700' as const,
-    color: Colors.indigo,
+    color: '#3730a3',
   },
   suggestMemberName: {
     fontSize: 15,
     fontWeight: '500' as const,
-    color: Colors.textSecondary,
+    color: '#1e293b',
     flex: 1,
   },
   suggestCancelBtn: {
     alignItems: 'center' as const,
     paddingVertical: 14,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surfaceSecondary,
-    marginTop: Spacing.md,
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9',
+    marginTop: 12,
   },
   suggestCancelBtnText: {
     fontSize: 15,
     fontWeight: '600' as const,
-    color: Colors.textMuted,
+    color: '#64748b',
   },
 });
