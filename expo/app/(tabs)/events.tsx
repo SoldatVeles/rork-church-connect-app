@@ -138,7 +138,10 @@ export default function EventsScreen() {
       
       const sanitizedEvents = (data as any[])
         .map((event: any) => {
-          const rawType = (event.type ?? event.event_type ?? 'bible_study') as string;
+          // Prefer event_type over the legacy `type` column, since the
+          // `type` column has a DB default of 'sabbath' and would otherwise
+          // make newly-created events look like sabbath entries.
+          const rawType = (event.event_type ?? event.type ?? 'bible_study') as string;
 
           if (rawType === 'prayer_meeting' || rawType === 'sabbath') {
             console.log('[Events] Skipping non-event entry in events feed:', event.id, rawType);
@@ -211,6 +214,10 @@ export default function EventsScreen() {
         start_at: startAt.toISOString(),
         end_at: endAt.toISOString(),
         location: eventData.location,
+        // Set BOTH columns to keep legacy `type` (which defaults to 'sabbath')
+        // in sync with the canonical event_type field. Otherwise new events
+        // get filtered out as sabbath entries.
+        type: eventData.type,
         event_type: eventData.type,
         max_attendees: eventData.maxAttendees ?? null,
         created_by: eventData.createdBy,
