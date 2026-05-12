@@ -105,11 +105,6 @@ BEGIN
   END IF;
 END $;
 
-ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
-ALTER TABLE public.profiles
-  ADD CONSTRAINT profiles_role_check
-  CHECK (role IN ('member', 'pastor', 'church_leader', 'admin', 'visitor'));
-
 CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role);
 CREATE INDEX IF NOT EXISTS idx_profiles_home_group ON public.profiles(home_group_id);
 
