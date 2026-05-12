@@ -32,10 +32,15 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { trpc } from '@/lib/trpc';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
 import type {
+  Sabbath,
   SabbathAssignment,
+  SabbathAttendance,
+  SabbathGroupInfo,
+  SabbathDetailView,
   SabbathRole,
   SabbathStatus,
   SabbathAssignmentStatus,
@@ -77,12 +82,119 @@ export default function SabbathDetailScreen() {
   const { sabbathId } = useLocalSearchParams<{ sabbathId: string }>();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const trpcUtils = trpc.useUtils();
+  const queryClient = useQueryClient();
 
-  const detailQuery = trpc.sabbaths.getSabbathDetail.useQuery(
-    { sabbathId: sabbathId! },
-    { enabled: !!sabbathId }
-  );
+  const detailQuery = useQuery<SabbathDetailView>({
+    queryKey: ['sabbath-detail', sabbathId, user?.id],
+    enabled: !!sabbathId && !!user?.id,
+    staleTime: 5_000,
+    queryFn: async (): Promise<SabbathDetailView> => {
+      if (!sabbathId || !user?.id) throw new Error('Missing sabbathId or user');
+
+      const { data: sabbathRow, error: sErr } = await supabase
+        .from('sabbaths')
+        .select('*')
+        .eq('id', sabbathId)
+        .single();
+      if (sErr || !sabbathRow) {
+        console.error('[SabbathDetail] sabbath fetch error:', sErr);
+        throw new Error('Sabbath not found');
+      }
+      const sabbathRec = sabbathRow as Sabbath;
+
+      const [groupRes, profileRes, pastorRes, assignmentsRes, myAttRes] = await Promise.all([
+        supabase.from('groups').select('id, name').eq('id', sabbathRec.group_id).maybeSingle(),
+        supabase.from('profiles').select('id, role, home_group_id').eq('id', user.id).maybeSingle(),
+        supabase.from('group_pastors').select('id').eq('group_id', sabbathRec.group_id).eq('user_id', user.id).maybeSingle(),
+        supabase.from('sabbath_assignments').select('*').eq('sabbath_id', sabbathId),
+        supabase.from('sabbath_attendance').select('*').eq('sabbath_id', sabbathId).eq('user_id', user.id).maybeSingle(),
+      ]);
+
+      const profile = profileRes.data as { id: string; role: string; home_group_id: string | null } | null;
+      const isAdminRole = profile?.role === 'admin';
+      const isPastorOfGroup = !!pastorRes.data;
+      const isLeaderOfGroup = profile?.role === 'church_leader' && profile?.home_group_id === sabbathRec.group_id;
+      const canManageVal = isAdminRole || isPastorOfGroup || isLeaderOfGroup;
+      const isHomeChurchVal = profile?.home_group_id === sabbathRec.group_id;
+
+      const groupInfo: SabbathGroupInfo = groupRes.data
+        ? { id: (groupRes.data as any).id, name: (groupRes.data as any).name }
+        : { id: sabbathRec.group_id, name: 'Unknown Church' };
+
+      const assignmentsList = (assignmentsRes.data ?? []) as any[];
+      const isAssignedUserVal = assignmentsList.some((a) => a.user_id === user.id);
+
+      const shouldShowAssignmentsVal =
+        sabbathRec.status === 'published' ||
+        (canManageVal && (sabbathRec.status === 'draft' || sabbathRec.status === 'cancelled'));
+
+      let assignmentsOut: SabbathAssignment[] = [];
+      if (shouldShowAssignmentsVal && assignmentsList.length > 0) {
+        const userIds = Array.from(new Set(
+          assignmentsList.flatMap((a) => [a.user_id, a.suggested_user_id]).filter(Boolean)
+        )) as string[];
+        const nameMap = new Map<string, string>();
+        if (userIds.length > 0) {
+          const { data: profs } = await supabase
+            .from('profiles')
+            .select('id, full_name, display_name')
+            .in('id', userIds);
+          (profs || []).forEach((p: any) => {
+            nameMap.set(p.id, p.display_name || p.full_name || 'Unknown');
+          });
+        }
+        assignmentsOut = assignmentsList.map((a) => ({
+          ...a,
+          user_name: a.user_id ? nameMap.get(a.user_id) ?? 'Unknown' : undefined,
+          suggested_user_name: a.suggested_user_id ? nameMap.get(a.suggested_user_id) ?? 'Unknown' : undefined,
+        }));
+      }
+
+      const shouldShowAttendeesVal = (isHomeChurchVal || canManageVal) && sabbathRec.status === 'published';
+      let attendanceOut: SabbathAttendance[] = [];
+      let attendingCountVal: number | null = null;
+      if (shouldShowAttendeesVal) {
+        const { data: attRaw } = await supabase
+          .from('sabbath_attendance')
+          .select('*')
+          .eq('sabbath_id', sabbathId);
+        const attList = (attRaw ?? []) as any[];
+        const ids = attList.map((a) => a.user_id) as string[];
+        const nameMap = new Map<string, string>();
+        if (ids.length > 0) {
+          const { data: profs } = await supabase
+            .from('profiles')
+            .select('id, full_name, display_name')
+            .in('id', ids);
+          (profs || []).forEach((p: any) => {
+            nameMap.set(p.id, p.display_name || p.full_name || 'Unknown');
+          });
+        }
+        attendanceOut = attList.map((a) => ({ ...a, user_name: nameMap.get(a.user_id) ?? 'Unknown' }));
+        attendingCountVal = attendanceOut.filter((a) => a.status === 'attending').length;
+      }
+
+      const myAttendanceStatusVal = (myAttRes.data as any)?.status ?? null;
+      const canRespondAttendanceVal = sabbathRec.status === 'published';
+      const canRespondAssignmentVal = sabbathRec.status === 'published' && isAssignedUserVal;
+
+      return {
+        sabbath: sabbathRec,
+        group: groupInfo,
+        assignments: assignmentsOut,
+        attendance: attendanceOut,
+        myAttendanceStatus: myAttendanceStatusVal,
+        attendingCount: attendingCountVal,
+        isHomeChurch: isHomeChurchVal,
+        isAssignedUser: isAssignedUserVal,
+        canManage: canManageVal,
+        canRespondAttendance: canRespondAttendanceVal,
+        canRespondAssignment: canRespondAssignmentVal,
+        shouldShowAttendees: shouldShowAttendeesVal,
+        shouldShowAssignments: shouldShowAssignmentsVal,
+      };
+    },
+  });
 
   const detail = detailQuery.data;
   const sabbath = detail?.sabbath ?? null;
@@ -96,24 +208,197 @@ export default function SabbathDetailScreen() {
 
   const upcoming = sabbath ? isUpcoming(sabbath.sabbath_date) : false;
 
-  const groupedMembersQuery = trpc.sabbaths.getAllMembersGrouped.useQuery(
-    { primaryGroupId: sabbath?.group_id ?? '' },
-    { enabled: !!sabbath?.group_id && canManage }
-  );
+  const fetchGroupedMembers = useCallback(async (primaryGroupId: string) => {
+    const [groupsRes, profilesRes, pastorsRes] = await Promise.all([
+      supabase.from('groups').select('id, name').order('name', { ascending: true }),
+      supabase.from('profiles').select('id, full_name, display_name, home_group_id').order('full_name', { ascending: true }),
+      supabase.from('group_pastors').select('user_id, group_id'),
+    ]);
+    const allGroups = (groupsRes.data || []) as Array<{ id: string; name: string }>;
+    const allProfiles = (profilesRes.data || []) as Array<{ id: string; full_name: string | null; display_name: string | null; home_group_id: string | null }>;
+    const allPastors = (pastorsRes.data || []) as Array<{ user_id: string; group_id: string }>;
+
+    const groupNameMap = new Map<string, string>();
+    allGroups.forEach((g) => groupNameMap.set(g.id, g.name));
+
+    const pastorGroupMap = new Map<string, Set<string>>();
+    allPastors.forEach((p) => {
+      if (!pastorGroupMap.has(p.user_id)) pastorGroupMap.set(p.user_id, new Set());
+      pastorGroupMap.get(p.user_id)!.add(p.group_id);
+    });
+
+    type Section = { groupId: string; groupName: string; members: { id: string; name: string }[] };
+    const sectionMap = new Map<string, Section>();
+    const addedToGroup = new Map<string, Set<string>>();
+    const addMember = (gId: string, mId: string, mName: string) => {
+      if (!addedToGroup.has(gId)) addedToGroup.set(gId, new Set());
+      if (addedToGroup.get(gId)!.has(mId)) return;
+      addedToGroup.get(gId)!.add(mId);
+      if (!sectionMap.has(gId)) {
+        sectionMap.set(gId, { groupId: gId, groupName: groupNameMap.get(gId) || 'Unknown Church', members: [] });
+      }
+      sectionMap.get(gId)!.members.push({ id: mId, name: mName });
+    };
+
+    allProfiles.forEach((p) => {
+      const name = (p.full_name?.trim()) || (p.display_name?.trim()) || 'Unknown';
+      const homeGroup = p.home_group_id;
+      if (homeGroup && groupNameMap.has(homeGroup)) addMember(homeGroup, p.id, name);
+      const pgs = pastorGroupMap.get(p.id);
+      if (pgs) pgs.forEach((gId) => { if (groupNameMap.has(gId)) addMember(gId, p.id, name); });
+      if (!homeGroup && !pgs) addMember('__unassigned__', p.id, name);
+    });
+    if (sectionMap.has('__unassigned__')) sectionMap.get('__unassigned__')!.groupName = 'Unassigned Members';
+
+    const sections = Array.from(sectionMap.values());
+    sections.sort((a, b) => {
+      if (a.groupId === primaryGroupId) return -1;
+      if (b.groupId === primaryGroupId) return 1;
+      if (a.groupId === '__unassigned__') return 1;
+      if (b.groupId === '__unassigned__') return -1;
+      return a.groupName.localeCompare(b.groupName);
+    });
+    sections.forEach((s) => s.members.sort((a, b) => a.name.localeCompare(b.name)));
+    return sections;
+  }, []);
+
+  const groupedMembersQuery = useQuery({
+    queryKey: ['sabbath-grouped-members', sabbath?.group_id],
+    queryFn: () => fetchGroupedMembers(sabbath!.group_id),
+    enabled: !!sabbath?.group_id && canManage,
+    staleTime: 30_000,
+  });
 
   const invalidateAll = useCallback(() => {
-    void trpcUtils.sabbaths.invalidate();
-  }, [trpcUtils]);
+    void queryClient.invalidateQueries({ queryKey: ['sabbath-detail', sabbathId] });
+    void queryClient.invalidateQueries({ queryKey: ['sabbaths-all'] });
+    void queryClient.invalidateQueries({ queryKey: ['sabbath-grouped-members'] });
+  }, [queryClient, sabbathId]);
 
-  const publishMutation = trpc.sabbaths.publish.useMutation({ onSuccess: invalidateAll });
-  const cancelMutation = trpc.sabbaths.cancel.useMutation({ onSuccess: invalidateAll });
-  const revertMutation = trpc.sabbaths.revertToDraft.useMutation({ onSuccess: invalidateAll });
-  const deleteMutation = trpc.sabbaths.deleteSabbath.useMutation({ onSuccess: invalidateAll });
-  const assignRoleMutation = trpc.sabbaths.assignRole.useMutation({ onSuccess: invalidateAll });
-  const acceptMutation = trpc.sabbaths.acceptAssignment.useMutation({ onSuccess: invalidateAll });
-  const declineMutation = trpc.sabbaths.declineAssignment.useMutation({ onSuccess: invalidateAll });
-  const attendanceMutation = trpc.sabbaths.respondAttendance.useMutation({ onSuccess: invalidateAll });
-  const suggestReplacementMutation = trpc.sabbaths.suggestReplacement.useMutation({ onSuccess: invalidateAll });
+  const publishMutation = useMutation({
+    mutationFn: async ({ sabbathId: sid }: { sabbathId: string }) => {
+      if (!user?.id) throw new Error('Not authenticated');
+      const { data: assignments } = await supabase
+        .from('sabbath_assignments')
+        .select('role, user_id')
+        .eq('sabbath_id', sid);
+      for (const role of ALL_ROLES) {
+        const a = (assignments || []).find((x: any) => x.role === role);
+        if (!a) throw new Error(`Cannot publish: missing assignment for "${role}". Please recreate the Sabbath.`);
+        if (!(a as any).user_id) throw new Error(`Cannot publish: role "${role}" has no assigned user. Please assign all roles before publishing.`);
+      }
+      const { error } = await supabase
+        .from('sabbaths')
+        .update({ status: 'published', published_by: user.id, published_at: new Date().toISOString(), updated_by: user.id })
+        .eq('id', sid);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: invalidateAll,
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: async ({ sabbathId: sid, cancellationReason }: { sabbathId: string; cancellationReason: string | null }) => {
+      if (!user?.id) throw new Error('Not authenticated');
+      const { error } = await supabase
+        .from('sabbaths')
+        .update({ status: 'cancelled', cancelled_by: user.id, cancelled_at: new Date().toISOString(), cancellation_reason: cancellationReason, updated_by: user.id })
+        .eq('id', sid);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: invalidateAll,
+  });
+
+  const revertMutation = useMutation({
+    mutationFn: async ({ sabbathId: sid }: { sabbathId: string }) => {
+      if (!user?.id) throw new Error('Not authenticated');
+      const { error } = await supabase
+        .from('sabbaths')
+        .update({ status: 'draft', updated_by: user.id })
+        .eq('id', sid);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: invalidateAll,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async ({ sabbathId: sid }: { sabbathId: string }) => {
+      await supabase.from('sabbath_attendance').delete().eq('sabbath_id', sid);
+      await supabase.from('sabbath_assignments').delete().eq('sabbath_id', sid);
+      const { error } = await supabase.from('sabbaths').delete().eq('id', sid);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: invalidateAll,
+  });
+
+  const assignRoleMutation = useMutation({
+    mutationFn: async ({ sabbathId: sid, role, userId }: { sabbathId: string; role: SabbathRole; userId: string }) => {
+      const { error } = await supabase
+        .from('sabbath_assignments')
+        .update({ user_id: userId, status: 'pending', decline_reason: null, suggested_user_id: null })
+        .eq('sabbath_id', sid)
+        .eq('role', role);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: invalidateAll,
+  });
+
+  const acceptMutation = useMutation({
+    mutationFn: async ({ assignmentId }: { assignmentId: string }) => {
+      const { error } = await supabase
+        .from('sabbath_assignments')
+        .update({ status: 'accepted' })
+        .eq('id', assignmentId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: invalidateAll,
+  });
+
+  const declineMutation = useMutation({
+    mutationFn: async ({ assignmentId, reason }: { assignmentId: string; reason: string | null }) => {
+      const { error } = await supabase
+        .from('sabbath_assignments')
+        .update({ status: 'declined', decline_reason: reason })
+        .eq('id', assignmentId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: invalidateAll,
+  });
+
+  const attendanceMutation = useMutation({
+    mutationFn: async ({ sabbathId: sid, status }: { sabbathId: string; status: SabbathAttendanceStatus }) => {
+      if (!user?.id) throw new Error('Not authenticated');
+      const { data: existing } = await supabase
+        .from('sabbath_attendance')
+        .select('id')
+        .eq('sabbath_id', sid)
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (existing) {
+        const { error } = await supabase
+          .from('sabbath_attendance')
+          .update({ status })
+          .eq('id', (existing as any).id);
+        if (error) throw new Error(error.message);
+      } else {
+        const { error } = await supabase
+          .from('sabbath_attendance')
+          .insert({ sabbath_id: sid, user_id: user.id, status });
+        if (error) throw new Error(error.message);
+      }
+    },
+    onSuccess: invalidateAll,
+  });
+
+  const suggestReplacementMutation = useMutation({
+    mutationFn: async ({ assignmentId, suggestedUserId }: { assignmentId: string; suggestedUserId: string }) => {
+      const { error } = await supabase
+        .from('sabbath_assignments')
+        .update({ status: 'replacement_suggested', suggested_user_id: suggestedUserId })
+        .eq('id', assignmentId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: invalidateAll,
+  });
 
   const isStatusUpdating = publishMutation.isPending || cancelMutation.isPending || revertMutation.isPending;
 
@@ -130,10 +415,12 @@ export default function SabbathDetailScreen() {
 
   const groupedMembers = useMemo(() => groupedMembersQuery.data ?? [], [groupedMembersQuery.data]);
 
-  const suggestGroupedMembersQuery = trpc.sabbaths.getAllMembersGrouped.useQuery(
-    { primaryGroupId: sabbath?.group_id ?? '' },
-    { enabled: !!sabbath?.group_id && showSuggestModal }
-  );
+  const suggestGroupedMembersQuery = useQuery({
+    queryKey: ['sabbath-grouped-members', sabbath?.group_id, 'suggest'],
+    queryFn: () => fetchGroupedMembers(sabbath!.group_id),
+    enabled: !!sabbath?.group_id && showSuggestModal,
+    staleTime: 30_000,
+  });
   const suggestGroupedMembers = useMemo(() => suggestGroupedMembersQuery.data ?? [], [suggestGroupedMembersQuery.data]);
 
   const myAttendance = useMemo(
