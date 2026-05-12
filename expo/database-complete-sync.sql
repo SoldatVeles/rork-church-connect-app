@@ -90,36 +90,12 @@ ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
 -- Allowed roles
--- If the legacy user_role ENUM exists, first make sure it includes every
--- value the app uses (incl. 'visitor'), then normalize the column to TEXT
--- so the CHECK constraint can hold all role values going forward.
-DO $
-BEGIN
-  IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
-    BEGIN
-      ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'visitor';
-    EXCEPTION WHEN others THEN NULL;
-    END;
-    BEGIN
-      ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'member';
-    EXCEPTION WHEN others THEN NULL;
-    END;
-    BEGIN
-      ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'pastor';
-    EXCEPTION WHEN others THEN NULL;
-    END;
-    BEGIN
-      ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'church_leader';
-    EXCEPTION WHEN others THEN NULL;
-    END;
-    BEGIN
-      ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'admin';
-    EXCEPTION WHEN others THEN NULL;
-    END;
-  END IF;
-END $;
-
-DO $
+-- Normalize the role column to TEXT so the CHECK constraint can hold all
+-- role values going forward. The legacy user_role ENUM (if any) must already
+-- include every value the app uses (incl. 'visitor'); ALTER TYPE ADD VALUE
+-- cannot run inside a DO block, so we keep this step purely as a column
+-- type normalization.
+DO $$
 DECLARE
   col_type TEXT;
 BEGIN
@@ -132,7 +108,7 @@ BEGIN
     ALTER TABLE public.profiles ALTER COLUMN role TYPE TEXT USING role::TEXT;
     ALTER TABLE public.profiles ALTER COLUMN role SET DEFAULT 'member';
   END IF;
-END $;
+END $$;
 
 -- Enforce the set of allowed role values on the TEXT column
 ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
