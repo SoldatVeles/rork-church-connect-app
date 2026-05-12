@@ -26,8 +26,57 @@ export default function AdminTabScreen() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<AdminTab>('users');
   
-  const usersQuery = trpc.users.getAll.useQuery(undefined, {
-    refetchOnMount: true,
+  // Direct Supabase query (bypasses cold-starting Hono backend so the list
+  // loads quickly and reliably). Admin uses RLS-permitted access to profiles.
+  type AdminUserRow = {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    role: Role;
+    isBlocked: boolean;
+    createdAt: string;
+    displayName: string;
+    phone?: string;
+  };
+
+  const usersQuery = useQuery<AdminUserRow[]>({
+    queryKey: ['users', 'getAll'],
+    queryFn: async (): Promise<AdminUserRow[]> => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, email, full_name, display_name, role, is_blocked, created_at, phone')
+        .order('created_at', { ascending: false });
+      if (error) throw new Error(error.message);
+      const rows = (data ?? []) as Array<{
+        id: string;
+        email: string | null;
+        full_name: string | null;
+        display_name: string | null;
+        role: string | null;
+        is_blocked: boolean | null;
+        created_at: string;
+        phone: string | null;
+      }>;
+      return rows
+        .filter((p) => Boolean(p.email))
+        .map((p) => {
+          const fullName = p.display_name || p.full_name || (p.email ? p.email.split('@')[0] : 'User');
+          const parts = fullName.trim().split(/\s+/);
+          return {
+            id: p.id,
+            firstName: parts[0] || 'User',
+            lastName: parts.slice(1).join(' ') || '',
+            email: p.email ?? '',
+            role: ((p.role as Role) || 'member'),
+            isBlocked: Boolean(p.is_blocked),
+            createdAt: p.created_at,
+            displayName: fullName,
+            phone: p.phone ?? undefined,
+          };
+        });
+    },
+    staleTime: 30_000,
     refetchOnWindowFocus: false,
   });
 
