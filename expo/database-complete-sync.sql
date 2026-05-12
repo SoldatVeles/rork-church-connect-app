@@ -95,20 +95,33 @@ ALTER TABLE public.profiles
 -- include every value the app uses (incl. 'visitor'); ALTER TYPE ADD VALUE
 -- cannot run inside a DO block, so we keep this step purely as a column
 -- type normalization.
-DO $$
+DO $
 DECLARE
   col_type TEXT;
+  pol RECORD;
 BEGIN
   SELECT data_type INTO col_type
   FROM information_schema.columns
   WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'role';
 
   IF col_type = 'USER-DEFINED' THEN
+    -- Drop ALL policies across the database that reference the profiles.role
+    -- column, because PostgreSQL forbids altering a column type while any
+    -- policy depends on it. They will be recreated later in this script.
+    FOR pol IN
+      SELECT schemaname, tablename, policyname
+      FROM pg_policies
+      WHERE schemaname = 'public'
+    LOOP
+      EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I',
+        pol.policyname, pol.schemaname, pol.tablename);
+    END LOOP;
+
     ALTER TABLE public.profiles ALTER COLUMN role DROP DEFAULT;
     ALTER TABLE public.profiles ALTER COLUMN role TYPE TEXT USING role::TEXT;
     ALTER TABLE public.profiles ALTER COLUMN role SET DEFAULT 'member';
   END IF;
-END $$;
+END $;
 
 -- Enforce the set of allowed role values on the TEXT column
 ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
