@@ -12,7 +12,22 @@ import { trpc, trpcClient } from "@/lib/trpc";
 
 void SplashScreen.preventAutoHideAsync();
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: (failureCount, error: unknown) => {
+        const msg = (error as { message?: string } | null)?.message ?? '';
+        if (/Not authenticated|Profile not found/i.test(msg)) return false;
+        return failureCount < 3;
+      },
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+      staleTime: 30_000,
+    },
+    mutations: {
+      retry: 0,
+    },
+  },
+});
 
 function RootLayoutNav() {
   const { isLoading, isAuthenticated } = useAuth();
