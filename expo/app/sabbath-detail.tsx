@@ -152,6 +152,17 @@ export default function SabbathDetailScreen() {
     return map;
   }, [assignments]);
 
+  const assignedRolesByUser = useMemo(() => {
+    const map = new Map<string, SabbathRole[]>();
+    assignments.forEach((a) => {
+      if (!a.user_id) return;
+      const arr = map.get(a.user_id) ?? [];
+      arr.push(a.role);
+      map.set(a.user_id, arr);
+    });
+    return map;
+  }, [assignments]);
+
   const attendingCount = useMemo(
     () => attendance.filter((a) => a.status === 'attending').length,
     [attendance]
@@ -779,22 +790,34 @@ export default function SabbathDetailScreen() {
                         </View>
                       )}
                     </View>
-                    {section.members.map((m) => (
-                      <TouchableOpacity
-                        key={m.id}
-                        style={styles.memberItem}
-                        onPress={() => handleAssign(m.id)}
-                        disabled={assignRoleMutation.isPending}
-                      >
-                        <View style={styles.memberAvatar}>
-                          <Text style={styles.memberAvatarText}>
-                            {m.name.charAt(0).toUpperCase()}
-                          </Text>
-                        </View>
-                        <Text style={styles.memberName}>{m.name}</Text>
-                        <ChevronDown size={16} color="#94a3b8" style={{ transform: [{ rotate: '-90deg' }] }} />
-                      </TouchableOpacity>
-                    ))}
+                    {section.members.map((m) => {
+                      const otherRoles = (assignedRolesByUser.get(m.id) ?? []).filter(
+                        (r) => r !== assigningRole
+                      );
+                      return (
+                        <TouchableOpacity
+                          key={m.id}
+                          style={styles.memberItem}
+                          onPress={() => handleAssign(m.id)}
+                          disabled={assignRoleMutation.isPending}
+                        >
+                          <View style={styles.memberAvatar}>
+                            <Text style={styles.memberAvatarText}>
+                              {m.name.charAt(0).toUpperCase()}
+                            </Text>
+                          </View>
+                          <View style={styles.memberInfo}>
+                            <Text style={styles.memberName}>{m.name}</Text>
+                            {otherRoles.length > 0 && (
+                              <Text style={styles.memberAlreadyAssigned}>
+                                Already: {otherRoles.map((r) => ROLE_LABELS[r]).join(', ')}
+                              </Text>
+                            )}
+                          </View>
+                          <ChevronDown size={16} color="#94a3b8" style={{ transform: [{ rotate: '-90deg' }] }} />
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
                 ))
               )}
@@ -1590,7 +1613,15 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500' as const,
     color: '#1e293b',
+  },
+  memberInfo: {
     flex: 1,
+    gap: 2,
+  },
+  memberAlreadyAssigned: {
+    fontSize: 12,
+    color: '#1e3a8a',
+    fontWeight: '500' as const,
   },
   modalCloseBtn: {
     paddingVertical: 14,
