@@ -136,11 +136,6 @@ export default function EventsScreen() {
         .map((event: any) => {
           const rawType = (event.event_type ?? 'bible_study') as string;
 
-          if (rawType === 'prayer_meeting') {
-            console.log('[Events] Skipping non-event entry in events feed:', event.id, rawType);
-            return null;
-          }
-
           const start = event.start_at ? new Date(event.start_at) : new Date();
           const end = event.end_at ? new Date(event.end_at) : undefined;
           const registeredUsersSafe: string[] = Array.isArray(event?.registered_users)
