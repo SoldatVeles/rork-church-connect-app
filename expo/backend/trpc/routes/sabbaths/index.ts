@@ -1595,25 +1595,42 @@ const deleteSabbath = publicProcedure
     if (!sabbath) throw new Error("Sabbath not found");
     await requireCanManageSabbath(ctx.supabase, user.id, (sabbath as any).group_id);
 
-    const { error: attErr } = await db(ctx.supabase)
+    // Use the admin (service role) client so RLS cannot silently drop the delete.
+    // Permission has already been enforced in application code above.
+    const adminClient = ctx.supabaseAdmin ?? ctx.supabase;
+    if (!ctx.hasServiceRoleAccess) {
+      console.warn(
+        "[sabbaths.deleteSabbath] Service role key not configured — falling back to user client; " +
+          "deletes may be blocked by RLS for non-admin/non-pastor managers."
+      );
+    }
+
+    const { error: attErr, count: attCount } = await db(adminClient)
       .from("sabbath_attendance")
-      .delete()
+      .delete({ count: "exact" })
       .eq("sabbath_id", input.sabbathId);
     if (attErr) console.warn("[sabbaths.deleteSabbath] Attendance cleanup error:", attErr.message);
+    else console.log("[sabbaths.deleteSabbath] Attendance rows removed:", attCount);
 
-    const { error: assErr } = await db(ctx.supabase)
+    const { error: assErr, count: assCount } = await db(adminClient)
       .from("sabbath_assignments")
-      .delete()
+      .delete({ count: "exact" })
       .eq("sabbath_id", input.sabbathId);
     if (assErr) console.warn("[sabbaths.deleteSabbath] Assignment cleanup error:", assErr.message);
+    else console.log("[sabbaths.deleteSabbath] Assignment rows removed:", assCount);
 
-    const { error } = await db(ctx.supabase)
+    const { error, count } = await db(adminClient)
       .from("sabbaths")
-      .delete()
+      .delete({ count: "exact" })
       .eq("id", input.sabbathId);
     if (error) throw new Error(error.message);
+    if (!count || count === 0) {
+      throw new Error(
+        "Delete returned 0 rows. The Sabbath was not removed (likely blocked by RLS or already deleted). Please contact support."
+      );
+    }
 
-    console.log("[sabbaths.deleteSabbath] Deleted:", input.sabbathId);
+    console.log("[sabbaths.deleteSabbath] Deleted:", input.sabbathId, "rows:", count);
     return { success: true };
   });
 
