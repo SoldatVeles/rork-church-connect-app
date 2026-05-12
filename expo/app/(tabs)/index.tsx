@@ -236,29 +236,64 @@ export default function HomeScreen() {
   const [bellPosition, setBellPosition] = useState({ x: 0, y: 0 });
   const [currentVerseIndex, setCurrentVerseIndex] = useState(0);
 
+  // Resolve the user's actual home group (not the church picker) so visibility is per-user.
+  const homeGroupQuery = useQuery({
+    queryKey: ['home-user-group', user?.id],
+    enabled: !!user?.id,
+    queryFn: async (): Promise<string | null> => {
+      if (!user?.id) return null;
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('home_group_id')
+        .eq('id', user.id)
+        .single();
+      const homeGroupId = (profile as any)?.home_group_id as string | null;
+      if (homeGroupId) return homeGroupId;
+      const { data: memberships } = await supabase
+        .from('group_members')
+        .select('group_id')
+        .eq('user_id', user.id)
+        .limit(1);
+      if (memberships && memberships.length > 0) {
+        return (memberships[0] as any).group_id as string;
+      }
+      return null;
+    },
+  });
+  const userHomeGroupId = homeGroupQuery.data ?? null;
+
   const eventsQuery = useQuery({
-    queryKey: ['home-events', currentChurchId, userIsAdmin],
+    queryKey: ['home-events', userHomeGroupId, userIsAdmin, homeGroupQuery.isFetched],
+    enabled: userIsAdmin || homeGroupQuery.isFetched,
     queryFn: async () => {
       let query = supabase
         .from('events')
         .select('*')
         .order('start_at', { ascending: true });
 
-      if (!userIsAdmin && currentChurchId) {
-        query = query.or(`group_id.eq.${currentChurchId},is_shared_all_churches.eq.true`);
-      } else if (!userIsAdmin && !currentChurchId) {
-        console.log('[Home] Non-admin user has no church, returning empty events');
-        return [];
+      if (!userIsAdmin) {
+        if (userHomeGroupId) {
+          query = query.or(`group_id.eq.${userHomeGroupId},is_shared_all_churches.eq.true`);
+        } else {
+          query = query.eq('is_shared_all_churches', true);
+        }
       }
 
       const { data, error } = await query;
       if (error) throw new Error(error.message);
-      return data || [];
+      const list = (data || []) as any[];
+      if (userIsAdmin) return list;
+      return list.filter((e: any) => {
+        const shared = e?.is_shared_all_churches === true;
+        const sameGroup = !!userHomeGroupId && e?.group_id === userHomeGroupId;
+        return shared || sameGroup;
+      });
     },
   });
 
   const prayersActiveQuery = useQuery({
-    queryKey: ['home-prayers-active', currentChurchId, userIsAdmin],
+    queryKey: ['home-prayers-active', userHomeGroupId, userIsAdmin, homeGroupQuery.isFetched],
+    enabled: userIsAdmin || homeGroupQuery.isFetched,
     queryFn: async () => {
       let query = supabase
         .from('prayers')
@@ -266,13 +301,23 @@ export default function HomeScreen() {
         .eq('is_answered', false)
         .order('created_at', { ascending: false });
 
-      if (!userIsAdmin && currentChurchId) {
-        query = query.or(`group_id.eq.${currentChurchId},is_shared_all_churches.eq.true`);
+      if (!userIsAdmin) {
+        if (userHomeGroupId) {
+          query = query.or(`group_id.eq.${userHomeGroupId},is_shared_all_churches.eq.true`);
+        } else {
+          query = query.eq('is_shared_all_churches', true);
+        }
       }
 
       const { data, error } = await query;
       if (error) throw new Error(error.message);
-      return data || [];
+      const list = (data || []) as any[];
+      if (userIsAdmin) return list;
+      return list.filter((p: any) => {
+        const shared = p?.is_shared_all_churches === true;
+        const sameGroup = !!userHomeGroupId && p?.group_id === userHomeGroupId;
+        return shared || sameGroup;
+      });
     },
   });
 

@@ -144,27 +144,33 @@ export default function EventsScreen() {
   });
 
   const userHomeChurch = homeChurchQuery.data ?? null;
-  const effectiveChurchId = userHomeChurch?.id ?? currentChurchId;
+  // Strict: only use the user's actual home group for scoping. Never fall back to the church picker.
+  const userHomeGroupId = userHomeChurch?.id ?? null;
+  // For display/labels we can still fall back to the church picker name.
+  const effectiveChurchId = userHomeGroupId ?? currentChurchId;
   const effectiveChurchName = userHomeChurch?.name ?? currentChurch?.name ?? null;
 
   const listQuery = useQuery({
-    queryKey: ['events', currentChurchId, userIsAdmin],
+    queryKey: ['events', userHomeGroupId, userIsAdmin, homeChurchQuery.isFetched],
+    enabled: userIsAdmin || homeChurchQuery.isFetched,
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
     staleTime: 0,
     queryFn: async () => {
-      console.log('[Events] Fetching events from database, churchId:', currentChurchId);
-      
+      console.log('[Events] Fetching events, userHomeGroupId:', userHomeGroupId, 'isAdmin:', userIsAdmin);
+
       let query = supabase
         .from('events')
         .select('*')
         .order('start_at', { ascending: true });
 
-      if (!userIsAdmin && effectiveChurchId) {
-        query = query.or(`group_id.eq.${effectiveChurchId},is_shared_all_churches.eq.true`);
-      } else if (!userIsAdmin && !effectiveChurchId) {
-        console.log('[Events] Non-admin user has no church, returning empty');
-        return [];
+      if (!userIsAdmin) {
+        if (userHomeGroupId) {
+          query = query.or(`group_id.eq.${userHomeGroupId},is_shared_all_churches.eq.true`);
+        } else {
+          // No home group: only see globally-shared events
+          query = query.eq('is_shared_all_churches', true);
+        }
       }
 
       const { data, error } = await query;
@@ -174,9 +180,17 @@ export default function EventsScreen() {
         throw new Error(error.message ?? 'Failed to load events');
       }
 
-      console.log('[Events] Fetched events:', data);
-      
-      const sanitizedEvents = (data as any[])
+      // Client-side safety filter: enforce visibility even if RLS/column issues exist.
+      const visibleRaw = (data as any[]).filter((e: any) => {
+        if (userIsAdmin) return true;
+        const shared = e?.is_shared_all_churches === true;
+        const sameGroup = !!userHomeGroupId && e?.group_id === userHomeGroupId;
+        return shared || sameGroup;
+      });
+
+      console.log('[Events] Fetched events:', data?.length, 'visible after safety filter:', visibleRaw.length);
+
+      const sanitizedEvents = visibleRaw
         .map((event: any) => {
           const rawType = (event.event_type ?? 'bible_study') as string;
 
@@ -241,6 +255,12 @@ export default function EventsScreen() {
         eventData.endTime.getMinutes(),
       );
 
+      // Always attach the creator's home group. Never use the church-picker as a fallback,
+      // otherwise events get assigned to the wrong church.
+      if (!userIsAdmin && !userHomeGroupId) {
+        throw new Error('You must be assigned to a home church before creating an event.');
+      }
+
       const insertData: Record<string, unknown> = {
         title: eventData.title,
         description: eventData.description,
@@ -253,8 +273,8 @@ export default function EventsScreen() {
         is_registration_open: true,
         current_attendees: 0,
         registered_users: [],
-        group_id: effectiveChurchId,
-        is_shared_all_churches: eventData.isSharedAllChurches,
+        group_id: userHomeGroupId,
+        is_shared_all_churches: eventData.isSharedAllChurches === true,
       };
 
       console.log('[Events] Inserting event with data:', JSON.stringify(insertData, null, 2));

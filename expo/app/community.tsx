@@ -40,6 +40,32 @@ export default function CommunityScreen() {
   const currentChurchId = currentChurch?.id ?? null;
   const userIsAdmin = isAdmin(user);
 
+  // Resolve user's home group so prayer visibility doesn't depend on the church picker.
+  const homeGroupQuery = useQuery({
+    queryKey: ['community-user-group', user?.id],
+    enabled: !!user?.id,
+    queryFn: async (): Promise<string | null> => {
+      if (!user?.id) return null;
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('home_group_id')
+        .eq('id', user.id)
+        .single();
+      const homeGroupId = (profile as any)?.home_group_id as string | null;
+      if (homeGroupId) return homeGroupId;
+      const { data: memberships } = await supabase
+        .from('group_members')
+        .select('group_id')
+        .eq('user_id', user.id)
+        .limit(1);
+      if (memberships && memberships.length > 0) {
+        return (memberships[0] as any).group_id as string;
+      }
+      return null;
+    },
+  });
+  const userHomeGroupId = homeGroupQuery.data ?? null;
+
   const membersQuery = useQuery({
     queryKey: ['community-members', currentChurchId, userIsAdmin],
     queryFn: async () => {
@@ -76,22 +102,35 @@ export default function CommunityScreen() {
   });
 
   const prayersQuery = useQuery({
-    queryKey: ['community-prayers', currentChurchId, userIsAdmin],
+    queryKey: ['community-prayers', userHomeGroupId, userIsAdmin, homeGroupQuery.isFetched],
+    enabled: userIsAdmin || homeGroupQuery.isFetched,
     queryFn: async () => {
       let query = supabase
         .from('prayers')
         .select('*')
         .eq('is_answered', false)
         .order('created_at', { ascending: false })
-        .limit(5);
+        .limit(20);
 
-      if (!userIsAdmin && currentChurchId) {
-        query = query.or(`group_id.eq.${currentChurchId},is_shared_all_churches.eq.true`);
+      if (!userIsAdmin) {
+        if (userHomeGroupId) {
+          query = query.or(`group_id.eq.${userHomeGroupId},is_shared_all_churches.eq.true`);
+        } else {
+          query = query.eq('is_shared_all_churches', true);
+        }
       }
 
       const { data, error } = await query;
       if (error) throw new Error(error.message);
-      return data || [];
+      const list = (data || []) as any[];
+      const filtered = userIsAdmin
+        ? list
+        : list.filter((p: any) => {
+            const shared = p?.is_shared_all_churches === true;
+            const sameGroup = !!userHomeGroupId && p?.group_id === userHomeGroupId;
+            return shared || sameGroup;
+          });
+      return filtered.slice(0, 5);
     },
   });
 
