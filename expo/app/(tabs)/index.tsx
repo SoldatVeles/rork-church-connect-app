@@ -245,7 +245,7 @@ export default function HomeScreen() {
         .order('start_at', { ascending: true });
 
       if (!userIsAdmin && currentChurchId) {
-        query = query.eq('group_id', currentChurchId);
+        query = query.or(`group_id.eq.${currentChurchId},is_shared_all_churches.eq.true`);
       } else if (!userIsAdmin && !currentChurchId) {
         console.log('[Home] Non-admin user has no church, returning empty events');
         return [];

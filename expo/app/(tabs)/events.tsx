@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { Calendar, MapPin, Users, Plus, Clock, AlertCircle, X, CalendarPlus } from 'lucide-react-native';
+import { Calendar, MapPin, Users, Plus, Clock, AlertCircle, X, CalendarPlus, Globe, Church } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import {
@@ -14,6 +14,7 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Switch,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -73,6 +74,7 @@ export default function EventsScreen() {
     location: string;
     type: EventType;
     maxAttendees?: string;
+    isSharedAllChurches: boolean;
   }>({
     title: '',
     description: '',
@@ -83,6 +85,7 @@ export default function EventsScreen() {
     location: '',
     type: 'bible_study',
     maxAttendees: '',
+    isSharedAllChurches: false,
   });
 
   const [showDatePicker, setShowDatePicker] = useState<{
@@ -103,6 +106,47 @@ export default function EventsScreen() {
 
   const queryClient = useQueryClient();
 
+  const homeChurchQuery = useQuery({
+    queryKey: ['user-home-church', user?.id],
+    queryFn: async (): Promise<{ id: string; name: string } | null> => {
+      if (!user?.id) return null;
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('home_group_id')
+        .eq('id', user.id)
+        .single();
+      const homeGroupId = (profile as any)?.home_group_id as string | null;
+      if (homeGroupId) {
+        const { data: group } = await supabase
+          .from('groups')
+          .select('id, name')
+          .eq('id', homeGroupId)
+          .single();
+        if (group) return { id: group.id as string, name: group.name as string };
+      }
+      const { data: memberships } = await supabase
+        .from('group_members')
+        .select('group_id')
+        .eq('user_id', user.id)
+        .limit(1);
+      if (memberships && memberships.length > 0) {
+        const gid = (memberships[0] as any).group_id as string;
+        const { data: group } = await supabase
+          .from('groups')
+          .select('id, name')
+          .eq('id', gid)
+          .single();
+        if (group) return { id: group.id as string, name: group.name as string };
+      }
+      return null;
+    },
+    enabled: !!user?.id,
+  });
+
+  const userHomeChurch = homeChurchQuery.data ?? null;
+  const effectiveChurchId = userHomeChurch?.id ?? currentChurchId;
+  const effectiveChurchName = userHomeChurch?.name ?? currentChurch?.name ?? null;
+
   const listQuery = useQuery({
     queryKey: ['events', currentChurchId, userIsAdmin],
     refetchOnMount: 'always',
@@ -116,9 +160,9 @@ export default function EventsScreen() {
         .select('*')
         .order('start_at', { ascending: true });
 
-      if (!userIsAdmin && currentChurchId) {
-        query = query.eq('group_id', currentChurchId);
-      } else if (!userIsAdmin && !currentChurchId) {
+      if (!userIsAdmin && effectiveChurchId) {
+        query = query.or(`group_id.eq.${effectiveChurchId},is_shared_all_churches.eq.true`);
+      } else if (!userIsAdmin && !effectiveChurchId) {
         console.log('[Events] Non-admin user has no church, returning empty');
         return [];
       }
@@ -177,6 +221,7 @@ export default function EventsScreen() {
       type: EventType;
       maxAttendees?: number;
       createdBy: string;
+      isSharedAllChurches: boolean;
     }) => {
       console.log('[Events] mutationFn called with:', eventData);
 
@@ -208,7 +253,8 @@ export default function EventsScreen() {
         is_registration_open: true,
         current_attendees: 0,
         registered_users: [],
-        group_id: currentChurchId,
+        group_id: effectiveChurchId,
+        is_shared_all_churches: eventData.isSharedAllChurches,
       };
 
       console.log('[Events] Inserting event with data:', JSON.stringify(insertData, null, 2));
@@ -258,7 +304,8 @@ export default function EventsScreen() {
         endTime: now,
         location: '',
         type: 'bible_study',
-        maxAttendees: ''
+        maxAttendees: '',
+        isSharedAllChurches: false,
       });
       setShowAddModal(false);
       Alert.alert('Success', 'Event has been created successfully!');
@@ -480,6 +527,7 @@ export default function EventsScreen() {
       type: form.type,
       maxAttendees: form.maxAttendees ? Number(form.maxAttendees) : undefined,
       createdBy: user.id,
+      isSharedAllChurches: form.isSharedAllChurches,
     };
 
     console.log('[Events] Creating event with payload:', JSON.stringify(payload, null, 2));
@@ -902,6 +950,15 @@ export default function EventsScreen() {
           </View>
 
           <ScrollView style={styles.modalContent}>
+            {effectiveChurchName && (
+              <View style={styles.churchContextBanner}>
+                <Church size={14} color="#1e3a8a" />
+                <Text style={styles.churchContextText}>
+                  Posting to: {effectiveChurchName}
+                </Text>
+              </View>
+            )}
+
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Title</Text>
               <TextInput
@@ -1024,6 +1081,27 @@ export default function EventsScreen() {
                 onChangeText={(text) => setForm(prev => ({ ...prev, maxAttendees: text.replace(/[^0-9]/g, '') }))}
                 keyboardType="numeric"
               />
+            </View>
+
+            <View style={styles.switchGroup}>
+              <View style={styles.switchRow}>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.shareLabelRow}>
+                    <Globe size={16} color="#2563eb" />
+                    <Text style={styles.switchLabel}>Share with all churches</Text>
+                  </View>
+                  <Text style={styles.switchDescription}>
+                    Visible to members of all church groups
+                  </Text>
+                </View>
+                <Switch
+                  value={form.isSharedAllChurches}
+                  onValueChange={(value) => setForm(prev => ({ ...prev, isSharedAllChurches: value }))}
+                  trackColor={{ false: '#e2e8f0', true: '#2563eb' }}
+                  thumbColor={form.isSharedAllChurches ? 'white' : '#f4f4f5'}
+                  testID="event-shared-switch"
+                />
+              </View>
             </View>
 
             <TouchableOpacity
@@ -1723,5 +1801,46 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700' as const,
     color: 'white',
+  },
+  churchContextBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  churchContextText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: '#1e3a8a',
+  },
+  switchGroup: {
+    gap: 20,
+    marginBottom: 24,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  switchLabel: {
+    fontSize: 16,
+    fontWeight: '500' as const,
+    color: '#1e293b',
+  },
+  switchDescription: {
+    fontSize: 14,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  shareLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
 });

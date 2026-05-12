@@ -100,6 +100,7 @@ export type Database = {
           is_registration_open: boolean;
           image_url: string | null;
           group_id: string | null;
+          is_shared_all_churches: boolean;
           created_by: string;
           is_published: boolean;
           created_at: string;
@@ -119,6 +120,7 @@ export type Database = {
           is_registration_open?: boolean;
           image_url?: string | null;
           group_id?: string | null;
+          is_shared_all_churches?: boolean;
           created_by: string;
           is_published?: boolean;
           created_at?: string;
@@ -138,6 +140,7 @@ export type Database = {
           is_registration_open?: boolean;
           image_url?: string | null;
           group_id?: string | null;
+          is_shared_all_churches?: boolean;
           created_by?: string;
           is_published?: boolean;
           created_at?: string;
