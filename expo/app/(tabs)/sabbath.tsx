@@ -283,7 +283,7 @@ export default function SabbathScreen() {
   const pastorGroupIds = useMemo(() => (pastorGroupsQuery.data ?? []).map((g: any) => g.group_id as string), [pastorGroupsQuery.data]);
   const [activeTab, setActiveTab] = useState<TabKey>('myChurch');
 
-  const churchScope = buildChurchScope(user, null, pastorGroupIds);
+  const churchScope = buildChurchScope(user, user?.homeGroupId ?? null, pastorGroupIds);
   const canManage = canManageAnySabbath(churchScope);
 
   const myChurchQuery = trpc.sabbaths.getMyChurchUpcoming.useQuery(undefined, {

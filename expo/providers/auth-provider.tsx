@@ -61,6 +61,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         permissions: [],
         joinedAt: new Date(newProfile.created_at as string),
         createdAt: newProfile.created_at as string,
+        homeGroupId: (newProfile as any).home_group_id ?? null,
       };
     }
 
@@ -97,6 +98,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       permissions: [],
       joinedAt: new Date((profile as any).created_at as string),
       createdAt: (profile as any).created_at as string,
+      homeGroupId: ((profile as any).home_group_id as string | null) ?? null,
     };
   };
 

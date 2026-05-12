@@ -231,7 +231,7 @@ export default function HomeScreen() {
   const userIsAdmin = isAdmin(user);
   const pastorGroupsQuery = trpc.sabbaths.getMyPastorGroups.useQuery();
   const pastorGroupIds = useMemo(() => (pastorGroupsQuery.data ?? []).map((g: any) => g.group_id as string), [pastorGroupsQuery.data]);
-  const canManageSabbath = canManageAnySabbath(buildChurchScope(user, null, pastorGroupIds));
+  const canManageSabbath = canManageAnySabbath(buildChurchScope(user, user?.homeGroupId ?? null, pastorGroupIds));
   const [showNotifications, setShowNotifications] = useState(false);
   const bellButtonRef = useRef<View>(null);
   const [bellPosition, setBellPosition] = useState({ x: 0, y: 0 });
