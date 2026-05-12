@@ -93,7 +93,7 @@ export type Database = {
           start_at: string;
           end_at: string | null;
           location: string | null;
-          event_type: 'sabbath' | 'bible_study' | 'youth' | 'special' | 'conference';
+          event_type: 'bible_study' | 'youth' | 'special' | 'conference';
           max_attendees: number | null;
           current_attendees: number;
           registered_users: string[];
@@ -112,7 +112,7 @@ export type Database = {
           start_at: string;
           end_at?: string | null;
           location?: string | null;
-          event_type?: 'sabbath' | 'bible_study' | 'youth' | 'special' | 'conference';
+          event_type?: 'bible_study' | 'youth' | 'special' | 'conference';
           max_attendees?: number | null;
           current_attendees?: number;
           registered_users?: string[];
@@ -131,7 +131,7 @@ export type Database = {
           start_at?: string;
           end_at?: string | null;
           location?: string | null;
-          event_type?: 'sabbath' | 'bible_study' | 'youth' | 'special' | 'conference';
+          event_type?: 'bible_study' | 'youth' | 'special' | 'conference';
           max_attendees?: number | null;
           current_attendees?: number;
           registered_users?: string[];

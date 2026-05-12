@@ -43,9 +43,6 @@ const eventTypeLabels: Record<EventType, string> = {
 };
 
 const normalizeEventType = (value: unknown): EventType | null => {
-  if (value === 'sabbath') {
-    return null;
-  }
   if (allowedEventTypes.includes(value as EventType)) {
     return value as EventType;
   }
@@ -117,7 +114,6 @@ export default function EventsScreen() {
       let query = supabase
         .from('events')
         .select('*')
-        .neq('event_type', 'sabbath')
         .order('start_at', { ascending: true });
 
       if (!userIsAdmin && currentChurchId) {
@@ -138,12 +134,9 @@ export default function EventsScreen() {
       
       const sanitizedEvents = (data as any[])
         .map((event: any) => {
-          // Prefer event_type over the legacy `type` column, since the
-          // `type` column has a DB default of 'sabbath' and would otherwise
-          // make newly-created events look like sabbath entries.
-          const rawType = (event.event_type ?? event.type ?? 'bible_study') as string;
+          const rawType = (event.event_type ?? 'bible_study') as string;
 
-          if (rawType === 'prayer_meeting' || rawType === 'sabbath') {
+          if (rawType === 'prayer_meeting') {
             console.log('[Events] Skipping non-event entry in events feed:', event.id, rawType);
             return null;
           }
@@ -214,10 +207,6 @@ export default function EventsScreen() {
         start_at: startAt.toISOString(),
         end_at: endAt.toISOString(),
         location: eventData.location,
-        // Set BOTH columns to keep legacy `type` (which defaults to 'sabbath')
-        // in sync with the canonical event_type field. Otherwise new events
-        // get filtered out as sabbath entries.
-        type: eventData.type,
         event_type: eventData.type,
         max_attendees: eventData.maxAttendees ?? null,
         created_by: eventData.createdBy,
@@ -249,13 +238,7 @@ export default function EventsScreen() {
 
       if (error) {
         console.error('[Events] Insert failed:', JSON.stringify(error));
-        const msg = error.message ?? 'Failed to create event';
-        if (msg.includes('type')) {
-          throw new Error(
-            msg + ' — You may need to run the database fix script (database-fix-events-creation.sql).'
-          );
-        }
-        throw new Error(msg);
+        throw new Error(error.message ?? 'Failed to create event');
       }
 
       if (!data) {
