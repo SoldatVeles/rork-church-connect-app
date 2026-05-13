@@ -98,11 +98,15 @@ export default function PrayersScreen() {
   });
 
   const userHomeChurch = homeChurchQuery.data ?? null;
-  const effectiveChurchId = userHomeChurch?.id ?? currentChurch?.id ?? null;
+  // Strict: scope by the viewer's actual home group only. The church picker must NOT
+  // grant visibility into another church's local prayers.
+  const userHomeGroupId = userHomeChurch?.id ?? null;
+  const effectiveChurchId = userHomeGroupId ?? currentChurch?.id ?? null;
   const effectiveChurchName = userHomeChurch?.name ?? currentChurch?.name ?? null;
 
   const allPrayersQuery = useQuery({
-    queryKey: ['prayers', effectiveChurchId, userIsAdmin],
+    queryKey: ['prayers', userHomeGroupId, userIsAdmin, homeChurchQuery.isFetched],
+    enabled: userIsAdmin || homeChurchQuery.isFetched,
     queryFn: async () => {
       let query = supabase
         .from('prayers')
@@ -112,10 +116,12 @@ export default function PrayersScreen() {
         `)
         .order('created_at', { ascending: false });
 
-      if (!userIsAdmin && effectiveChurchId) {
-        query = query.or(`group_id.eq.${effectiveChurchId},is_shared_all_churches.eq.true`);
-      } else if (!userIsAdmin && !effectiveChurchId) {
-        query = query.or('is_shared_all_churches.eq.true');
+      if (!userIsAdmin) {
+        if (userHomeGroupId) {
+          query = query.or(`group_id.eq.${userHomeGroupId},is_shared_all_churches.eq.true`);
+        } else {
+          query = query.eq('is_shared_all_churches', true);
+        }
       }
 
       const { data, error } = await query;
@@ -125,7 +131,16 @@ export default function PrayersScreen() {
         throw new Error(error.message);
       }
 
-      return (data || []).map((prayer: any) => ({
+      const rows = (data || []) as any[];
+      const visible = userIsAdmin
+        ? rows
+        : rows.filter((p: any) => {
+            const shared = p?.is_shared_all_churches === true;
+            const sameGroup = !!userHomeGroupId && p?.group_id === userHomeGroupId;
+            return shared || sameGroup;
+          });
+
+      return visible.map((prayer: any) => ({
         id: prayer.id,
         title: prayer.title,
         description: prayer.description || '',
@@ -223,6 +238,12 @@ export default function PrayersScreen() {
       requestedByName: string;
       isSharedAllChurches: boolean;
     }) => {
+      // Non-admins MUST be tied to their own home group so prayers can never
+      // leak into another church's local feed via the church picker.
+      if (!userIsAdmin && !userHomeGroupId) {
+        throw new Error('You must be assigned to a home church before posting a prayer.');
+      }
+      const groupForInsert = userIsAdmin ? effectiveChurchId : userHomeGroupId;
       const { data, error } = await supabase
         .from('prayers')
         .insert({
@@ -231,7 +252,7 @@ export default function PrayersScreen() {
           created_by: prayerData.requestedBy,
           is_anonymous: prayerData.isAnonymous,
           is_answered: false,
-          group_id: effectiveChurchId,
+          group_id: groupForInsert,
           is_shared_all_churches: prayerData.isSharedAllChurches,
         })
         .select()
