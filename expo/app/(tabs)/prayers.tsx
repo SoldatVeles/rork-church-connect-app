@@ -632,15 +632,15 @@ export default function PrayersScreen() {
           prayers.map((prayer: PrayerRequest) => {
           const scopeBadge = getScopeBadge(prayer);
           return (
-          <View key={prayer.id} style={styles.prayerCard}>
+          <View key={prayer.id} style={[styles.prayerCard, prayer.isUrgent && styles.prayerCardUrgent]}>
+            {prayer.isUrgent && (
+              <View style={styles.urgentRibbon}>
+                <AlertCircle size={14} color="white" />
+                <Text style={styles.urgentRibbonText}>URGENT PRAYER</Text>
+              </View>
+            )}
             <View style={styles.prayerHeader}>
               <View style={styles.prayerBadges}>
-                {prayer.isUrgent && (
-                  <View style={styles.urgentBadge}>
-                    <AlertCircle size={12} color="#dc2626" />
-                    <Text style={styles.urgentBadgeText}>URGENT</Text>
-                  </View>
-                )}
                 <View style={[
                   styles.statusBadge,
                   prayer.status === 'answered' && styles.answeredBadge,
@@ -1066,6 +1066,30 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
+    overflow: 'hidden' as const,
+  },
+  prayerCardUrgent: {
+    borderWidth: 2,
+    borderColor: '#dc2626',
+    backgroundColor: '#fff8f8',
+  },
+  urgentRibbon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#dc2626',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginHorizontal: -20,
+    marginTop: -20,
+    marginBottom: 12,
+  },
+  urgentRibbonText: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: 'white',
+    letterSpacing: 1,
   },
   prayerHeader: {
     marginBottom: 16,
@@ -1155,6 +1179,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 16,
     marginBottom: 16,
+    flexWrap: 'wrap' as const,
   },
   prayerMetaRow: {
     flexDirection: 'row',
@@ -1169,16 +1194,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap' as const,
+    gap: 10,
   },
   actionButtons: {
     flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
+    flexWrap: 'wrap' as const,
+    justifyContent: 'flex-end' as const,
   },
   prayerStats: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    flexShrink: 1,
   },
   prayerStatsText: {
     fontSize: 12,
