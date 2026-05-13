@@ -18,6 +18,7 @@ import { useAuth } from '@/providers/auth-provider';
 import { supabase } from '@/lib/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ChatMessage } from '@/types/chat';
+import { setLastRead } from '@/utils/chat-read';
 
 export default function GroupChatScreen() {
   const { groupId, groupName } = useLocalSearchParams<{ groupId: string; groupName: string }>();
@@ -87,8 +88,15 @@ export default function GroupChatScreen() {
       setTimeout(() => {
         scrollViewRef.current?.scrollToEnd({ animated: true });
       }, 100);
+      const last = messagesQuery.data[messagesQuery.data.length - 1];
+      if (user?.id && groupId && last?.createdAt) {
+        void setLastRead(user.id, String(groupId), last.createdAt.toISOString()).then(() => {
+          queryClient.invalidateQueries({ queryKey: ['group-unread-total', user.id] });
+          queryClient.invalidateQueries({ queryKey: ['group-unread-map', user.id] });
+        });
+      }
     }
-  }, [messagesQuery.data]);
+  }, [messagesQuery.data, user?.id, groupId, queryClient]);
 
   const handleSend = () => {
     const trimmed = message.trim();

@@ -19,6 +19,7 @@ import NotificationDropdown from '@/components/NotificationDropdown';
 import { supabase } from '@/lib/supabase';
 import { useQuery } from '@tanstack/react-query';
 import { trpc } from '@/lib/trpc';
+import { getLastReadMap } from '@/utils/chat-read';
 
 const bibleVerses = [
   {
@@ -381,6 +382,46 @@ export default function HomeScreen() {
 
   const unreadNotificationsCount = notificationsCountQuery.data ?? 0;
 
+  const unreadChatsQuery = useQuery({
+    queryKey: ['group-unread-total', user?.id],
+    enabled: !!user?.id,
+    refetchInterval: 15000,
+    queryFn: async (): Promise<number> => {
+      if (!user?.id) return 0;
+      const { data: memberships, error: mErr } = await supabase
+        .from('group_members')
+        .select('group_id')
+        .eq('user_id', user.id);
+      if (mErr) {
+        console.warn('[Home] unread memberships error:', mErr.message);
+        return 0;
+      }
+      const groupIds = (memberships || []).map((m: any) => m.group_id as string);
+      if (groupIds.length === 0) return 0;
+      const lastReadMap = await getLastReadMap(user.id);
+      const counts = await Promise.all(
+        groupIds.map(async (gid) => {
+          const since = lastReadMap[gid] ?? '1970-01-01T00:00:00.000Z';
+          let q = supabase
+            .from('group_messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('group_id', gid)
+            .neq('sender_id', user.id)
+            .gt('created_at', since);
+          const { count, error } = await q;
+          if (error) {
+            console.warn('[Home] unread count error:', error.message);
+            return 0;
+          }
+          return count ?? 0;
+        })
+      );
+      return counts.reduce((a, b) => a + b, 0);
+    },
+  });
+
+  const unreadChatsCount = unreadChatsQuery.data ?? 0;
+
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentVerseIndex((prevIndex) => (prevIndex + 1) % bibleVerses.length);
@@ -421,8 +462,11 @@ export default function HomeScreen() {
     {
       icon: MessageCircle,
       title: 'Group Chats',
-      subtitle: 'Connect with your groups',
+      subtitle: unreadChatsCount > 0
+        ? `${unreadChatsCount} new ${unreadChatsCount === 1 ? 'message' : 'messages'}`
+        : 'Connect with your groups',
       color: '#8b5cf6',
+      badge: unreadChatsCount,
       onPress: () => router.push('/groups'),
     },
     ...(canManageSabbath ? [{
@@ -432,7 +476,7 @@ export default function HomeScreen() {
       color: '#0f172a',
       onPress: () => router.push('/sabbath-planner' as any),
     }] : []),
-  ], [totalEventsCount, activeRequestsCount, membersCount, canManageSabbath]);
+  ], [totalEventsCount, activeRequestsCount, membersCount, canManageSabbath, unreadChatsCount]);
 
   const announcements = [
     {
@@ -506,6 +550,13 @@ export default function HomeScreen() {
               >
                 <View style={[styles.actionIcon, { backgroundColor: action.color }]}>
                   <action.icon size={24} color="white" />
+                  {!!(action as any).badge && (action as any).badge > 0 && (
+                    <View style={styles.actionBadge}>
+                      <Text style={styles.actionBadgeText}>
+                        {(action as any).badge > 99 ? '99+' : (action as any).badge}
+                      </Text>
+                    </View>
+                  )}
                 </View>
                 <Text style={styles.actionTitle}>{action.title}</Text>
                 <Text style={styles.actionSubtitle}>{action.subtitle}</Text>
@@ -640,6 +691,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
+    position: 'relative',
+  },
+  actionBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -6,
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 6,
+    borderRadius: 11,
+    backgroundColor: '#ef4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  actionBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
   },
   actionTitle: {
     fontSize: 14,
