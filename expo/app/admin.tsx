@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { SafeAreaView, View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, Platform, Switch } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { Users, Shield, Plus, Check, UserPlus, Church, BookOpen, Settings, Youtube, Edit, Trash2, ArrowLeft, Ban } from 'lucide-react-native';
+import { Users, Shield, Plus, Check, UserPlus, Church, BookOpen, Settings, Youtube, Edit, Trash2, ArrowLeft, Ban, Globe, X } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
 import { isAdmin as checkIsAdminRole } from '@/utils/permissions';
@@ -19,7 +19,7 @@ interface Group {
   created_at: string;
 }
 
-type AdminTab = 'users' | 'sermons' | 'groups';
+type AdminTab = 'users' | 'sermons' | 'groups' | 'countries';
 
 export default function AdminScreen() {
   const { user } = useAuth();
@@ -357,6 +357,54 @@ export default function AdminScreen() {
       ]
     );
   };
+
+  const countriesQuery = trpc.countries.list.useQuery();
+  const groupsWithCountryQuery = trpc.countries.listGroupsWithCountry.useQuery();
+  const [newCountry, setNewCountry] = useState({ code: '', name: '', flag: '' });
+  const [selectedUserForCountries, setSelectedUserForCountries] = useState<string | null>(null);
+
+  const userCountriesQuery = trpc.countries.getUserCountries.useQuery(
+    { userId: selectedUserForCountries ?? '' },
+    { enabled: !!selectedUserForCountries }
+  );
+
+  const createCountryMutation = trpc.countries.create.useMutation({
+    onSuccess: () => {
+      Alert.alert('Success', 'Country created');
+      setNewCountry({ code: '', name: '', flag: '' });
+      void countriesQuery.refetch();
+    },
+    onError: (e) => Alert.alert('Error', e.message),
+  });
+
+  const deleteCountryMutation = trpc.countries.delete.useMutation({
+    onSuccess: () => {
+      void countriesQuery.refetch();
+      void groupsWithCountryQuery.refetch();
+    },
+    onError: (e) => Alert.alert('Error', e.message),
+  });
+
+  const setGroupCountryMutation = trpc.countries.setGroupCountry.useMutation({
+    onSuccess: () => {
+      void groupsWithCountryQuery.refetch();
+    },
+    onError: (e) => Alert.alert('Error', e.message),
+  });
+
+  const addUserCountryMutation = trpc.countries.addUserCountry.useMutation({
+    onSuccess: () => {
+      void userCountriesQuery.refetch();
+    },
+    onError: (e) => Alert.alert('Error', e.message),
+  });
+
+  const removeUserCountryMutation = trpc.countries.removeUserCountry.useMutation({
+    onSuccess: () => {
+      void userCountriesQuery.refetch();
+    },
+    onError: (e) => Alert.alert('Error', e.message),
+  });
 
   const canAccess = checkIsAdminRole(user);
   if (!canAccess) {
@@ -923,6 +971,200 @@ export default function AdminScreen() {
     </>
   );
 
+  const renderCountriesTab = () => {
+    const countries = countriesQuery.data ?? [];
+    const groups = groupsWithCountryQuery.data ?? [];
+    const users = usersQuery.data ?? [];
+    const selectedUser = users.find((u) => u.id === selectedUserForCountries) ?? null;
+    const assignedCountryIds = new Set((userCountriesQuery.data ?? []).map((r) => r.country_id));
+
+    return (
+      <>
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Globe size={18} color="#1e3a8a" />
+            <Text style={styles.cardTitle}>Countries</Text>
+          </View>
+          {countriesQuery.isLoading ? (
+            <View style={styles.loadingRow}><ActivityIndicator color="#1e3a8a" /></View>
+          ) : countries.length === 0 ? (
+            <Text style={styles.emptyText}>No countries yet.</Text>
+          ) : (
+            countries.map((c) => (
+              <View key={c.id} style={styles.countryRow}>
+                <Text style={styles.countryRowFlag}>{c.flag_emoji ?? '🌍'}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.countryRowName}>{c.name}</Text>
+                  <Text style={styles.countryRowCode}>{c.code}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.iconButton}
+                  onPress={() => {
+                    Alert.alert('Delete Country', `Remove ${c.name}? Churches assigned to it will become unassigned.`, [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Delete', style: 'destructive', onPress: () => deleteCountryMutation.mutate({ countryId: c.id }) },
+                    ]);
+                  }}
+                >
+                  <Trash2 size={16} color="#ef4444" />
+                </TouchableOpacity>
+              </View>
+            ))
+          )}
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Plus size={18} color="#1e3a8a" />
+            <Text style={styles.cardTitle}>Add Country</Text>
+          </View>
+          <View style={styles.row}>
+            <TextInput
+              style={[styles.input, { flex: 0.4 }]}
+              placeholder="Code (CH)"
+              autoCapitalize="characters"
+              maxLength={4}
+              value={newCountry.code}
+              onChangeText={(t) => setNewCountry((p) => ({ ...p, code: t.toUpperCase() }))}
+            />
+            <TextInput
+              style={[styles.input, { flex: 1 }]}
+              placeholder="Name"
+              value={newCountry.name}
+              onChangeText={(t) => setNewCountry((p) => ({ ...p, name: t }))}
+            />
+            <TextInput
+              style={[styles.input, { flex: 0.4 }]}
+              placeholder="🏁"
+              value={newCountry.flag}
+              onChangeText={(t) => setNewCountry((p) => ({ ...p, flag: t }))}
+            />
+          </View>
+          <TouchableOpacity
+            style={[styles.primaryButton, createCountryMutation.isPending && { opacity: 0.7 }]}
+            onPress={() => {
+              if (!newCountry.code.trim() || !newCountry.name.trim()) {
+                Alert.alert('Required', 'Code and name are required');
+                return;
+              }
+              createCountryMutation.mutate({
+                code: newCountry.code.trim(),
+                name: newCountry.name.trim(),
+                flagEmoji: newCountry.flag.trim() || null,
+              });
+            }}
+            disabled={createCountryMutation.isPending}
+          >
+            {createCountryMutation.isPending ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <View style={styles.buttonContent}><Plus size={16} color="#fff" /><Text style={styles.primaryButtonText}>Add Country</Text></View>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Church size={18} color="#1e3a8a" />
+            <Text style={styles.cardTitle}>Church → Country</Text>
+          </View>
+          {groupsWithCountryQuery.isLoading ? (
+            <View style={styles.loadingRow}><ActivityIndicator color="#1e3a8a" /></View>
+          ) : (
+            groups.map((g) => (
+              <View key={g.id} style={styles.groupCountryRow}>
+                <Text style={styles.groupCountryName}>{g.name}</Text>
+                <View style={styles.groupCountryChips}>
+                  {countries.map((c) => (
+                    <TouchableOpacity
+                      key={c.id}
+                      style={[styles.roleChip, g.country_id === c.id && styles.roleChipActive]}
+                      onPress={() => setGroupCountryMutation.mutate({ groupId: g.id, countryId: c.id })}
+                    >
+                      <Text style={[styles.roleChipText, g.country_id === c.id && styles.roleChipTextActive]}>
+                        {c.flag_emoji ?? ''} {c.code}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            ))
+          )}
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <UserPlus size={18} color="#1e3a8a" />
+            <Text style={styles.cardTitle}>User Extra Countries</Text>
+          </View>
+          <Text style={styles.helpText}>
+            A user&apos;s primary country is derived from their church. Use this to grant access to additional countries (e.g. for visiting members).
+          </Text>
+
+          {!selectedUser ? (
+            users.map((u) => (
+              <TouchableOpacity
+                key={u.id}
+                style={styles.userSelectCard}
+                onPress={() => setSelectedUserForCountries(u.id)}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.userName}>{u.firstName} {u.lastName}</Text>
+                  <Text style={styles.userEmail}>{u.email}</Text>
+                </View>
+                <Text style={styles.linkText}>Manage</Text>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <View>
+              <View style={styles.selectedUserHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.userName}>{selectedUser.firstName} {selectedUser.lastName}</Text>
+                  <Text style={styles.userEmail}>{selectedUser.email}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.iconButtonSmall}
+                  onPress={() => setSelectedUserForCountries(null)}
+                >
+                  <X size={16} color="#64748b" />
+                </TouchableOpacity>
+              </View>
+              {userCountriesQuery.isLoading ? (
+                <View style={styles.loadingRow}><ActivityIndicator color="#1e3a8a" /></View>
+              ) : (
+                <View style={styles.groupCountryChips}>
+                  {countries.map((c) => {
+                    const assigned = assignedCountryIds.has(c.id);
+                    return (
+                      <TouchableOpacity
+                        key={c.id}
+                        style={[styles.roleChip, assigned && styles.roleChipActive]}
+                        onPress={() => {
+                          if (!selectedUserForCountries) return;
+                          if (assigned) {
+                            removeUserCountryMutation.mutate({ userId: selectedUserForCountries, countryId: c.id });
+                          } else {
+                            addUserCountryMutation.mutate({ userId: selectedUserForCountries, countryId: c.id });
+                          }
+                        }}
+                      >
+                        <Text style={[styles.roleChipText, assigned && styles.roleChipTextActive]}>
+                          {c.flag_emoji ?? ''} {c.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+
+        <View style={styles.spacer} />
+      </>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
@@ -960,11 +1202,19 @@ export default function AdminScreen() {
             <Church size={18} color={activeTab === 'groups' ? '#1e3a8a' : '#64748b'} />
             <Text style={[styles.tabText, activeTab === 'groups' && styles.tabTextActive]}>Groups</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'countries' && styles.tabActive]}
+            onPress={() => setActiveTab('countries')}
+          >
+            <Globe size={18} color={activeTab === 'countries' ? '#1e3a8a' : '#64748b'} />
+            <Text style={[styles.tabText, activeTab === 'countries' && styles.tabTextActive]}>Countries</Text>
+          </TouchableOpacity>
         </View>
 
         {activeTab === 'users' && renderUsersTab()}
         {activeTab === 'sermons' && renderSermonsTab()}
         {activeTab === 'groups' && renderGroupsTab()}
+        {activeTab === 'countries' && renderCountriesTab()}
       </ScrollView>
     </SafeAreaView>
   );
@@ -1047,6 +1297,15 @@ const styles = StyleSheet.create({
   retryButtonText: { color: '#fff', fontWeight: '600' },
   spacer: { height: 40 },
   groupCard: { backgroundColor: '#f8fafc', borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#e2e8f0', flexDirection: 'row', alignItems: 'center' },
+  countryRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f1f5f9', gap: 12 },
+  countryRowFlag: { fontSize: 22 },
+  countryRowName: { fontSize: 15, fontWeight: '600', color: '#1e293b' },
+  countryRowCode: { fontSize: 11, color: '#64748b', marginTop: 2, letterSpacing: 1 },
+  groupCountryRow: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  groupCountryName: { fontSize: 14, fontWeight: '600', color: '#1e293b', marginBottom: 8 },
+  groupCountryChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  selectedUserHeader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, marginBottom: 8, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  linkText: { color: '#1e3a8a', fontWeight: '600', fontSize: 13 },
   groupCardSelected: { backgroundColor: '#eff6ff', borderColor: '#1e3a8a', borderWidth: 2 },
   groupName: { fontSize: 15, fontWeight: '600', color: '#1e293b', marginBottom: 4 },
   groupMeta: { fontSize: 12, color: '#64748b' },

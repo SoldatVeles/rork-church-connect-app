@@ -8,7 +8,7 @@ import {
   XCircle,
   Plus,
 } from 'lucide-react-native';
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -21,7 +21,7 @@ import {
   Alert,
   Modal,
 } from 'react-native';
-import { Users, ChevronDown, RefreshCw } from 'lucide-react-native';
+import { Users, ChevronDown, RefreshCw, Globe } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/providers/auth-provider';
@@ -46,7 +46,7 @@ import { SabbathAttendeesList } from '@/components/sabbath/SabbathAttendeesList'
 import { SabbathAssignmentActions } from '@/components/sabbath/SabbathAssignmentActions';
 import { SabbathDateGroup } from '@/components/sabbath/SabbathDateGroup';
 
-type TabKey = 'myChurch' | 'switzerland';
+type TabKey = 'myChurch' | 'country';
 
 function EmptyState({ icon, title, message }: { icon: React.ReactNode; title: string; message: string }) {
   return (
@@ -88,7 +88,28 @@ function CancelledBanner({ reason }: { reason?: string | null }) {
   );
 }
 
-function TabSwitcher({ activeTab, onSwitch, canManage, onPlanSabbath }: { activeTab: TabKey; onSwitch: (tab: TabKey) => void; canManage: boolean; onPlanSabbath: () => void }) {
+interface TabSwitcherProps {
+  activeTab: TabKey;
+  onSwitch: (tab: TabKey) => void;
+  canManage: boolean;
+  onPlanSabbath: () => void;
+  selectedCountry: { id: string; name: string; flag_emoji: string | null } | null;
+  onOpenCountryPicker: () => void;
+  canPickCountry: boolean;
+}
+
+function TabSwitcher({
+  activeTab,
+  onSwitch,
+  canManage,
+  onPlanSabbath,
+  selectedCountry,
+  onOpenCountryPicker,
+  canPickCountry,
+}: TabSwitcherProps) {
+  const countryLabel = selectedCountry
+    ? `${selectedCountry.flag_emoji ? selectedCountry.flag_emoji + ' ' : ''}${selectedCountry.name}`
+    : 'Country';
   return (
     <View style={styles.header}>
       <View style={styles.headerRow}>
@@ -121,14 +142,27 @@ function TabSwitcher({ activeTab, onSwitch, canManage, onPlanSabbath }: { active
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          testID="tab-switzerland"
-          style={[styles.segmentButton, activeTab === 'switzerland' && styles.segmentButtonActive]}
-          onPress={() => onSwitch('switzerland')}
+          testID="tab-country"
+          style={[styles.segmentButton, activeTab === 'country' && styles.segmentButtonActive]}
+          onPress={() => {
+            if (activeTab === 'country' && canPickCountry) {
+              onOpenCountryPicker();
+            } else {
+              onSwitch('country');
+            }
+          }}
         >
-          <MapPin size={16} color={activeTab === 'switzerland' ? '#ffffff' : '#64748b'} />
-          <Text style={[styles.segmentLabel, activeTab === 'switzerland' && styles.segmentLabelActive]}>
-            Switzerland
+          {selectedCountry?.flag_emoji ? (
+            <Text style={[styles.flagInTab, activeTab === 'country' && { color: '#ffffff' }]}>{selectedCountry.flag_emoji}</Text>
+          ) : (
+            <Globe size={16} color={activeTab === 'country' ? '#ffffff' : '#64748b'} />
+          )}
+          <Text style={[styles.segmentLabel, activeTab === 'country' && styles.segmentLabelActive]} numberOfLines={1}>
+            {countryLabel}
           </Text>
+          {activeTab === 'country' && canPickCountry && (
+            <ChevronDown size={14} color="#ffffff" />
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -232,18 +266,19 @@ function MyChurchSection({
   );
 }
 
-interface SwitzerlandSectionProps {
+interface CountrySectionProps {
   dateGroups: SabbathDateGroupType[];
   isLoading: boolean;
   error: { message: string } | null;
+  countryName: string;
   onAttend: (sabbathId: string, attending: boolean) => void;
   onViewDetail: (sabbathId: string) => void;
   isMutating: boolean;
 }
 
-function SwitzerlandSection({ dateGroups, isLoading, error, onAttend, onViewDetail, isMutating }: SwitzerlandSectionProps) {
+function CountrySection({ dateGroups, isLoading, error, countryName, onAttend, onViewDetail, isMutating }: CountrySectionProps) {
   if (isLoading) {
-    return <LoadingState message="Loading Sabbaths across Switzerland..." />;
+    return <LoadingState message={`Loading Sabbaths across ${countryName}...`} />;
   }
 
   if (error) {
@@ -255,7 +290,7 @@ function SwitzerlandSection({ dateGroups, isLoading, error, onAttend, onViewDeta
       <EmptyState
         icon={<MapPin size={40} color="#cbd5e1" />}
         title="No upcoming Sabbaths"
-        message="There are no published Sabbaths scheduled in Switzerland yet."
+        message={`There are no published Sabbaths scheduled in ${countryName} yet.`}
       />
     );
   }
@@ -281,17 +316,35 @@ export default function SabbathScreen() {
   const pastorGroupsQuery = trpc.sabbaths.getMyPastorGroups.useQuery();
   const pastorGroupIds = useMemo(() => (pastorGroupsQuery.data ?? []).map((g: any) => g.group_id as string), [pastorGroupsQuery.data]);
   const [activeTab, setActiveTab] = useState<TabKey>('myChurch');
+  const [selectedCountryId, setSelectedCountryId] = useState<string | null>(null);
+  const [showCountryPicker, setShowCountryPicker] = useState<boolean>(false);
 
   const churchScope = buildChurchScope(user, null, pastorGroupIds);
   const canManage = canManageAnySabbath(churchScope);
+
+  const accessibleCountriesQuery = trpc.countries.getMyAccessible.useQuery();
+
+  useEffect(() => {
+    if (selectedCountryId || !accessibleCountriesQuery.data) return;
+    const primary = accessibleCountriesQuery.data.primaryCountryId
+      ?? accessibleCountriesQuery.data.countries[0]?.id
+      ?? null;
+    if (primary) setSelectedCountryId(primary);
+  }, [accessibleCountriesQuery.data, selectedCountryId]);
+
+  const selectedCountry = useMemo(() => {
+    const list = accessibleCountriesQuery.data?.countries ?? [];
+    return list.find((c) => c.id === selectedCountryId) ?? null;
+  }, [accessibleCountriesQuery.data, selectedCountryId]);
 
   const myChurchQuery = trpc.sabbaths.getMyChurchUpcoming.useQuery(undefined, {
     enabled: activeTab === 'myChurch',
   });
 
-  const switzerlandQuery = trpc.sabbaths.getSwitzerlandUpcomingByDate.useQuery(undefined, {
-    enabled: activeTab === 'switzerland',
-  });
+  const countryQuery = trpc.sabbaths.getCountryUpcomingByDate.useQuery(
+    { countryId: selectedCountryId ?? '' },
+    { enabled: activeTab === 'country' && !!selectedCountryId }
+  );
 
   const sabbathDetailQuery = trpc.sabbaths.getSabbathDetail.useQuery(
     { sabbathId: myChurchQuery.data?.sabbath?.id ?? '' },
@@ -362,16 +415,16 @@ export default function SabbathScreen() {
 
   const isRefreshing = activeTab === 'myChurch'
     ? myChurchQuery.isRefetching || sabbathDetailQuery.isRefetching
-    : switzerlandQuery.isRefetching;
+    : countryQuery.isRefetching;
 
   const handleRefresh = useCallback(() => {
     if (activeTab === 'myChurch') {
       void myChurchQuery.refetch();
       void sabbathDetailQuery.refetch();
     } else {
-      void switzerlandQuery.refetch();
+      void countryQuery.refetch();
     }
-  }, [activeTab, myChurchQuery, sabbathDetailQuery, switzerlandQuery]);
+  }, [activeTab, myChurchQuery, sabbathDetailQuery, countryQuery]);
 
   const handleAttendance = useCallback((sabbathId: string, attending: boolean) => {
     respondAttendanceMutation.mutate({
@@ -438,7 +491,15 @@ export default function SabbathScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
 
-      <TabSwitcher activeTab={activeTab} onSwitch={setActiveTab} canManage={canManage} onPlanSabbath={handleOpenPlanner} />
+      <TabSwitcher
+        activeTab={activeTab}
+        onSwitch={setActiveTab}
+        canManage={canManage}
+        onPlanSabbath={handleOpenPlanner}
+        selectedCountry={selectedCountry}
+        onOpenCountryPicker={() => setShowCountryPicker(true)}
+        canPickCountry={(accessibleCountriesQuery.data?.countries.length ?? 0) > 1}
+      />
 
       <ScrollView
         style={styles.scroll}
@@ -465,10 +526,11 @@ export default function SabbathScreen() {
             isMutating={isMutating}
           />
         ) : (
-          <SwitzerlandSection
-            dateGroups={switzerlandQuery.data ?? []}
-            isLoading={switzerlandQuery.isLoading}
-            error={switzerlandQuery.error}
+          <CountrySection
+            dateGroups={countryQuery.data ?? []}
+            isLoading={countryQuery.isLoading || (!selectedCountryId && accessibleCountriesQuery.isLoading)}
+            error={countryQuery.error}
+            countryName={selectedCountry?.name ?? 'your country'}
             onAttend={handleAttendance}
             onViewDetail={handleViewDetail}
             isMutating={isMutating}
@@ -477,6 +539,52 @@ export default function SabbathScreen() {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      <Modal visible={showCountryPicker} animationType="slide" transparent onRequestClose={() => setShowCountryPicker(false)}>
+        <View style={styles.suggestModalOverlay}>
+          <View style={styles.suggestModalContainer}>
+            <View style={styles.suggestModalHandle} />
+            <View style={styles.suggestModalHeader}>
+              <Globe size={20} color="#1e3a8a" />
+              <Text style={styles.suggestModalTitle}>Select Country</Text>
+            </View>
+            <Text style={styles.suggestModalSubtitle}>
+              Choose which country&apos;s Sabbaths you want to see.
+            </Text>
+            <ScrollView style={styles.suggestMembersList} showsVerticalScrollIndicator={false}>
+              {(accessibleCountriesQuery.data?.countries ?? []).map((c) => {
+                const isSelected = c.id === selectedCountryId;
+                const isPrimary = c.id === accessibleCountriesQuery.data?.primaryCountryId;
+                return (
+                  <TouchableOpacity
+                    key={c.id}
+                    style={[styles.suggestMemberItem, isSelected && styles.countryItemSelected]}
+                    onPress={() => {
+                      setSelectedCountryId(c.id);
+                      setShowCountryPicker(false);
+                    }}
+                  >
+                    <Text style={styles.countryFlag}>{c.flag_emoji ?? '🌍'}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.suggestMemberName}>{c.name}</Text>
+                      {isPrimary && (
+                        <Text style={styles.countryPrimaryHint}>Your church&apos;s country</Text>
+                      )}
+                    </View>
+                    {isSelected && <View style={styles.countryCheckDot} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <TouchableOpacity
+              style={styles.suggestCancelBtn}
+              onPress={() => setShowCountryPicker(false)}
+            >
+              <Text style={styles.suggestCancelBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={showSuggestModal} animationType="slide" transparent>
         <View style={styles.suggestModalOverlay}>
@@ -622,6 +730,29 @@ const styles = StyleSheet.create({
   },
   segmentLabelActive: {
     color: '#ffffff',
+  },
+  flagInTab: {
+    fontSize: 16,
+  },
+  countryItemSelected: {
+    backgroundColor: '#eff6ff',
+    borderRadius: 10,
+  },
+  countryFlag: {
+    fontSize: 22,
+    marginRight: 12,
+  },
+  countryPrimaryHint: {
+    fontSize: 11,
+    color: '#1e3a8a',
+    marginTop: 2,
+    fontWeight: '600' as const,
+  },
+  countryCheckDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#1e3a8a',
   },
   scroll: {
     flex: 1,

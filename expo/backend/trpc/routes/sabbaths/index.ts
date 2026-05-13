@@ -363,6 +363,88 @@ const getSwitzerlandUpcomingByDate = publicProcedure.query(async ({ ctx }) => {
   return result;
 });
 
+const getCountryUpcomingByDate = publicProcedure
+  .input(z.object({ countryId: z.string() }))
+  .query(async ({ input, ctx }) => {
+    await getAuthenticatedUser(ctx);
+    const today = getTodayDateString();
+
+    console.log(
+      "[sabbaths.getCountryUpcomingByDate] country:",
+      input.countryId,
+      "from:",
+      today
+    );
+
+    const { data: countryGroups, error: groupsError } = await db(ctx.supabase)
+      .from("groups")
+      .select("id, name")
+      .eq("country_id", input.countryId);
+
+    if (groupsError) {
+      console.error("[sabbaths.getCountryUpcomingByDate] groups error:", groupsError);
+      throw new Error(groupsError.message);
+    }
+
+    const groupRows = (countryGroups ?? []) as Array<{ id: string; name: string }>;
+    if (groupRows.length === 0) {
+      return [] as SabbathDateGroup[];
+    }
+
+    const groupIds = groupRows.map((g) => g.id);
+
+    const { data: sabbaths, error } = await db(ctx.supabase)
+      .from("sabbaths")
+      .select("*")
+      .in("group_id", groupIds)
+      .gte("sabbath_date", today)
+      .in("status", ["published", "cancelled"])
+      .order("sabbath_date", { ascending: true })
+      .limit(200);
+
+    if (error) {
+      console.error("[sabbaths.getCountryUpcomingByDate] Error:", error);
+      throw new Error(error.message);
+    }
+
+    if (!sabbaths || sabbaths.length === 0) {
+      return [] as SabbathDateGroup[];
+    }
+
+    const groupMap = new Map<string, SabbathGroupInfo>();
+    for (const g of groupRows) {
+      groupMap.set(g.id, { id: g.id, name: g.name });
+    }
+
+    const itemsWithGroup: SabbathWithGroup[] = (sabbaths as Sabbath[]).map((s) => ({
+      sabbath: s,
+      group: groupMap.get(s.group_id) ?? { id: s.group_id, name: "Unknown Church" },
+    }));
+
+    const dateGroups = new Map<string, SabbathWithGroup[]>();
+    for (const item of itemsWithGroup) {
+      const key = item.sabbath.sabbath_date;
+      const existing = dateGroups.get(key);
+      if (existing) existing.push(item);
+      else dateGroups.set(key, [item]);
+    }
+
+    const result: SabbathDateGroup[] = Array.from(dateGroups.entries()).map(
+      ([dateKey, items]) => ({
+        date: dateKey,
+        label: formatSabbathDate(dateKey),
+        sabbaths: items,
+      })
+    );
+
+    console.log(
+      "[sabbaths.getCountryUpcomingByDate] Returning",
+      result.length,
+      "date groups"
+    );
+    return result;
+  });
+
 const getSabbathDetail = publicProcedure
   .input(z.object({ sabbathId: z.string() }))
   .query(async ({ input, ctx }) => {
@@ -1563,6 +1645,7 @@ const getMyPastorGroups = publicProcedure.query(async ({ ctx }) => {
 export const sabbathsRouter = createTRPCRouter({
   getMyChurchUpcoming,
   getSwitzerlandUpcomingByDate,
+  getCountryUpcomingByDate,
   getSabbathDetail,
   getMyUpcomingResponsibilities,
   getMyPastorGroups,
