@@ -358,14 +358,23 @@ export default function AdminScreen() {
     );
   };
 
-  const countriesQuery = trpc.countries.list.useQuery();
-  const groupsWithCountryQuery = trpc.countries.listGroupsWithCountry.useQuery();
+  const countriesQuery = trpc.countries.list.useQuery(undefined, {
+    enabled: activeTab === 'countries',
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+  const groupsWithCountryQuery = trpc.countries.listGroupsWithCountry.useQuery(undefined, {
+    enabled: activeTab === 'countries',
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
   const [newCountry, setNewCountry] = useState({ code: '', name: '', flag: '' });
   const [selectedUserForCountries, setSelectedUserForCountries] = useState<string | null>(null);
+  const [userCountrySearch, setUserCountrySearch] = useState<string>('');
 
   const userCountriesQuery = trpc.countries.getUserCountries.useQuery(
     { userId: selectedUserForCountries ?? '' },
-    { enabled: !!selectedUserForCountries }
+    { enabled: !!selectedUserForCountries && activeTab === 'countries' }
   );
 
   const createCountryMutation = trpc.countries.create.useMutation({
@@ -1102,19 +1111,50 @@ export default function AdminScreen() {
           </Text>
 
           {!selectedUser ? (
-            users.map((u) => (
-              <TouchableOpacity
-                key={u.id}
-                style={styles.userSelectCard}
-                onPress={() => setSelectedUserForCountries(u.id)}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.userName}>{u.firstName} {u.lastName}</Text>
-                  <Text style={styles.userEmail}>{u.email}</Text>
-                </View>
-                <Text style={styles.linkText}>Manage</Text>
-              </TouchableOpacity>
-            ))
+            <>
+              <TextInput
+                style={styles.input}
+                placeholder="Search users by name or email"
+                value={userCountrySearch}
+                onChangeText={setUserCountrySearch}
+                autoCapitalize="none"
+              />
+              {(() => {
+                const q = userCountrySearch.trim().toLowerCase();
+                const filtered = q.length === 0
+                  ? users.slice(0, 20)
+                  : users.filter((u) => {
+                      const name = `${u.firstName} ${u.lastName}`.toLowerCase();
+                      return name.includes(q) || (u.email ?? '').toLowerCase().includes(q);
+                    }).slice(0, 50);
+                if (users.length === 0) {
+                  return <Text style={styles.emptyText}>No users found</Text>;
+                }
+                return (
+                  <>
+                    {q.length === 0 && users.length > filtered.length && (
+                      <Text style={styles.helpText}>Showing first {filtered.length} of {users.length} users. Use search to find others.</Text>
+                    )}
+                    {filtered.map((u) => (
+                      <TouchableOpacity
+                        key={u.id}
+                        style={styles.userSelectCard}
+                        onPress={() => setSelectedUserForCountries(u.id)}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.userName}>{u.firstName} {u.lastName}</Text>
+                          <Text style={styles.userEmail}>{u.email}</Text>
+                        </View>
+                        <Text style={styles.linkText}>Manage</Text>
+                      </TouchableOpacity>
+                    ))}
+                    {filtered.length === 0 && (
+                      <Text style={styles.emptyText}>No users match "{userCountrySearch}"</Text>
+                    )}
+                  </>
+                );
+              })()}
+            </>
           ) : (
             <View>
               <View style={styles.selectedUserHeader}>
