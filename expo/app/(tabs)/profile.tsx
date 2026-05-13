@@ -30,12 +30,12 @@ export default function ProfileScreen() {
 
   const { data: userStats, isLoading: isStatsLoading } = trpc.users.getStats.useQuery(
     { userId: user?.id ?? '' },
-    { enabled: !!user?.id && user?.role !== 'admin' }
+    { enabled: !!user?.id }
   );
 
   const { data: totalCount, isLoading: isTotalCountLoading } = trpc.users.getTotalCount.useQuery(
     undefined,
-    { enabled: checkIsChurchLeader(user) }
+    { enabled: !!user?.id }
   );
 
   const handleLogout = () => {
@@ -57,28 +57,40 @@ export default function ProfileScreen() {
     );
   };
 
-  const isLeaderOrAdmin = checkIsChurchLeader(user);
+  /**
+   * Some user types (e.g. visitors) can't register for events or share prayers.
+   * For those, we display an em-dash placeholder instead of a misleading 0.
+   */
+  const canAttendEvents = user?.role !== 'visitor';
+  const canSharePrayers = user?.role !== 'visitor';
+
+  const formatStat = (value: number | undefined, applicable: boolean, loading: boolean): string => {
+    if (!applicable) return '—';
+    if (loading) return '...';
+    return String(value ?? 0);
+  };
 
   const profileStats = [
-    { 
-      label: 'Events Attended', 
-      value: isStatsLoading ? '...' : String(userStats?.eventsAttended ?? 0), 
-      icon: Calendar, 
-      color: '#3b82f6' 
+    {
+      label: 'Events Attended',
+      value: formatStat(userStats?.eventsAttended, canAttendEvents, isStatsLoading),
+      hint: canAttendEvents ? undefined : 'Not available for visitors',
+      icon: Calendar,
+      color: '#3b82f6',
     },
-    { 
-      label: 'Prayers Shared', 
-      value: isStatsLoading ? '...' : String(userStats?.prayersShared ?? 0), 
-      icon: Heart, 
-      color: '#ef4444' 
+    {
+      label: 'Prayers Shared',
+      value: formatStat(userStats?.prayersShared, canSharePrayers, isStatsLoading),
+      hint: canSharePrayers ? undefined : 'Not available for visitors',
+      icon: Heart,
+      color: '#ef4444',
     },
-    { 
-      label: isLeaderOrAdmin ? 'Total Users' : 'Church Members', 
-      value: isLeaderOrAdmin 
-        ? (isTotalCountLoading ? '...' : String(totalCount?.totalUsers ?? 0))
-        : (isStatsLoading ? '...' : String(userStats?.membersCount ?? 0)), 
-      icon: Users, 
-      color: '#10b981' 
+    {
+      label: 'Total Users',
+      value: isTotalCountLoading ? '...' : String(totalCount?.totalUsers ?? 0),
+      hint: undefined,
+      icon: Users,
+      color: '#10b981',
     },
   ];
 
@@ -171,6 +183,9 @@ export default function ProfileScreen() {
                 </View>
                 <Text style={styles.statValue}>{stat.value}</Text>
                 <Text style={styles.statLabel}>{stat.label}</Text>
+                {stat.hint && (
+                  <Text style={styles.statHint}>{stat.hint}</Text>
+                )}
               </View>
             ))}
           </View>
@@ -337,6 +352,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748b',
     textAlign: 'center',
+  },
+  statHint: {
+    fontSize: 10,
+    color: '#94a3b8',
+    textAlign: 'center',
+    marginTop: 4,
   },
   permissionsContainer: {
     paddingHorizontal: 24,
