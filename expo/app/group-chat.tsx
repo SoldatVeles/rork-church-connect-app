@@ -93,6 +93,7 @@ export default function GroupChatScreen() {
         void setLastRead(user.id, String(groupId), last.createdAt.toISOString()).then(() => {
           queryClient.invalidateQueries({ queryKey: ['group-unread-total', user.id] });
           queryClient.invalidateQueries({ queryKey: ['group-unread-map', user.id] });
+          queryClient.invalidateQueries({ queryKey: ['user-groups', user.id] });
         });
       }
     }
