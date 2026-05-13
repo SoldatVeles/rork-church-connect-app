@@ -14,6 +14,7 @@ import { useAuth } from '@/providers/auth-provider';
 import { supabase } from '@/lib/supabase';
 import { useQuery } from '@tanstack/react-query';
 import type { GroupChat } from '@/types/chat';
+import { getLastReadMap } from '@/utils/chat-read';
 
 export default function GroupsScreen() {
   const { user } = useAuth();
@@ -45,6 +46,8 @@ export default function GroupsScreen() {
         return [];
       }
 
+      const lastReadMap = await getLastReadMap(user.id);
+
       const groups: GroupChat[] = await Promise.all(
         (groupsData || []).map(async (group: any) => {
           const { count } = await supabase
@@ -60,12 +63,20 @@ export default function GroupsScreen() {
             .limit(1)
             .single();
 
+          const since = lastReadMap[group.id] ?? '1970-01-01T00:00:00.000Z';
+          const { count: unread } = await supabase
+            .from('group_messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('group_id', group.id)
+            .neq('sender_id', user.id)
+            .gt('created_at', since);
+
           return {
             id: group.id,
             name: group.name,
             lastMessage: lastMsg?.content,
             lastMessageTime: lastMsg?.created_at ? new Date(lastMsg.created_at) : undefined,
-            unreadCount: 0,
+            unreadCount: unread ?? 0,
             memberCount: count || 0,
           };
         })
@@ -79,6 +90,7 @@ export default function GroupsScreen() {
       });
     },
     enabled: !!user?.id,
+    refetchInterval: 10000,
   });
 
   const formatTime = (date?: Date) => {
@@ -138,16 +150,26 @@ export default function GroupsScreen() {
               </View>
               <View style={styles.groupInfo}>
                 <View style={styles.groupHeader}>
-                  <Text style={styles.groupName} numberOfLines={1}>
+                  <Text
+                    style={[styles.groupName, group.unreadCount > 0 && styles.groupNameUnread]}
+                    numberOfLines={1}
+                  >
                     {group.name}
                   </Text>
                   {group.lastMessageTime && (
-                    <Text style={styles.groupTime}>{formatTime(group.lastMessageTime)}</Text>
+                    <Text
+                      style={[styles.groupTime, group.unreadCount > 0 && styles.groupTimeUnread]}
+                    >
+                      {formatTime(group.lastMessageTime)}
+                    </Text>
                   )}
                 </View>
                 <View style={styles.groupMeta}>
                   {group.lastMessage ? (
-                    <Text style={styles.lastMessage} numberOfLines={1}>
+                    <Text
+                      style={[styles.lastMessage, group.unreadCount > 0 && styles.lastMessageUnread]}
+                      numberOfLines={1}
+                    >
                       {group.lastMessage}
                     </Text>
                   ) : (
@@ -161,7 +183,15 @@ export default function GroupsScreen() {
                   </Text>
                 </View>
               </View>
-              <ChevronRight size={20} color="#cbd5e1" />
+              {group.unreadCount > 0 ? (
+                <View style={styles.unreadBadge}>
+                  <Text style={styles.unreadBadgeText}>
+                    {group.unreadCount > 99 ? '99+' : group.unreadCount}
+                  </Text>
+                </View>
+              ) : (
+                <ChevronRight size={20} color="#cbd5e1" />
+              )}
             </TouchableOpacity>
           ))
         ) : (
@@ -243,6 +273,33 @@ const styles = StyleSheet.create({
   groupTime: {
     fontSize: 12,
     color: '#94a3b8',
+  },
+  groupNameUnread: {
+    fontWeight: '700' as const,
+    color: '#0f172a',
+  },
+  groupTimeUnread: {
+    color: '#1e3a8a',
+    fontWeight: '600' as const,
+  },
+  lastMessageUnread: {
+    color: '#1e293b',
+    fontWeight: '600' as const,
+  },
+  unreadBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 7,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    marginLeft: 4,
+  },
+  unreadBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700' as const,
   },
   groupMeta: {
     marginBottom: 4,
