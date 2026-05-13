@@ -5,7 +5,7 @@ import { Users, Shield, Plus, Check, UserPlus, Church, BookOpen, Settings, Youtu
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
 import { isAdmin as checkIsAdminRole } from '@/utils/permissions';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { trpc } from '@/lib/trpc';
 import type { Sermon } from '@/types/sermon';
 import { router } from 'expo-router';
@@ -361,12 +361,18 @@ export default function AdminScreen() {
   const countriesQuery = trpc.countries.list.useQuery(undefined, {
     enabled: activeTab === 'countries',
     staleTime: 5 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
     refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
+    retry: 2,
   });
   const groupsWithCountryQuery = trpc.countries.listGroupsWithCountry.useQuery(undefined, {
     enabled: activeTab === 'countries',
     staleTime: 5 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
     refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
+    retry: 2,
   });
   const [newCountry, setNewCountry] = useState({ code: '', name: '', flag: '' });
   const [selectedUserForCountries, setSelectedUserForCountries] = useState<string | null>(null);
@@ -374,7 +380,12 @@ export default function AdminScreen() {
 
   const userCountriesQuery = trpc.countries.getUserCountries.useQuery(
     { userId: selectedUserForCountries ?? '' },
-    { enabled: !!selectedUserForCountries && activeTab === 'countries' }
+    {
+      enabled: !!selectedUserForCountries && activeTab === 'countries',
+      staleTime: 60 * 1000,
+      gcTime: 30 * 60 * 1000,
+      placeholderData: keepPreviousData,
+    }
   );
 
   const createCountryMutation = trpc.countries.create.useMutation({
@@ -994,7 +1005,7 @@ export default function AdminScreen() {
             <Globe size={18} color="#1e3a8a" />
             <Text style={styles.cardTitle}>Countries</Text>
           </View>
-          {countriesQuery.isLoading ? (
+          {countriesQuery.isLoading && countries.length === 0 ? (
             <View style={styles.loadingRow}><ActivityIndicator color="#1e3a8a" /></View>
           ) : countries.length === 0 ? (
             <Text style={styles.emptyText}>No countries yet.</Text>
@@ -1077,8 +1088,10 @@ export default function AdminScreen() {
             <Church size={18} color="#1e3a8a" />
             <Text style={styles.cardTitle}>Church → Country</Text>
           </View>
-          {groupsWithCountryQuery.isLoading ? (
+          {groupsWithCountryQuery.isLoading && groups.length === 0 ? (
             <View style={styles.loadingRow}><ActivityIndicator color="#1e3a8a" /></View>
+          ) : groups.length === 0 ? (
+            <Text style={styles.emptyText}>No churches yet.</Text>
           ) : (
             groups.map((g) => (
               <View key={g.id} style={styles.groupCountryRow}>

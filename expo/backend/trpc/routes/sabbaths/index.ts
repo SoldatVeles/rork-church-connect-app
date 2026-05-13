@@ -376,27 +376,12 @@ const getCountryUpcomingByDate = publicProcedure
       today
     );
 
-    const { data: countryGroups, error: groupsError } = await db(ctx.supabase)
-      .from("groups")
-      .select("id, name")
-      .eq("country_id", input.countryId);
-
-    if (groupsError) {
-      console.error("[sabbaths.getCountryUpcomingByDate] groups error:", groupsError);
-      throw new Error(groupsError.message);
-    }
-
-    const groupRows = (countryGroups ?? []) as Array<{ id: string; name: string }>;
-    if (groupRows.length === 0) {
-      return [] as SabbathDateGroup[];
-    }
-
-    const groupIds = groupRows.map((g) => g.id);
-
+    // Query sabbaths directly by country_id (denormalized column kept in
+    // sync by DB triggers — see database-sabbath-country-id.sql).
     const { data: sabbaths, error } = await db(ctx.supabase)
       .from("sabbaths")
       .select("*")
-      .in("group_id", groupIds)
+      .eq("country_id", input.countryId)
       .gte("sabbath_date", today)
       .in("status", ["published", "cancelled"])
       .order("sabbath_date", { ascending: true })
@@ -411,6 +396,16 @@ const getCountryUpcomingByDate = publicProcedure
       return [] as SabbathDateGroup[];
     }
 
+    const groupIds = [
+      ...new Set((sabbaths as Sabbath[]).map((s) => s.group_id)),
+    ];
+
+    const { data: groupsData } = await db(ctx.supabase)
+      .from("groups")
+      .select("id, name")
+      .in("id", groupIds);
+
+    const groupRows = (groupsData ?? []) as Array<{ id: string; name: string }>;
     const groupMap = new Map<string, SabbathGroupInfo>();
     for (const g of groupRows) {
       groupMap.set(g.id, { id: g.id, name: g.name });
