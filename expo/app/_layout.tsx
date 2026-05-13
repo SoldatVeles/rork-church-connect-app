@@ -1,4 +1,7 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useState } from "react";
@@ -13,7 +16,41 @@ import { trpc, trpcClient } from "@/lib/trpc";
 
 void SplashScreen.preventAutoHideAsync();
 
-const queryClient = new QueryClient();
+/**
+ * React Query defaults tuned for our serverless backend:
+ * - staleTime keeps data fresh across tab switches (no refetch storm)
+ * - gcTime keeps the cache around long enough to be persisted
+ * - retry handles cold-start "Failed to fetch" transient errors
+ * - refetchOnWindowFocus disabled to avoid surprise refetches on mobile
+ */
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60 * 1000,
+      gcTime: 24 * 60 * 60 * 1000,
+      retry: 2,
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
+    },
+  },
+});
+
+const asyncStoragePersister = createAsyncStoragePersister({
+  storage: AsyncStorage,
+  key: "church-app-query-cache-v1",
+  throttleTime: 1000,
+});
+
+/**
+ * Warm up the serverless tRPC backend on app launch so the first user
+ * interaction (Countries / Sabbath tabs) doesn't pay the cold-start cost.
+ */
+function warmupBackend(): void {
+  const baseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+  if (!baseUrl) return;
+  fetch(`${baseUrl}/api`, { method: "GET" }).catch(() => {});
+}
 
 function RootLayoutNav() {
   const { isLoading, isAuthenticated } = useAuth();
@@ -59,11 +96,19 @@ export default function RootLayout() {
 
   useEffect(() => {
     void SplashScreen.hideAsync();
+    warmupBackend();
   }, []);
 
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>
+      <PersistQueryClientProvider
+        client={queryClient}
+        persistOptions={{
+          persister: asyncStoragePersister,
+          maxAge: 24 * 60 * 60 * 1000,
+          buster: "v1",
+        }}
+      >
         <AuthProvider>
           <ChurchProvider>
             <OfflineProvider>
@@ -76,7 +121,7 @@ export default function RootLayout() {
             </OfflineProvider>
           </ChurchProvider>
         </AuthProvider>
-      </QueryClientProvider>
+      </PersistQueryClientProvider>
     </trpc.Provider>
   );
 }
