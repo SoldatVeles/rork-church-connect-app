@@ -99,6 +99,36 @@ export default function GroupChatScreen() {
     }
   }, [messagesQuery.data, user?.id, groupId, queryClient]);
 
+  useEffect(() => {
+    if (!user?.id || !groupId) return;
+    let cancelled = false;
+    const markAsReadOnOpen = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('group_messages')
+          .select('created_at')
+          .eq('group_id', groupId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (cancelled) return;
+        const nowIso = new Date().toISOString();
+        const ts = !error && data?.created_at ? data.created_at : nowIso;
+        await setLastRead(user.id, String(groupId), ts);
+        if (cancelled) return;
+        queryClient.invalidateQueries({ queryKey: ['group-unread-total', user.id] });
+        queryClient.invalidateQueries({ queryKey: ['group-unread-map', user.id] });
+        queryClient.invalidateQueries({ queryKey: ['user-groups', user.id] });
+      } catch (e) {
+        console.warn('[GroupChat] markAsReadOnOpen error:', (e as Error).message);
+      }
+    };
+    void markAsReadOnOpen();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, groupId, queryClient]);
+
   const handleSend = () => {
     const trimmed = message.trim();
     if (!trimmed) return;
