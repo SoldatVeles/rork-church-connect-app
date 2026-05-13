@@ -215,6 +215,7 @@ export default function GroupChatScreen() {
                   msgIndex === 0 ||
                   group.messages[msgIndex - 1].senderId !== msg.senderId
                 );
+                const displayName = isOwnMessage ? 'You' : msg.senderName;
                 return (
                   <View
                     key={msg.id}
@@ -238,11 +239,14 @@ export default function GroupChatScreen() {
                         isOwnMessage ? styles.ownMessage : styles.otherMessage,
                       ]}
                     >
-                      {showAvatar && (
-                        <Text style={[styles.senderName, { color: getAvatarColor(msg.senderId) }]}>
-                          {msg.senderName}
-                        </Text>
-                      )}
+                      <Text
+                        style={[
+                          styles.senderName,
+                          { color: isOwnMessage ? 'rgba(255,255,255,0.85)' : getAvatarColor(msg.senderId) },
+                        ]}
+                      >
+                        {displayName}
+                      </Text>
                       <Text
                         style={[
                           styles.messageText,
