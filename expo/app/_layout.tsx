@@ -1,13 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AuthProvider, useAuth } from "@/providers/auth-provider";
 import { OfflineProvider } from "@/providers/offline-provider";
 import { ChurchProvider } from "@/providers/church-provider";
 import LoadingScreen from "@/components/LoadingScreen";
+import BibleVerseSplash from "@/components/BibleVerseSplash";
 import { trpc, trpcClient } from "@/lib/trpc";
 
 void SplashScreen.preventAutoHideAsync();
@@ -54,6 +55,8 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  const [showVerseSplash, setShowVerseSplash] = useState<boolean>(true);
+
   useEffect(() => {
     void SplashScreen.hideAsync();
   }, []);
@@ -66,6 +69,9 @@ export default function RootLayout() {
             <OfflineProvider>
               <GestureHandlerRootView style={styles.container}>
                 <RootLayoutNav />
+                {showVerseSplash && (
+                  <BibleVerseSplash onDismiss={() => setShowVerseSplash(false)} />
+                )}
               </GestureHandlerRootView>
             </OfflineProvider>
           </ChurchProvider>
