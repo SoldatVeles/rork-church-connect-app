@@ -472,13 +472,25 @@ export default function HomeScreen() {
   const upcomingAnnouncements = useMemo(() => {
     const now = Date.now();
     const list = (eventsQuery.data ?? []) as any[];
-    return list
-      .filter((e) => {
-        const t = e?.start_at ? new Date(e.start_at).getTime() : NaN;
-        return Number.isFinite(t) && t >= now;
-      })
-      .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())
-      .slice(0, 3);
+    const withTime = list
+      .map((e) => ({ e, t: e?.start_at ? new Date(e.start_at).getTime() : NaN }))
+      .filter((x) => Number.isFinite(x.t));
+
+    const upcoming = withTime
+      .filter((x) => x.t >= now)
+      .sort((a, b) => a.t - b.t);
+
+    const past = withTime
+      .filter((x) => x.t < now)
+      .sort((a, b) => b.t - a.t);
+
+    const combined = [...upcoming, ...past].slice(0, 3).map((x) => x.e);
+
+    // Fallback: if no events have a valid start_at, still show whatever is available.
+    if (combined.length === 0 && list.length > 0) {
+      return list.slice(0, 3);
+    }
+    return combined;
   }, [eventsQuery.data]);
 
   const formatEventWhen = (iso: string): string => {
