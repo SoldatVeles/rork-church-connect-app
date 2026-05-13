@@ -148,7 +148,7 @@ export default function PrayersScreen() {
         requestedByName: prayer.profiles?.full_name || 'Anonymous',
         status: prayer.is_answered ? 'answered' as PrayerStatus : 'active' as PrayerStatus,
         isAnonymous: prayer.is_anonymous || false,
-        isUrgent: false,
+        isUrgent: prayer.is_urgent === true,
         prayedBy: [] as string[],
         createdAt: new Date(prayer.created_at),
         answeredAt: prayer.updated_at && prayer.is_answered ? new Date(prayer.updated_at) : undefined,
@@ -244,20 +244,33 @@ export default function PrayersScreen() {
         throw new Error('You must be assigned to a home church before posting a prayer.');
       }
       const groupForInsert = userIsAdmin ? effectiveChurchId : userHomeGroupId;
-      const { data, error } = await supabase
+      const basePayload = {
+        title: prayerData.title,
+        description: prayerData.description,
+        created_by: prayerData.requestedBy,
+        is_anonymous: prayerData.isAnonymous,
+        is_answered: false,
+        group_id: groupForInsert,
+        is_shared_all_churches: prayerData.isSharedAllChurches,
+      } as Record<string, unknown>;
+      let { data, error } = await supabase
         .from('prayers')
-        .insert({
-          title: prayerData.title,
-          description: prayerData.description,
-          created_by: prayerData.requestedBy,
-          is_anonymous: prayerData.isAnonymous,
-          is_answered: false,
-          group_id: groupForInsert,
-          is_shared_all_churches: prayerData.isSharedAllChurches,
-        })
+        .insert({ ...basePayload, is_urgent: prayerData.isUrgent })
         .select()
         .single();
-      
+
+      // Fallback if the is_urgent column hasn't been migrated yet
+      if (error && /is_urgent/i.test(error.message)) {
+        console.warn('[Prayers] is_urgent column missing, run database-add-prayer-urgent.sql');
+        const retry = await supabase
+          .from('prayers')
+          .insert(basePayload)
+          .select()
+          .single();
+        data = retry.data;
+        error = retry.error;
+      }
+
       if (error) throw new Error(error.message);
       return data;
     },
