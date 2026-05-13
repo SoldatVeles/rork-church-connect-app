@@ -1027,9 +1027,15 @@ export default function AdminScreen() {
             <Plus size={18} color="#1e3a8a" />
             <Text style={styles.cardTitle}>Add Country</Text>
           </View>
+          <TextInput
+            style={[styles.input, { marginBottom: 10 }]}
+            placeholder="Name"
+            value={newCountry.name}
+            onChangeText={(t) => setNewCountry((p) => ({ ...p, name: t }))}
+          />
           <View style={styles.row}>
             <TextInput
-              style={[styles.input, { flex: 0.4 }]}
+              style={[styles.input, { flex: 1, minWidth: 0 }]}
               placeholder="Code (CH)"
               autoCapitalize="characters"
               maxLength={4}
@@ -1037,14 +1043,8 @@ export default function AdminScreen() {
               onChangeText={(t) => setNewCountry((p) => ({ ...p, code: t.toUpperCase() }))}
             />
             <TextInput
-              style={[styles.input, { flex: 1 }]}
-              placeholder="Name"
-              value={newCountry.name}
-              onChangeText={(t) => setNewCountry((p) => ({ ...p, name: t }))}
-            />
-            <TextInput
-              style={[styles.input, { flex: 0.4 }]}
-              placeholder="🏁"
+              style={[styles.input, { flex: 1, minWidth: 0 }]}
+              placeholder="Flag 🏁"
               value={newCountry.flag}
               onChangeText={(t) => setNewCountry((p) => ({ ...p, flag: t }))}
             />
@@ -1293,7 +1293,7 @@ const styles = StyleSheet.create({
   roleChipActive: { backgroundColor: '#1e3a8a' },
   roleChipText: { fontSize: 12, color: '#334155' },
   roleChipTextActive: { color: 'white', fontWeight: '600' },
-  row: { flexDirection: 'row', gap: 12, alignItems: 'center' },
+  row: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   input: { flex: 1, backgroundColor: '#f8fafc', borderRadius: 12, paddingHorizontal: 12, paddingVertical: Platform.OS === 'ios' ? 12 : 10, borderWidth: 1, borderColor: '#e2e8f0', color: '#1e293b' },
   primaryButton: { backgroundColor: '#1e3a8a', paddingVertical: 12, borderRadius: 10, alignItems: 'center', marginTop: 12 },
   primaryButtonText: { color: 'white', fontWeight: '700' },
