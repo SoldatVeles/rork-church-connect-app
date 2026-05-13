@@ -57,38 +57,22 @@ export default function ProfileScreen() {
     );
   };
 
-  /**
-   * Some user types (e.g. visitors) can't register for events or share prayers.
-   * For those, we display an em-dash placeholder instead of a misleading 0.
-   */
-  const canAttendEvents = user?.role !== 'visitor';
-  const canSharePrayers = user?.role !== 'visitor';
-
-  const formatStat = (value: number | undefined, applicable: boolean, loading: boolean): string => {
-    if (!applicable) return '—';
-    if (loading) return '...';
-    return String(value ?? 0);
-  };
-
   const profileStats = [
     {
       label: 'Events Attended',
-      value: formatStat(userStats?.eventsAttended, canAttendEvents, isStatsLoading),
-      hint: canAttendEvents ? undefined : 'Not available for visitors',
+      value: isStatsLoading ? '...' : String(userStats?.eventsAttended ?? 0),
       icon: Calendar,
       color: '#3b82f6',
     },
     {
       label: 'Prayers Shared',
-      value: formatStat(userStats?.prayersShared, canSharePrayers, isStatsLoading),
-      hint: canSharePrayers ? undefined : 'Not available for visitors',
+      value: isStatsLoading ? '...' : String(userStats?.prayersShared ?? 0),
       icon: Heart,
       color: '#ef4444',
     },
     {
       label: 'Total Users',
       value: isTotalCountLoading ? '...' : String(totalCount?.totalUsers ?? 0),
-      hint: undefined,
       icon: Users,
       color: '#10b981',
     },
@@ -183,9 +167,6 @@ export default function ProfileScreen() {
                 </View>
                 <Text style={styles.statValue}>{stat.value}</Text>
                 <Text style={styles.statLabel}>{stat.label}</Text>
-                {stat.hint && (
-                  <Text style={styles.statHint}>{stat.hint}</Text>
-                )}
               </View>
             ))}
           </View>
