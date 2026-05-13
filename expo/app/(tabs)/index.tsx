@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { Bell, Calendar, Heart, Users, Church, BookOpen, MessageCircle, Sun } from 'lucide-react-native';
-import React, { useMemo, useState, useRef, useEffect } from 'react';
+import { Bell, Calendar, Heart, Users, BookOpen, MessageCircle, Sun } from 'lucide-react-native';
+import React, { useMemo, useState, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -21,7 +21,7 @@ import { useQuery } from '@tanstack/react-query';
 import { trpc } from '@/lib/trpc';
 import { getLastReadMap } from '@/utils/chat-read';
 
-const bibleVerses = [
+const _bibleVerses = [
   {
     text: '"Trust in the Lord with all your heart and lean not on your own understanding; in all your ways submit to him, and he will make your paths straight."',
     reference: 'Proverbs 3:5-6',
@@ -235,7 +235,6 @@ export default function HomeScreen() {
   const [showNotifications, setShowNotifications] = useState(false);
   const bellButtonRef = useRef<View>(null);
   const [bellPosition, setBellPosition] = useState({ x: 0, y: 0 });
-  const [currentVerseIndex, setCurrentVerseIndex] = useState(0);
 
   // Resolve the user's actual home group (not the church picker) so visibility is per-user.
   const homeGroupQuery = useQuery({
@@ -422,14 +421,6 @@ export default function HomeScreen() {
 
   const unreadChatsCount = unreadChatsQuery.data ?? 0;
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentVerseIndex((prevIndex) => (prevIndex + 1) % bibleVerses.length);
-    }, 10000);
-
-    return () => clearInterval(interval);
-  }, []);
-
   const quickActions = useMemo(() => [
     {
       icon: Calendar,
@@ -478,29 +469,32 @@ export default function HomeScreen() {
     }] : []),
   ], [totalEventsCount, activeRequestsCount, membersCount, canManageSabbath, unreadChatsCount]);
 
-  const announcements = [
-    {
-      id: '1',
-      title: 'Sabbath Service This Saturday',
-      content: 'Join us for our weekly Sabbath service at 9:00 AM. Pastor John will be speaking about "Walking in Faith".',
-      time: '2 hours ago',
-      isUrgent: false,
-    },
-    {
-      id: '2',
-      title: 'Youth Bible Study',
-      content: 'Special youth Bible study session this Friday at 7:00 PM. All young members are welcome!',
-      time: '1 day ago',
-      isUrgent: true,
-    },
-    {
-      id: '3',
-      title: 'Community Outreach Program',
-      content: 'We are organizing a community outreach program next month. Volunteers needed!',
-      time: '2 days ago',
-      isUrgent: false,
-    },
-  ];
+  const upcomingAnnouncements = useMemo(() => {
+    const now = Date.now();
+    const list = (eventsQuery.data ?? []) as any[];
+    return list
+      .filter((e) => {
+        const t = e?.start_at ? new Date(e.start_at).getTime() : NaN;
+        return Number.isFinite(t) && t >= now;
+      })
+      .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())
+      .slice(0, 3);
+  }, [eventsQuery.data]);
+
+  const formatEventWhen = (iso: string): string => {
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+    } catch {
+      return '';
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -567,29 +561,26 @@ export default function HomeScreen() {
 
         <View style={styles.announcements}>
           <Text style={styles.sectionTitle}>Recent Announcements</Text>
-          {announcements.map((announcement) => (
-            <View key={announcement.id} style={styles.announcementCard}>
-              {announcement.isUrgent && (
-                <View style={styles.urgentBadge}>
-                  <Text style={styles.urgentBadgeText}>URGENT</Text>
-                </View>
-              )}
-              <Text style={styles.announcementTitle}>{announcement.title}</Text>
-              <Text style={styles.announcementContent}>{announcement.content}</Text>
-              <Text style={styles.announcementTime}>{announcement.time}</Text>
+          {upcomingAnnouncements.length === 0 ? (
+            <View style={styles.announcementCard}>
+              <Text style={styles.announcementContent}>No upcoming events.</Text>
             </View>
-          ))}
-        </View>
-
-        <View style={styles.todayVerse}>
-          <View style={styles.verseHeader}>
-            <Church size={20} color="#1e3a8a" />
-            <Text style={styles.verseTitle}>Verse of the Day</Text>
-          </View>
-          <Text style={styles.verseText}>
-            {bibleVerses[currentVerseIndex].text}
-          </Text>
-          <Text style={styles.verseReference}>{bibleVerses[currentVerseIndex].reference}</Text>
+          ) : (
+            upcomingAnnouncements.map((event: any) => (
+              <TouchableOpacity
+                key={event.id}
+                style={styles.announcementCard}
+                onPress={() => router.push('/(tabs)/events')}
+                testID={`announcement-${event.id}`}
+              >
+                <Text style={styles.announcementTitle}>{event.title ?? 'Event'}</Text>
+                {!!event.description && (
+                  <Text style={styles.announcementContent} numberOfLines={3}>{event.description}</Text>
+                )}
+                <Text style={styles.announcementTime}>{formatEventWhen(event.start_at)}</Text>
+              </TouchableOpacity>
+            ))
+          )}
         </View>
 
         <View style={styles.spacer} />
