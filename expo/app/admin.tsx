@@ -1091,7 +1091,7 @@ export default function AdminScreen() {
                       onPress={() => setGroupCountryMutation.mutate({ groupId: g.id, countryId: c.id })}
                     >
                       <Text style={[styles.roleChipText, g.country_id === c.id && styles.roleChipTextActive]}>
-                        {c.flag_emoji ?? ''} {c.code}
+                        {c.code}
                       </Text>
                     </TouchableOpacity>
                   ))}
