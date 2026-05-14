@@ -100,15 +100,15 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <PersistQueryClientProvider
-        client={queryClient}
-        persistOptions={{
-          persister: asyncStoragePersister,
-          maxAge: 24 * 60 * 60 * 1000,
-          buster: "v1",
-        }}
-      >
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{
+        persister: asyncStoragePersister,
+        maxAge: 24 * 60 * 60 * 1000,
+        buster: "v1",
+      }}
+    >
+      <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <AuthProvider>
           <ChurchProvider>
             <OfflineProvider>
@@ -121,8 +121,8 @@ export default function RootLayout() {
             </OfflineProvider>
           </ChurchProvider>
         </AuthProvider>
-      </PersistQueryClientProvider>
-    </trpc.Provider>
+      </trpc.Provider>
+    </PersistQueryClientProvider>
   );
 }
 

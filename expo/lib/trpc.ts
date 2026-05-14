@@ -6,14 +6,21 @@ import { supabase } from "@/lib/supabase";
 
 export const trpc = createTRPCReact<AppRouter>();
 
-const getBaseUrl = () => {
-  if (process.env.EXPO_PUBLIC_RORK_API_BASE_URL) {
-    return process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+const trimTrailingSlash = (url: string): string => url.replace(/\/+$/, "");
+
+const getBaseUrl = (): string => {
+  const configuredBaseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+  if (configuredBaseUrl && configuredBaseUrl.trim().length > 0) {
+    return trimTrailingSlash(configuredBaseUrl.trim());
   }
 
-  throw new Error(
-    "No base url found, please set EXPO_PUBLIC_RORK_API_BASE_URL"
-  );
+  const projectId = process.env.EXPO_PUBLIC_PROJECT_ID;
+  if (projectId && projectId.trim().length > 0) {
+    return `https://dev-${projectId.trim()}.rorktest.dev`;
+  }
+
+  console.warn("[trpc] Missing API base URL; using project fallback backend URL");
+  return "https://dev-dp19rhx6u8l63wpiaeqki.rorktest.dev";
 };
 
 /**

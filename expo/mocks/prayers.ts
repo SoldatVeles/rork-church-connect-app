@@ -12,6 +12,8 @@ export const mockPrayers: PrayerRequest[] = [
     status: 'active',
     createdAt: new Date(2025, 0, 12),
     prayedBy: ['1', '2'],
+    groupId: null,
+    isSharedAllChurches: true,
   },
   {
     id: '2',
@@ -24,6 +26,8 @@ export const mockPrayers: PrayerRequest[] = [
     status: 'active',
     createdAt: new Date(2025, 0, 10),
     prayedBy: ['1', '2', '3'],
+    groupId: null,
+    isSharedAllChurches: true,
   },
   {
     id: '3',
@@ -36,6 +40,8 @@ export const mockPrayers: PrayerRequest[] = [
     status: 'active',
     createdAt: new Date(2025, 0, 8),
     prayedBy: ['2'],
+    groupId: null,
+    isSharedAllChurches: true,
   },
   {
     id: '4',
@@ -48,6 +54,8 @@ export const mockPrayers: PrayerRequest[] = [
     status: 'answered',
     createdAt: new Date(2025, 0, 5),
     prayedBy: ['1', '2', '3', '4'],
+    groupId: null,
+    isSharedAllChurches: true,
   },
   {
     id: '5',
@@ -60,5 +68,7 @@ export const mockPrayers: PrayerRequest[] = [
     status: 'active',
     createdAt: new Date(2025, 0, 14),
     prayedBy: ['1', '2', '3'],
+    groupId: null,
+    isSharedAllChurches: true,
   },
 ];
