@@ -3,11 +3,11 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
-    "start": "bunx rork start -p dp19rhx6u8l63wpiaeqki --tunnel",
-    "start-web": "bunx rork start -p dp19rhx6u8l63wpiaeqki --web --tunnel",
-    "start-web-dev": "DEBUG=expo* bunx rork start -p dp19rhx6u8l63wpiaeqki --web --tunnel",
-    "lint": "expo lint"
-  },
+  "start": "bunx rork start -p dp19rhx6u8l63wpiaeqki --lan",
+  "web": "bunx rork start -p dp19rhx6u8l63wpiaeqki --web --lan",
+  "dev": "DEBUG=expo* bunx rork start -p dp19rhx6u8l63wpiaeqki --web --lan",
+  "lint": "expo lint"
+},
   "dependencies": {
     "@ai-sdk/react": "^2.0.89",
     "@expo/vector-icons": "^15.0.3",
