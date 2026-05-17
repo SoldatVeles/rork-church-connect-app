@@ -421,6 +421,11 @@ export default function HomeScreen() {
 
   const unreadChatsCount = unreadChatsQuery.data ?? 0;
 
+const todayVerse = useMemo(() => {
+  const dayIndex = new Date().getDate() % _bibleVerses.length;
+  return _bibleVerses[dayIndex];
+}, []);
+
   const quickActions = useMemo(() => [
     {
       icon: Calendar,
@@ -569,6 +574,15 @@ export default function HomeScreen() {
               </TouchableOpacity>
             ))}
           </View>
+        </View>
+
+        <View style={styles.todayVerse}>
+          <View style={styles.verseHeader}>
+            <BookOpen size={20} color="#1e3a8a" />
+            <Text style={styles.verseTitle}>Verse of the Day</Text>
+          </View>
+          <Text style={styles.verseText}>{todayVerse.text}</Text>
+          <Text style={styles.verseReference}>{todayVerse.reference}</Text>
         </View>
 
         <View style={styles.announcements}>
