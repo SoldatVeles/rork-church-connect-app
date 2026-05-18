@@ -13,6 +13,10 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { useAuth } from '@/providers/auth-provider';
 
@@ -55,7 +59,12 @@ export default function RegisterScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+  <KeyboardAvoidingView
+    style={styles.container}
+    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+  >
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
       <LinearGradient
         colors={['#1e3a8a', '#3b82f6']}
@@ -72,7 +81,12 @@ export default function RegisterScreen() {
           <Text style={styles.subtitle}>Create your account</Text>
         </View>
 
-        <ScrollView style={styles.form} showsVerticalScrollIndicator={false}>
+<ScrollView
+  style={styles.form}
+  contentContainerStyle={styles.formContent}
+  showsVerticalScrollIndicator={false}
+  keyboardShouldPersistTaps="handled"
+>
           <View style={styles.row}>
             <View style={[styles.inputContainer, styles.halfWidth]}>
               <User size={20} color="#64748b" style={styles.inputIcon} />
@@ -200,8 +214,10 @@ export default function RegisterScreen() {
           <View style={styles.spacer} />
         </ScrollView>
       </LinearGradient>
-    </SafeAreaView>
-  );
+      </SafeAreaView>
+    </TouchableWithoutFeedback>
+  </KeyboardAvoidingView>
+);
 }
 
 const styles = StyleSheet.create({
@@ -235,6 +251,9 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: 24,
     marginTop: 40,
+  },
+  formContent: {
+  paddingBottom: 40,
   },
   row: {
     flexDirection: 'row',
