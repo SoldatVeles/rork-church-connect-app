@@ -52,11 +52,25 @@ function warmupBackend(): void {
   fetch(`${baseUrl}/api`, { method: "GET" }).catch(() => {});
 }
 
-function RootLayoutNav() {
+function RootLayoutNav({ onAuthReady }: { onAuthReady: () => void }) {
   const { isLoading, isAuthenticated } = useAuth();
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false);
   const segments = useSegments();
   const router = useRouter();
-  
+  useEffect(() => {
+  if (!isLoading) {
+    setLoadingTimedOut(false);
+    onAuthReady();
+    return;
+  }
+
+  const timeout = setTimeout(() => {
+    console.warn('[RootLayout] Auth loading timed out, showing login fallback');
+    setLoadingTimedOut(true);
+  }, 8000);
+
+  return () => clearTimeout(timeout);
+}, [isLoading, onAuthReady]);
   useEffect(() => {
     if (isLoading) return;
 
@@ -73,9 +87,24 @@ function RootLayoutNav() {
     }
   }, [isAuthenticated, segments, isLoading, router]);
   
-  if (isLoading) {
-    return <LoadingScreen />;
-  }
+if (isLoading && !loadingTimedOut) {
+  return <LoadingScreen />;
+}
+
+if (isLoading && loadingTimedOut) {
+  return (
+    <Stack screenOptions={{ headerBackTitle: "Back" }}>
+      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
+      <Stack.Screen name="modal" options={{ presentation: "modal" }} />
+      <Stack.Screen name="groups" options={{ headerShown: false }} />
+      <Stack.Screen name="group-chat" options={{ headerShown: false }} />
+      <Stack.Screen name="sabbath-planner" options={{ headerShown: false }} />
+      <Stack.Screen name="sabbath-detail" options={{ headerShown: false }} />
+    </Stack>
+  );
+}
   
   return (
     <Stack screenOptions={{ headerBackTitle: "Back" }}>
@@ -93,6 +122,7 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   const [showVerseSplash, setShowVerseSplash] = useState<boolean>(true);
+  const [authReady, setAuthReady] = useState<boolean>(false);
 
   useEffect(() => {
     void SplashScreen.hideAsync();
@@ -113,10 +143,10 @@ export default function RootLayout() {
           <ChurchProvider>
             <OfflineProvider>
               <GestureHandlerRootView style={styles.container}>
-                <RootLayoutNav />
-                {showVerseSplash && (
-                  <BibleVerseSplash onDismiss={() => setShowVerseSplash(false)} />
-                )}
+              <RootLayoutNav onAuthReady={() => setAuthReady(true)} />
+              {authReady && showVerseSplash && (
+                <BibleVerseSplash onDismiss={() => setShowVerseSplash(false)} />
+              )}
               </GestureHandlerRootView>
             </OfflineProvider>
           </ChurchProvider>
