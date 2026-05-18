@@ -294,7 +294,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                     ]}>
                       {notification.title}
                     </Text>
-                    <Text style={styles.notificationMessage}>
+                    <Text style={styles.notificationMessage} numberOfLines={3}>
                       {notification.message}
                     </Text>
                     <Text style={styles.notificationTime}>
@@ -441,13 +441,13 @@ const styles = StyleSheet.create({
   modalBackground: {
     flex: 1,
   },
-  modalContent: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '80%',
-    paddingBottom: 34,
-  },
+modalContent: {
+  backgroundColor: 'white',
+  borderTopLeftRadius: 24,
+  borderTopRightRadius: 24,
+  maxHeight: Dimensions.get('window').height * 0.85,
+  paddingBottom: 34,
+},
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -470,7 +470,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   modalNotificationsList: {
-    flex: 1,
+    maxHeight: Dimensions.get('window').height * 0.65,
   },
   modalNotificationItem: {
     flexDirection: 'row',
