@@ -243,7 +243,6 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       phone?: string;
     }) => {
       const redirectTo = Linking.createURL('/auth-callback');
-      console.log('[Auth] email redirect URL:', redirectTo);
       const fullName = `${userData.firstName} ${userData.lastName}`.trim();
       const { data, error } = await supabase.auth.signUp({
         email: userData.email,
