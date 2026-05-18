@@ -161,9 +161,11 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         console.error('Error code:', error.status);
         console.error('Error name:', error.name);
         
-        if (error.message.includes('Invalid login credentials')) {
-          throw new Error('Invalid email or password. Please check your credentials and try again.');
-        }
+      if (error.message.includes('Email not confirmed')) {
+        throw new Error(
+          'Please verify your email before signing in.\n\nIf the confirmation page showed an expired-link message, try signing in again first — your email may already have been confirmed successfully.'
+        );
+      }
         
         if (error.message.includes('Email not confirmed')) {
           throw new Error('Please verify your email before signing in. Check your inbox for the confirmation link.');
