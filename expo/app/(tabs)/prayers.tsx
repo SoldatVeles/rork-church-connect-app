@@ -177,6 +177,8 @@ return visible.map((prayer: any) => {
       prayer.is_shared_all_churches ?? false,
   };
 });
+    },
+  });
 
   const prayingQuery = useQuery({
     queryKey: ['prayer_prayers'],
@@ -428,36 +430,18 @@ const formatDate = (date?: Date | string | null) => {
     return 'Unknown date';
   }
 
-  const parsedDate =
-    date instanceof Date
-      ? date
-      : new Date(date);
-
-  if (!(parsedDate instanceof Date)) {
-    return 'Unknown date';
-  }
+  const parsedDate = date instanceof Date ? date : new Date(date);
 
   if (isNaN(parsedDate.getTime())) {
     return 'Unknown date';
   }
 
   const now = new Date();
+  const diffTime = Math.abs(now.getTime() - parsedDate.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-  const diffTime = Math.abs(
-    now.getTime() - parsedDate.getTime()
-  );
-
-  const diffDays = Math.ceil(
-    diffTime / (1000 * 60 * 60 * 24)
-  );
-
-  if (diffDays === 1) {
-    return 'Yesterday';
-  }
-
-  if (diffDays < 7) {
-    return `${diffDays} days ago`;
-  }
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
 
   return parsedDate.toLocaleDateString('en-US', {
     month: 'short',
