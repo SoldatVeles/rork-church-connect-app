@@ -140,23 +140,43 @@ export default function PrayersScreen() {
             return shared || sameGroup;
           });
 
-      return visible.map((prayer: any) => ({
-        id: prayer.id,
-        title: prayer.title,
-        description: prayer.description || '',
-        requestedBy: prayer.created_by || '',
-        requestedByName: prayer.profiles?.full_name || 'Anonymous',
-        status: prayer.is_answered ? 'answered' as PrayerStatus : 'active' as PrayerStatus,
-        isAnonymous: prayer.is_anonymous || false,
-        isUrgent: prayer.is_urgent === true,
-        prayedBy: [] as string[],
-        createdAt: new Date(prayer.created_at),
-        answeredAt: prayer.updated_at && prayer.is_answered ? new Date(prayer.updated_at) : undefined,
-        groupId: prayer.group_id ?? null,
-        isSharedAllChurches: prayer.is_shared_all_churches ?? false,
-      }));
-    },
-  });
+return visible.map((prayer: any) => {
+  const safeCreatedAt = prayer.created_at
+    ? new Date(prayer.created_at)
+    : new Date();
+
+  const safeUpdatedAt =
+    prayer.updated_at && prayer.is_answered
+      ? new Date(prayer.updated_at)
+      : undefined;
+
+  return {
+    id: prayer.id,
+    title: prayer.title,
+    description: prayer.description || '',
+    requestedBy: prayer.created_by || '',
+    requestedByName: prayer.profiles?.full_name || 'Anonymous',
+    status: prayer.is_answered
+      ? ('answered' as PrayerStatus)
+      : ('active' as PrayerStatus),
+    isAnonymous: prayer.is_anonymous || false,
+    isUrgent: prayer.is_urgent === true,
+    prayedBy: [] as string[],
+    createdAt:
+      safeCreatedAt instanceof Date &&
+      !isNaN(safeCreatedAt.getTime())
+        ? safeCreatedAt
+        : new Date(),
+    answeredAt:
+      safeUpdatedAt instanceof Date &&
+      !isNaN(safeUpdatedAt.getTime())
+        ? safeUpdatedAt
+        : undefined,
+    groupId: prayer.group_id ?? null,
+    isSharedAllChurches:
+      prayer.is_shared_all_churches ?? false,
+  };
+});
 
   const prayingQuery = useQuery({
     queryKey: ['prayer_prayers'],
@@ -403,15 +423,47 @@ export default function PrayersScreen() {
     ? allPrayers 
     : allPrayers.filter((prayer: PrayerRequest) => prayer.status === selectedFilter);
 
-  const formatDate = (date: Date) => {
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays} days ago`;
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
+const formatDate = (date?: Date | string | null) => {
+  if (!date) {
+    return 'Unknown date';
+  }
+
+  const parsedDate =
+    date instanceof Date
+      ? date
+      : new Date(date);
+
+  if (!(parsedDate instanceof Date)) {
+    return 'Unknown date';
+  }
+
+  if (isNaN(parsedDate.getTime())) {
+    return 'Unknown date';
+  }
+
+  const now = new Date();
+
+  const diffTime = Math.abs(
+    now.getTime() - parsedDate.getTime()
+  );
+
+  const diffDays = Math.ceil(
+    diffTime / (1000 * 60 * 60 * 24)
+  );
+
+  if (diffDays === 1) {
+    return 'Yesterday';
+  }
+
+  if (diffDays < 7) {
+    return `${diffDays} days ago`;
+  }
+
+  return parsedDate.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
+};
 
   const hasUserPrayed = (prayer: PrayerRequest) => {
     return (prayer.prayedBy ?? []).includes(user?.id || '');
