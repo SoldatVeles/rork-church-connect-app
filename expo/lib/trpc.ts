@@ -9,9 +9,13 @@ export const trpc = createTRPCReact<AppRouter>();
 const trimTrailingSlash = (url: string): string => url.replace(/\/+$/, "");
 
 const getBaseUrl = (): string => {
-  if (__DEV__ && typeof window !== "undefined") {
+if (__DEV__) {
+  if (typeof window !== "undefined") {
     return "http://localhost:3000";
   }
+
+  return "http://192.168.1.119:3000";
+}
 
   const configuredBaseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
   if (configuredBaseUrl && configuredBaseUrl.trim().length > 0) {
