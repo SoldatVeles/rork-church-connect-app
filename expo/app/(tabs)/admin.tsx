@@ -416,20 +416,43 @@ export default function AdminTabScreen() {
 
   const sermonsQuery = trpc.sermons.getAll.useQuery();
 
-  const countriesQuery = trpc.countries.list.useQuery(undefined, {
-    staleTime: 5 * 60 * 1000,
-    gcTime: 60 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    placeholderData: keepPreviousData,
-    retry: 2,
-  });
-  const groupsWithCountryQuery = trpc.countries.listGroupsWithCountry.useQuery(undefined, {
-    staleTime: 5 * 60 * 1000,
-    gcTime: 60 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    placeholderData: keepPreviousData,
-    retry: 2,
-  });
+const countriesQuery = useQuery({
+  queryKey: ['countries'],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from('countries')
+      .select('*')
+      .order('name');
+
+    if (error) {
+      console.error('[countriesQuery]', error);
+      throw error;
+    }
+
+    return data ?? [];
+  },
+});
+
+const groupsWithCountryQuery = useQuery({
+  queryKey: ['groups-with-country'],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from('groups')
+      .select(`
+        id,
+        name,
+        country_id
+      `)
+      .order('name');
+
+    if (error) {
+      console.error('[groupsWithCountryQuery]', error);
+      throw error;
+    }
+
+    return data ?? [];
+  },
+});
   const [newCountry, setNewCountry] = useState<{ code: string; name: string; flag: string }>({ code: '', name: '', flag: '' });
   const [selectedUserForCountries, setSelectedUserForCountries] = useState<string | null>(null);
   const userCountriesQuery = trpc.countries.getUserCountries.useQuery(
@@ -442,40 +465,94 @@ export default function AdminTabScreen() {
     }
   );
 
-  const createCountryMutation = trpc.countries.create.useMutation({
+  const createCountryMutation = useMutation({
+    mutationFn: async (input: { code: string; name: string; flagEmoji?: string | null }) => {
+      const { data, error } = await supabase
+        .from('countries')
+        .insert({
+          code: input.code.toUpperCase(),
+          name: input.name,
+          flag_emoji: input.flagEmoji ?? null,
+          is_active: true,
+        })
+        .select()
+        .single();
+
+      if (error) throw new Error(error.message);
+      return data;
+    },
     onSuccess: () => {
       Alert.alert('Success', 'Country created');
       setNewCountry({ code: '', name: '', flag: '' });
       void countriesQuery.refetch();
     },
-    onError: (e) => Alert.alert('Error', e.message),
+    onError: (e: Error) => Alert.alert('Error', e.message),
   });
-  const deleteCountryMutation = trpc.countries.delete.useMutation({
+
+  const deleteCountryMutation = useMutation({
+    mutationFn: async (input: { countryId: string }) => {
+      const { error } = await supabase
+        .from('countries')
+        .delete()
+        .eq('id', input.countryId);
+
+      if (error) throw new Error(error.message);
+    },
     onSuccess: () => {
       void countriesQuery.refetch();
       void groupsWithCountryQuery.refetch();
     },
-    onError: (e) => Alert.alert('Error', e.message),
+    onError: (e: Error) => Alert.alert('Error', e.message),
   });
-  const setGroupCountryMutation = trpc.countries.setGroupCountry.useMutation({
+
+  const setGroupCountryMutation = useMutation({
+    mutationFn: async (input: { groupId: string; countryId: string | null }) => {
+      const { error } = await supabase
+        .from('groups')
+        .update({ country_id: input.countryId })
+        .eq('id', input.groupId);
+
+      if (error) throw new Error(error.message);
+    },
     onSuccess: () => {
       void groupsWithCountryQuery.refetch();
     },
-    onError: (e) => Alert.alert('Error', e.message),
-  });
-  const addUserCountryMutation = trpc.countries.addUserCountry.useMutation({
-    onSuccess: () => {
-      void userCountriesQuery.refetch();
-    },
-    onError: (e) => Alert.alert('Error', e.message),
-  });
-  const removeUserCountryMutation = trpc.countries.removeUserCountry.useMutation({
-    onSuccess: () => {
-      void userCountriesQuery.refetch();
-    },
-    onError: (e) => Alert.alert('Error', e.message),
+    onError: (e: Error) => Alert.alert('Error', e.message),
   });
 
+  const addUserCountryMutation = useMutation({
+    mutationFn: async (input: { userId: string; countryId: string }) => {
+      const { error } = await supabase
+        .from('user_countries')
+        .insert({
+          user_id: input.userId,
+          country_id: input.countryId,
+          created_by: user?.id ?? null,
+        });
+
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      void userCountriesQuery.refetch();
+    },
+    onError: (e: Error) => Alert.alert('Error', e.message),
+  });
+
+  const removeUserCountryMutation = useMutation({
+    mutationFn: async (input: { userId: string; countryId: string }) => {
+      const { error } = await supabase
+        .from('user_countries')
+        .delete()
+        .eq('user_id', input.userId)
+        .eq('country_id', input.countryId);
+
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      void userCountriesQuery.refetch();
+    },
+    onError: (e: Error) => Alert.alert('Error', e.message),
+  });
   const createSermonMutation = trpc.sermons.create.useMutation({
     onSuccess: () => {
       Alert.alert('Success', 'Sermon created successfully');
