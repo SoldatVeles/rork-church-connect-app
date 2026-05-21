@@ -1,3 +1,5 @@
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase';
 import { StatusBar } from 'expo-status-bar';
 import {
   Sun,
@@ -322,7 +324,71 @@ export default function SabbathScreen() {
   const churchScope = buildChurchScope(user, null, pastorGroupIds);
   const canManage = canManageAnySabbath(churchScope);
 
-  const accessibleCountriesQuery = trpc.countries.getMyAccessible.useQuery();
+  const accessibleCountriesQuery = useQuery({
+  queryKey: ['my-accessible-countries', user?.id],
+  enabled: !!user?.id,
+  queryFn: async () => {
+    if (!user?.id) return { primaryCountryId: null, countries: [] };
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('home_group_id')
+      .eq('id', user.id)
+      .single();
+
+    const homeGroupId = (profile as any)?.home_group_id ?? null;
+    const accessibleIds = new Set<string>();
+    let primaryCountryId: string | null = null;
+
+    if (homeGroupId) {
+      const { data: group } = await supabase
+        .from('groups')
+        .select('country_id')
+        .eq('id', homeGroupId)
+        .single();
+
+      const countryId = (group as any)?.country_id ?? null;
+      if (countryId) {
+        accessibleIds.add(countryId);
+        primaryCountryId = countryId;
+      }
+    }
+
+    const { data: extras } = await supabase
+      .from('user_countries')
+      .select('country_id')
+      .eq('user_id', user.id);
+
+    (extras ?? []).forEach((row: any) => {
+      if (row.country_id) accessibleIds.add(row.country_id);
+    });
+
+    const ids = Array.from(accessibleIds);
+
+    if (ids.length === 0) {
+      const { data } = await supabase
+        .from('countries')
+        .select('id, code, name, flag_emoji, is_active')
+        .order('name');
+
+      return {
+        primaryCountryId: null,
+        countries: data ?? [],
+      };
+    }
+
+    const { data } = await supabase
+      .from('countries')
+      .select('id, code, name, flag_emoji, is_active')
+      .in('id', ids)
+      .order('name');
+
+    return {
+      primaryCountryId,
+      countries: data ?? [],
+    };
+  },
+});
 
   useEffect(() => {
     if (selectedCountryId || !accessibleCountriesQuery.data) return;
@@ -337,39 +403,281 @@ export default function SabbathScreen() {
     return list.find((c) => c.id === selectedCountryId) ?? null;
   }, [accessibleCountriesQuery.data, selectedCountryId]);
 
-  const myChurchQuery = trpc.sabbaths.getMyChurchUpcoming.useQuery(undefined, {
-    enabled: activeTab === 'myChurch',
-  });
+const getTodayDateString = () => {
+  const now = new Date();
+  return now.toISOString().slice(0, 10);
+};
 
-  const countryQuery = trpc.sabbaths.getCountryUpcomingByDate.useQuery(
-    { countryId: selectedCountryId ?? '' },
-    { enabled: activeTab === 'country' && !!selectedCountryId }
-  );
+const myChurchQuery = useQuery({
+  queryKey: ['sabbath-my-church-upcoming', user?.id, activeTab],
+  enabled: activeTab === 'myChurch' && !!user?.id,
+  queryFn: async () => {
+    if (!user?.id) return null;
 
-  const sabbathDetailQuery = trpc.sabbaths.getSabbathDetail.useQuery(
-    { sabbathId: myChurchQuery.data?.sabbath?.id ?? '' },
-    {
-      enabled: activeTab === 'myChurch' && !!myChurchQuery.data?.sabbath?.id,
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('home_group_id, role')
+      .eq('id', user.id)
+      .single();
+
+    let homeGroupId = (profile as any)?.home_group_id ?? null;
+
+    if (!homeGroupId) {
+      const { data: memberships } = await supabase
+        .from('group_members')
+        .select('group_id')
+        .eq('user_id', user.id)
+        .limit(1);
+
+      homeGroupId = memberships?.[0]?.group_id ?? null;
     }
-  );
 
-  const trpcUtils = trpc.useUtils();
+    if (!homeGroupId) return null;
 
-  const respondAttendanceMutation = trpc.sabbaths.respondAttendance.useMutation({
-    onSuccess: (_data, variables) => {
-      console.log('[Sabbath] Attendance response saved');
-      void myChurchQuery.refetch();
-      void sabbathDetailQuery.refetch();
-      void trpcUtils.sabbaths.getSabbathDetail.invalidate({ sabbathId: variables.sabbathId });
-      if (variables.status === 'attending') {
-        Alert.alert('Confirmed', "You're now marked as attending this Sabbath.");
-      }
-    },
-    onError: (err) => {
-      console.error('[Sabbath] Attendance error:', err);
-      Alert.alert('Error', err.message ?? 'Failed to respond');
-    },
-  });
+    const statuses = user?.role === 'admin'
+      ? ['draft', 'published', 'cancelled']
+      : ['published', 'cancelled'];
+
+    const { data: sabbath, error } = await supabase
+      .from('sabbaths')
+      .select('*')
+      .eq('group_id', homeGroupId)
+      .gte('sabbath_date', getTodayDateString())
+      .in('status', statuses)
+      .order('sabbath_date', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    if (!sabbath) return null;
+
+    const { data: group } = await supabase
+      .from('groups')
+      .select('id, name')
+      .eq('id', homeGroupId)
+      .single();
+
+    return {
+      sabbath: sabbath as Sabbath,
+      group: group
+        ? { id: group.id, name: group.name }
+        : { id: homeGroupId, name: 'Unknown Church' },
+    };
+  },
+});
+
+const countryQuery = useQuery({
+  queryKey: ['sabbath-country-upcoming', selectedCountryId, activeTab],
+  enabled: activeTab === 'country' && !!selectedCountryId,
+  queryFn: async () => {
+    if (!selectedCountryId) return [];
+
+    const { data: sabbaths, error } = await supabase
+      .from('sabbaths')
+      .select('*')
+      .eq('country_id', selectedCountryId)
+      .gte('sabbath_date', getTodayDateString())
+      .in('status', ['published', 'cancelled'])
+      .order('sabbath_date', { ascending: true })
+      .limit(200);
+
+    if (error) throw new Error(error.message);
+    if (!sabbaths || sabbaths.length === 0) return [];
+
+    const groupIds = [...new Set(sabbaths.map((s: any) => s.group_id))];
+
+    const { data: groups } = await supabase
+      .from('groups')
+      .select('id, name')
+      .in('id', groupIds);
+
+    const groupMap = new Map<string, SabbathGroupInfo>();
+    (groups ?? []).forEach((g: any) => {
+      groupMap.set(g.id, { id: g.id, name: g.name });
+    });
+
+    const dateGroups = new Map<string, any[]>();
+
+    sabbaths.forEach((sabbath: any) => {
+      const item = {
+        sabbath: sabbath as Sabbath,
+        group: groupMap.get(sabbath.group_id) ?? {
+          id: sabbath.group_id,
+          name: 'Unknown Church',
+        },
+      };
+
+      const existing = dateGroups.get(sabbath.sabbath_date) ?? [];
+      existing.push(item);
+      dateGroups.set(sabbath.sabbath_date, existing);
+    });
+
+    return Array.from(dateGroups.entries()).map(([date, sabbathItems]) => ({
+      date,
+      label: formatSabbathDate(date),
+      sabbaths: sabbathItems,
+    })) as SabbathDateGroupType[];
+  },
+});
+
+const sabbathDetailQuery = useQuery({
+  queryKey: ['sabbath-detail', myChurchQuery.data?.sabbath?.id, user?.id],
+  enabled: activeTab === 'myChurch' && !!myChurchQuery.data?.sabbath?.id && !!user?.id,
+  queryFn: async () => {
+    const sabbath = myChurchQuery.data?.sabbath;
+    const group = myChurchQuery.data?.group;
+
+    if (!sabbath || !group || !user?.id) {
+      throw new Error('Sabbath not found');
+    }
+
+    const { data: assignmentsRaw } = await supabase
+      .from('sabbath_assignments')
+      .select('*')
+      .eq('sabbath_id', sabbath.id);
+
+    const assignmentsList = (assignmentsRaw ?? []) as any[];
+
+    const userIds = [
+      ...new Set(
+        assignmentsList
+          .flatMap((a) => [a.user_id, a.suggested_user_id])
+          .filter(Boolean)
+      ),
+    ];
+
+    const profileMap = new Map<string, string>();
+
+    if (userIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, display_name')
+        .in('id', userIds);
+
+      (profiles ?? []).forEach((p: any) => {
+        profileMap.set(p.id, p.display_name || p.full_name || 'Unknown');
+      });
+    }
+
+    const assignments = assignmentsList.map((a: any) => ({
+      ...a,
+      user_name: a.user_id ? profileMap.get(a.user_id) ?? 'Unknown' : undefined,
+      suggested_user_name: a.suggested_user_id
+        ? profileMap.get(a.suggested_user_id) ?? 'Unknown'
+        : undefined,
+    }));
+
+    const { data: attendanceRaw } = await supabase
+      .from('sabbath_attendance')
+      .select('*')
+      .eq('sabbath_id', sabbath.id);
+
+    const attendanceRows = (attendanceRaw ?? []) as any[];
+    const attendeeIds = [...new Set(attendanceRows.map((a) => a.user_id).filter(Boolean))];
+
+    const attendeeMap = new Map<string, string>();
+
+    if (attendeeIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, display_name')
+        .in('id', attendeeIds);
+
+      (profiles ?? []).forEach((p: any) => {
+        attendeeMap.set(p.id, p.display_name || p.full_name || 'Unknown');
+      });
+    }
+
+    const attendance = attendanceRows.map((a: any) => ({
+      ...a,
+      user_name: attendeeMap.get(a.user_id) ?? 'Unknown',
+    }));
+
+    const myAttendance = attendance.find((a: any) => a.user_id === user.id);
+    const myAssignment = assignments.find((a: any) => a.user_id === user.id);
+
+    const isHomeChurch = true;
+    const canManageDetail = user?.role === 'admin' || canManage;
+    const shouldShowAssignments =
+      sabbath.status === 'published' ||
+      (canManageDetail && (sabbath.status === 'draft' || sabbath.status === 'cancelled'));
+
+    const shouldShowAttendees = sabbath.status === 'published';
+
+    return {
+      sabbath,
+      group,
+      assignments: shouldShowAssignments ? assignments : [],
+      attendance: shouldShowAttendees ? attendance : [],
+      myAttendanceStatus: myAttendance?.status ?? null,
+      attendingCount: attendance.filter((a: any) => a.status === 'attending').length,
+      isHomeChurch,
+      isAssignedUser: !!myAssignment,
+      canManage: canManageDetail,
+      canRespondAttendance: sabbath.status === 'published',
+      canRespondAssignment: sabbath.status === 'published' && !!myAssignment,
+      shouldShowAttendees,
+      shouldShowAssignments,
+    } as SabbathDetailView;
+  },
+});
+
+const respondAttendanceMutation = useMutation({
+  mutationFn: async (input: { sabbathId: string; status: 'attending' | 'not_attending' }) => {
+    if (!user?.id) {
+      throw new Error('You must be logged in to respond.');
+    }
+
+    const { data: existing, error: existingError } = await supabase
+      .from('sabbath_attendance')
+      .select('id')
+      .eq('sabbath_id', input.sabbathId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (existingError) {
+      throw new Error(existingError.message);
+    }
+
+    if (existing?.id) {
+      const { data, error } = await supabase
+        .from('sabbath_attendance')
+        .update({ status: input.status })
+        .eq('id', existing.id)
+        .select()
+        .single();
+
+      if (error) throw new Error(error.message);
+      return data;
+    }
+
+    const { data, error } = await supabase
+      .from('sabbath_attendance')
+      .insert({
+        sabbath_id: input.sabbathId,
+        user_id: user.id,
+        status: input.status,
+      })
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+    return data;
+  },
+  onSuccess: (_data, variables) => {
+    void myChurchQuery.refetch();
+    void sabbathDetailQuery.refetch();
+    void countryQuery.refetch();
+
+    if (variables.status === 'attending') {
+      Alert.alert('Confirmed', "You're now marked as attending this Sabbath.");
+    }
+  },
+  onError: (err: Error) => {
+    console.error('[Sabbath] Attendance error:', err);
+    Alert.alert('Error', err.message || 'Failed to respond');
+  },
+});
 
   const acceptMutation = trpc.sabbaths.acceptAssignment.useMutation({
     onSuccess: () => {
