@@ -1,9 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Alert } from 'react-native';
 import { Calendar, Church, ChevronRight, UserPlus, CheckCircle, XCircle } from 'lucide-react-native';
+import { useQuery } from '@tanstack/react-query';
 import type { SabbathDateGroup as SabbathDateGroupType, SabbathWithGroup } from '@/types/sabbath';
 import { isPublishedSabbath, isCancelledSabbath } from '@/utils/sabbath';
-import { trpc } from '@/lib/trpc';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/providers/auth-provider';
 
 import { SabbathStatusBadge } from './SabbathStatusBadge';
 import { SabbathRoleList } from './SabbathRoleList';
@@ -22,8 +24,9 @@ export function SabbathDateGroup({ group, onAttend, onViewDetail, isMutating }: 
         <Calendar size={16} color="#1e3a8a" />
         <Text style={styles.dateGroupLabel}>{group.label}</Text>
       </View>
+
       {group.sabbaths.map((item) => (
-        <SwitzerlandSabbathCard
+        <CountrySabbathCard
           key={item.sabbath.id}
           item={item}
           onAttend={onAttend}
@@ -35,31 +38,82 @@ export function SabbathDateGroup({ group, onAttend, onViewDetail, isMutating }: 
   );
 }
 
-interface SwitzerlandSabbathCardProps {
+interface CountrySabbathCardProps {
   item: SabbathWithGroup;
   onAttend: (sabbathId: string, attending: boolean) => void;
   onViewDetail: (sabbathId: string) => void;
   isMutating: boolean;
 }
 
-function SwitzerlandSabbathCard({ item, onAttend, onViewDetail, isMutating }: SwitzerlandSabbathCardProps) {
+function CountrySabbathCard({ item, onAttend, onViewDetail, isMutating }: CountrySabbathCardProps) {
+  const { user } = useAuth();
   const { sabbath, group } = item;
+  const [optimisticAttending, setOptimisticAttending] = useState(false);
 
   const cancelled = isCancelledSabbath(sabbath.status);
   const published = isPublishedSabbath(sabbath.status);
 
-  const detailQuery = trpc.sabbaths.getSabbathDetail.useQuery(
-    { sabbathId: sabbath.id },
-    { enabled: published }
-  );
+  const detailQuery = useQuery({
+    queryKey: ['country-sabbath-card-detail', sabbath.id, user?.id],
+    enabled: published && !!user?.id,
+    queryFn: async () => {
+      const { data: attendance } = await supabase
+        .from('sabbath_attendance')
+        .select('status')
+        .eq('sabbath_id', sabbath.id)
+        .eq('user_id', user?.id)
+        .maybeSingle();
+
+      const { data: assignmentsRaw } = await supabase
+        .from('sabbath_assignments')
+        .select('*')
+        .eq('sabbath_id', sabbath.id);
+
+      const assignmentsList = assignmentsRaw ?? [];
+      const userIds = [
+        ...new Set(
+          assignmentsList
+            .flatMap((a: any) => [a.user_id, a.suggested_user_id])
+            .filter(Boolean)
+        ),
+      ];
+
+      const profileMap = new Map<string, string>();
+
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, display_name')
+          .in('id', userIds);
+
+        (profiles ?? []).forEach((p: any) => {
+          profileMap.set(p.id, p.display_name || p.full_name || 'Unknown');
+        });
+      }
+
+      const assignments = assignmentsList.map((a: any) => ({
+        ...a,
+        user_name: a.user_id ? profileMap.get(a.user_id) ?? 'Unknown' : undefined,
+        suggested_user_name: a.suggested_user_id
+          ? profileMap.get(a.suggested_user_id) ?? 'Unknown'
+          : undefined,
+      }));
+
+      return {
+        myAttendanceStatus: attendance?.status ?? null,
+        shouldShowAssignments: sabbath.status === 'published',
+        assignments,
+      };
+    },
+  });
 
   const isAttending = useMemo(() => {
-    if (!detailQuery.data) return false;
-    return detailQuery.data.myAttendanceStatus === 'attending';
-  }, [detailQuery.data]);
+    return optimisticAttending || detailQuery.data?.myAttendanceStatus === 'attending';
+  }, [optimisticAttending, detailQuery.data?.myAttendanceStatus]);
 
   const handleAttendPress = () => {
     if (isAttending) return;
+
     Alert.alert(
       'Attend Sabbath',
       `Would you like to attend this Sabbath at ${group.name}?`,
@@ -67,7 +121,11 @@ function SwitzerlandSabbathCard({ item, onAttend, onViewDetail, isMutating }: Sw
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Attend',
-          onPress: () => onAttend(sabbath.id, true),
+          onPress: () => {
+            setOptimisticAttending(true);
+            onAttend(sabbath.id, true);
+            void detailQuery.refetch();
+          },
         },
       ]
     );
@@ -84,6 +142,7 @@ function SwitzerlandSabbathCard({ item, onAttend, onViewDetail, isMutating }: Sw
           <Church size={16} color="#475569" />
           <Text style={styles.swissChurchName}>{group.name}</Text>
         </View>
+
         <View style={styles.swissCardHeaderRight}>
           <SabbathStatusBadge status={sabbath.status} />
           <ChevronRight size={16} color="#94a3b8" />
@@ -104,7 +163,7 @@ function SwitzerlandSabbathCard({ item, onAttend, onViewDetail, isMutating }: Sw
       {published && (
         isAttending ? (
           <View
-            testID={`attending-swiss-${sabbath.id}`}
+            testID={`attending-country-${sabbath.id}`}
             style={styles.swissAttendingBadge}
           >
             <CheckCircle size={16} color="#15803d" />
@@ -112,7 +171,7 @@ function SwitzerlandSabbathCard({ item, onAttend, onViewDetail, isMutating }: Sw
           </View>
         ) : (
           <TouchableOpacity
-            testID={`attend-swiss-${sabbath.id}`}
+            testID={`attend-country-${sabbath.id}`}
             style={styles.swissAttendButton}
             onPress={handleAttendPress}
             disabled={isMutating}
