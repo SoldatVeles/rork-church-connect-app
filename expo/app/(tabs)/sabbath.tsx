@@ -24,7 +24,7 @@ import {
   Modal,
 } from 'react-native';
 import { Users, ChevronDown, RefreshCw, Globe } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/providers/auth-provider';
 import { canManageAnySabbath, buildChurchScope } from '@/utils/church-scope';
@@ -400,18 +400,32 @@ export default function SabbathScreen() {
   },
 });
 
-  useEffect(() => {
-    if (selectedCountryId || !accessibleCountriesQuery.data) return;
-    const primary = accessibleCountriesQuery.data.primaryCountryId
-      ?? accessibleCountriesQuery.data.countries[0]?.id
-      ?? null;
-    if (primary) setSelectedCountryId(primary);
-  }, [accessibleCountriesQuery.data, selectedCountryId]);
+useEffect(() => {
+  if (!accessibleCountriesQuery.data) return;
+
+  const countries = accessibleCountriesQuery.data.countries;
+  const selectedStillExists = countries.some((country) => country.id === selectedCountryId);
+
+  if (selectedCountryId && selectedStillExists) return;
+
+  const primary =
+    accessibleCountriesQuery.data.primaryCountryId ??
+    countries[0]?.id ??
+    null;
+
+  setSelectedCountryId(primary);
+}, [accessibleCountriesQuery.data, selectedCountryId]);
 
   const selectedCountry = useMemo(() => {
     const list = accessibleCountriesQuery.data?.countries ?? [];
     return list.find((c) => c.id === selectedCountryId) ?? null;
   }, [accessibleCountriesQuery.data, selectedCountryId]);
+
+  useFocusEffect(
+  useCallback(() => {
+    void accessibleCountriesQuery.refetch();
+  }, [accessibleCountriesQuery])
+);
 
 const getTodayDateString = () => {
   const now = new Date();
@@ -815,7 +829,10 @@ const myAssignments = useMemo(() => {
         canManage={canManage}
         onPlanSabbath={handleOpenPlanner}
         selectedCountry={selectedCountry}
-        onOpenCountryPicker={() => setShowCountryPicker(true)}
+        onOpenCountryPicker={() => {
+          void accessibleCountriesQuery.refetch();
+          setShowCountryPicker(true);
+        }}
         canPickCountry={(accessibleCountriesQuery.data?.countries.length ?? 0) > 1}
       />
 
