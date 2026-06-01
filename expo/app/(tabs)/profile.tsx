@@ -78,25 +78,37 @@ export default function ProfileScreen() {
     },
   ];
 
-  const menuItems = [
-    { 
-      title: 'Notifications', 
-      subtitle: 'Manage your notification preferences',
-      icon: Bell, 
-      onPress: () => {} 
-    },
-    { 
-      title: 'Privacy & Security', 
-      subtitle: 'Control your privacy settings',
-      icon: Shield, 
-      onPress: () => {} 
-    },
-    { 
-      title: 'App Settings', 
-      subtitle: 'Customize your app experience',
-      icon: Settings, 
-      onPress: () => {} 
-    },
+const menuItems = [
+  {
+    title: 'Notifications',
+    subtitle: 'Manage your notification preferences',
+    icon: Bell,
+    onPress: () =>
+      Alert.alert(
+        'Coming Soon',
+        'Notification settings will be available in a future update.'
+      ),
+  },
+  {
+    title: 'Privacy & Security',
+    subtitle: 'Control your privacy settings',
+    icon: Shield,
+    onPress: () =>
+      Alert.alert(
+        'Coming Soon',
+        'Privacy and security settings will be available in a future update.'
+      ),
+  },
+  {
+    title: 'App Settings',
+    subtitle: 'Customize your app experience',
+    icon: Settings,
+    onPress: () =>
+      Alert.alert(
+        'Coming Soon',
+        'App settings will be available in a future update.'
+      ),
+  },
     ...(checkIsChurchLeader(user) ? [{
       title: 'Admin Dashboard',
       subtitle: 'Manage users, sermons, and groups',
