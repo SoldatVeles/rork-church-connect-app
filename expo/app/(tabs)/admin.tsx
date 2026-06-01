@@ -455,15 +455,22 @@ const groupsWithCountryQuery = useQuery({
 });
   const [newCountry, setNewCountry] = useState<{ code: string; name: string; flag: string }>({ code: '', name: '', flag: '' });
   const [selectedUserForCountries, setSelectedUserForCountries] = useState<string | null>(null);
-  const userCountriesQuery = trpc.countries.getUserCountries.useQuery(
-    { userId: selectedUserForCountries ?? '' },
-    {
-      enabled: !!selectedUserForCountries,
-      staleTime: 60 * 1000,
-      gcTime: 30 * 60 * 1000,
-      placeholderData: keepPreviousData,
-    }
-  );
+const userCountriesQuery = useQuery({
+  queryKey: ['user-countries', selectedUserForCountries],
+  enabled: !!selectedUserForCountries,
+  queryFn: async () => {
+    if (!selectedUserForCountries) return [];
+
+    const { data, error } = await supabase
+      .from('user_countries')
+      .select('id, country_id, created_at')
+      .eq('user_id', selectedUserForCountries);
+
+    if (error) throw new Error(error.message);
+
+    return data ?? [];
+  },
+});
 
   const createCountryMutation = useMutation({
     mutationFn: async (input: { code: string; name: string; flagEmoji?: string | null }) => {
@@ -520,23 +527,29 @@ const groupsWithCountryQuery = useQuery({
     onError: (e: Error) => Alert.alert('Error', e.message),
   });
 
-  const addUserCountryMutation = useMutation({
-    mutationFn: async (input: { userId: string; countryId: string }) => {
-      const { error } = await supabase
-        .from('user_countries')
-        .insert({
+const addUserCountryMutation = useMutation({
+  mutationFn: async (input: { userId: string; countryId: string }) => {
+    const { error } = await supabase
+      .from('user_countries')
+      .upsert(
+        {
           user_id: input.userId,
           country_id: input.countryId,
           created_by: user?.id ?? null,
-        });
+        },
+        {
+          onConflict: 'user_id,country_id',
+          ignoreDuplicates: true,
+        }
+      );
 
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: () => {
-      void userCountriesQuery.refetch();
-    },
-    onError: (e: Error) => Alert.alert('Error', e.message),
-  });
+    if (error) throw new Error(error.message);
+  },
+  onSuccess: async () => {
+    await userCountriesQuery.refetch();
+  },
+  onError: (e: Error) => Alert.alert('Error', e.message),
+});
 
   const removeUserCountryMutation = useMutation({
     mutationFn: async (input: { userId: string; countryId: string }) => {
@@ -1493,7 +1506,10 @@ const groupsWithCountryQuery = useQuery({
                   return (
                     <TouchableOpacity
                       key={c.id}
-                      style={[styles.roleChip, assigned && styles.roleChipActive]}
+                      style={[
+                        styles.countryToggleButton,
+                        assigned && styles.countryToggleButtonActive,
+                      ]}
                       onPress={() => {
                         if (assigned) {
                           removeUserCountryMutation.mutate({ userId: selectedUserForCountries, countryId: c.id });
@@ -1502,7 +1518,10 @@ const groupsWithCountryQuery = useQuery({
                         }
                       }}
                     >
-                      <Text style={[styles.roleChipText, assigned && styles.roleChipTextActive]}>
+                      <Text style={[
+                        styles.countryToggleButtonText,
+                        assigned && styles.countryToggleButtonTextActive,
+                      ]}>
                         {c.flag_emoji ?? '🌍'} {c.name}
                       </Text>
                     </TouchableOpacity>
@@ -1689,4 +1708,29 @@ const styles = StyleSheet.create({
   groupCountryRow: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
   groupCountryName: { fontSize: 14, fontWeight: '600' as const, color: '#1e293b', marginBottom: 8 },
   groupCountryChips: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6 },
+  countryToggleButton: {
+  paddingHorizontal: 14,
+  paddingVertical: 10,
+  borderRadius: 10,
+  borderWidth: 1,
+  borderColor: '#cbd5e1',
+  backgroundColor: '#ffffff',
+  marginRight: 8,
+  marginBottom: 8,
+},
+
+countryToggleButtonActive: {
+  backgroundColor: '#1e3a8a',
+  borderColor: '#1e3a8a',
+},
+
+countryToggleButtonText: {
+  fontSize: 14,
+  fontWeight: '600' as const,
+  color: '#334155',
+},
+
+countryToggleButtonTextActive: {
+  color: '#ffffff',
+},
 });
