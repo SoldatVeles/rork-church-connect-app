@@ -63,6 +63,7 @@ export default function EventsScreen() {
   const [selectedFilter, setSelectedFilter] = useState<EventType | 'all'>('all');
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [showDetailsModal, setShowDetailsModal] = useState<boolean>(false);
+  const [registeringEventId, setRegisteringEventId] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [form, setForm] = useState<{
     title: string;
@@ -383,67 +384,79 @@ export default function EventsScreen() {
     setSelectedEvent(null);
   }, []);
 
-  const registerMutation = useMutation({
-    mutationFn: async ({ eventId }: { eventId: string }) => {
-      console.log('[Events] Register mutation called for', eventId);
-      if (!user?.id) {
-        throw new Error('You must be logged in.');
-      }
+const registerMutation = useMutation({
+  mutationFn: async ({ eventId }: { eventId: string }) => {
+    setRegisteringEventId(eventId);
 
-      const { data: current, error: fetchError } = await supabase
-        .from('events')
-        .select('id, registered_users, current_attendees, max_attendees, is_registration_open')
-        .eq('id', eventId)
-        .single();
+    if (!user?.id) {
+      throw new Error('You must be logged in.');
+    }
 
-      if (fetchError) {
-        console.error('[Events] Failed to fetch event before register:', fetchError);
-        throw new Error(fetchError.message ?? 'Failed to load event');
-      }
+    const { data: current, error: fetchError } = await supabase
+      .from('events')
+      .select('id, registered_users, current_attendees, max_attendees, is_registration_open')
+      .eq('id', eventId)
+      .maybeSingle();
 
-      const regUsers: string[] = (current as any).registered_users ?? [];
-      const already = regUsers.includes(user.id);
-      const capacity: number | null = (current as any).max_attendees ?? null;
-      const open: boolean = Boolean((current as any).is_registration_open);
-      const currentCount: number = Number((current as any).current_attendees ?? 0);
+    if (fetchError) {
+      throw new Error(fetchError.message ?? 'Failed to load event');
+    }
 
-      if (!open) {
-        throw new Error('Registration is closed for this event.');
-      }
+    if (!current) {
+      throw new Error('Event not found.');
+    }
 
-      if (!already) {
-        if (capacity !== null && currentCount >= capacity) {
-          throw new Error('This event is at full capacity.');
-        }
-      }
+    const regUsers: string[] = Array.isArray((current as any).registered_users)
+      ? (current as any).registered_users
+      : [];
 
-      const nextUsers = already ? regUsers.filter((id: string) => id !== user.id) : [...regUsers, user.id];
-      const nextCount = already ? Math.max(0, currentCount - 1) : currentCount + 1;
+    const already = regUsers.includes(user.id);
+    const capacity: number | null = (current as any).max_attendees ?? null;
+    const open: boolean = Boolean((current as any).is_registration_open);
+    const currentCount: number = Number((current as any).current_attendees ?? 0);
 
-      const { data: updated, error: updateError } = await supabase
-        .from('events')
-        .update({ registered_users: nextUsers, current_attendees: nextCount })
-        .eq('id', eventId)
-        .select()
-        .single();
+    if (!open) {
+      throw new Error('Registration is closed for this event.');
+    }
 
-      if (updateError) {
-        console.error('[Events] Registration update failed:', updateError);
-        throw new Error(updateError.message ?? 'Failed to update registration');
-      }
+    if (!already && capacity !== null && currentCount >= capacity) {
+      throw new Error('This event is at full capacity.');
+    }
 
-      return updated;
-    },
-    onSuccess: () => {
-      console.log('[Events] Register mutation success - invalidating events');
-      void queryClient.invalidateQueries({ queryKey: ['events'] });
-      Alert.alert('Success', 'Your registration status was updated.');
-    },
-    onError: (error) => {
-      console.error('[Events] Register mutation error:', error);
-      Alert.alert('Error', (error as Error).message ?? 'Could not update registration.');
-    },
-  });
+    const nextUsers = already
+      ? regUsers.filter((id: string) => id !== user.id)
+      : [...regUsers, user.id];
+
+    const nextCount = already
+      ? Math.max(0, currentCount - 1)
+      : currentCount + 1;
+
+    const { data: updated, error: updateError } = await supabase
+      .from('events')
+      .update({
+        registered_users: nextUsers,
+        current_attendees: nextCount,
+      })
+      .eq('id', eventId)
+      .select()
+      .maybeSingle();
+
+    if (updateError) {
+      throw new Error(updateError.message ?? 'Failed to update registration');
+    }
+
+    return updated;
+  },
+  onSuccess: async () => {
+    setRegisteringEventId(null);
+    await queryClient.invalidateQueries({ queryKey: ['events'] });
+    await listQuery.refetch();
+  },
+  onError: (error) => {
+    setRegisteringEventId(null);
+    Alert.alert('Error', (error as Error).message ?? 'Could not update registration.');
+  },
+});
 
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('en-US', {
@@ -736,7 +749,7 @@ export default function EventsScreen() {
                     }
                     registerMutation.mutate({ eventId: event.id });
                   }}
-                  disabled={registerMutation.isPending}
+                  disabled={registeringEventId === event.id}
                 >
                   <Text
                     style={[
@@ -744,7 +757,7 @@ export default function EventsScreen() {
                       isUserRegistered(event) && styles.registeredButtonText,
                     ]}
                   >
-                    {registerMutation.isPending
+                    {registeringEventId === event.id
                       ? 'Please wait...'
                       : isUserRegistered(event)
                       ? 'Unregister'
@@ -901,7 +914,7 @@ export default function EventsScreen() {
                           }
                           registerMutation.mutate({ eventId: activeEvent.id });
                         }}
-                        disabled={registerMutation.isPending}
+                        disabled={registeringEventId === activeEvent.id}
                       >
                         <Text
                           style={[
@@ -909,7 +922,7 @@ export default function EventsScreen() {
                             isUserRegistered(activeEvent) && styles.detailsRegisterButtonTextActive,
                           ]}
                         >
-                          {registerMutation.isPending
+                          {registeringEventId === activeEvent.id
                             ? 'Updating...'
                             : isUserRegistered(activeEvent)
                             ? 'Cancel registration'
