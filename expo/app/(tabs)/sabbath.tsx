@@ -160,7 +160,7 @@ function TabSwitcher({
             <Globe size={16} color={activeTab === 'country' ? '#ffffff' : '#64748b'} />
           )}
           <Text style={[styles.segmentLabel, activeTab === 'country' && styles.segmentLabelActive]} numberOfLines={1}>
-            {countryLabel}
+            Country
           </Text>
           {activeTab === 'country' && canPickCountry && (
             <ChevronDown size={14} color="#ffffff" />
@@ -177,7 +177,7 @@ interface MyChurchSectionProps {
   isLoading: boolean;
   error: { message: string } | null;
   currentAttendanceStatus: string | null;
-  myAssignment: SabbathAssignment | null;
+  myAssignments: SabbathAssignment[];
   attendingCount: number;
   onAttend: (sabbathId: string, attending: boolean) => void;
   onAccept: (assignmentId: string) => void;
@@ -193,7 +193,7 @@ function MyChurchSection({
   isLoading,
   error,
   currentAttendanceStatus,
-  myAssignment,
+  myAssignments,
   attendingCount,
   onAttend,
   onAccept,
@@ -241,16 +241,21 @@ function MyChurchSection({
         <SabbathRoleList assignments={detailData.assignments} />
       )}
 
-      {published && myAssignment && detailData?.canRespondAssignment && (
-        <SabbathAssignmentActions
-          myAssignment={myAssignment}
-          canRespond={detailData.canRespondAssignment}
-          onAccept={onAccept}
-          onDecline={onDecline}
-          onSuggestReplacement={onSuggestReplacement}
-          isMutating={isMutating}
-        />
-      )}
+{published && myAssignments.length > 0 && detailData?.canRespondAssignment && (
+  <>
+    {myAssignments.map((assignment) => (
+      <SabbathAssignmentActions
+        key={assignment.id}
+        myAssignment={assignment}
+        canRespond={detailData.canRespondAssignment}
+        onAccept={onAccept}
+        onDecline={onDecline}
+        onSuggestReplacement={onSuggestReplacement}
+        isMutating={isMutating}
+      />
+    ))}
+  </>
+)}
 
       {published && detailData?.canRespondAttendance && (
         <SabbathAttendanceActions
@@ -297,9 +302,14 @@ function CountrySection({ dateGroups, isLoading, error, countryName, onAttend, o
     );
   }
 
-  return (
-    <View>
-      {dateGroups.map((group) => (
+return (
+  <View>
+    <View style={styles.countryHeaderCard}>
+      <Text style={styles.countryHeaderLabel}>Showing Sabbaths for</Text>
+      <Text style={styles.countryHeaderName}>{countryName}</Text>
+    </View>
+
+    {dateGroups.map((group) => (
         <SabbathDateGroup
           key={group.date}
           group={group}
@@ -777,10 +787,10 @@ const respondAttendanceMutation = useMutation({
     router.push('/sabbath-planner' as any);
   }, [router]);
 
-  const myAssignment = useMemo(() => {
-    if (!sabbathDetailQuery.data || !user?.id) return null;
-    return sabbathDetailQuery.data.assignments.find(a => a.user_id === user.id) ?? null;
-  }, [sabbathDetailQuery.data, user?.id]);
+const myAssignments = useMemo(() => {
+  if (!sabbathDetailQuery.data || !user?.id) return [];
+  return sabbathDetailQuery.data.assignments.filter(a => a.user_id === user.id);
+}, [sabbathDetailQuery.data, user?.id]);
 
   const currentAttendanceStatus = useMemo(() => {
     if (!sabbathDetailQuery.data || !user?.id) return null;
@@ -824,7 +834,7 @@ const respondAttendanceMutation = useMutation({
             isLoading={myChurchQuery.isLoading || (!!myChurchQuery.data?.sabbath?.id && sabbathDetailQuery.isLoading)}
             error={myChurchQuery.error ?? sabbathDetailQuery.error}
             currentAttendanceStatus={currentAttendanceStatus}
-            myAssignment={myAssignment}
+            myAssignments={myAssignments}
             attendingCount={attendingCount}
             onAttend={handleAttendance}
             onAccept={handleAccept}
@@ -1248,4 +1258,27 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
     color: '#64748b',
   },
+  countryHeaderCard: {
+  backgroundColor: '#ffffff',
+  borderRadius: 14,
+  padding: 14,
+  marginBottom: 14,
+  borderWidth: 1,
+  borderColor: '#e2e8f0',
+},
+
+countryHeaderLabel: {
+  fontSize: 12,
+  fontWeight: '600' as const,
+  color: '#64748b',
+  textTransform: 'uppercase' as const,
+  letterSpacing: 0.5,
+  marginBottom: 4,
+},
+
+countryHeaderName: {
+  fontSize: 17,
+  fontWeight: '700' as const,
+  color: '#1e3a8a',
+},
 });
