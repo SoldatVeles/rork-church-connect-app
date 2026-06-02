@@ -358,26 +358,59 @@ export default function HomeScreen() {
 
   const activeRequestsCount = prayersActiveQuery.data?.length ?? 0;
   const membersCount = usersQuery.data?.length ?? 0;
-  const notificationsCountQuery = useQuery({
-    queryKey: ['notifications', 'count', user?.id],
-    queryFn: async () => {
-      let query = supabase
-        .from('notifications')
-        .select('*', { count: 'exact', head: true });
+const notificationsCountQuery = useQuery({
+  queryKey: ['notifications', 'count', user?.id],
+  enabled: !!user?.id,
+  queryFn: async () => {
+    if (!user?.id) return 0;
 
-      if (user?.id) {
-        query = query.or(`user_id.eq.${user.id},user_id.is.null`);
-      }
+    const { data: notificationsData, error: notificationsError } = await supabase
+      .from('notifications')
+      .select('id')
+      .or(`user_id.eq.${user.id},user_id.is.null`);
 
-      const { count, error } = await query;
-      if (error) {
-        console.warn('[Home] Notifications count error:', error.message);
-        return 0;
-      }
-      return count ?? 0;
-    },
-    refetchInterval: 15000,
-  });
+    if (notificationsError) {
+      console.warn('[Home] Notifications count error:', notificationsError.message);
+      return 0;
+    }
+
+    const notificationIds = (notificationsData ?? []).map((notification: any) => notification.id);
+
+    if (notificationIds.length === 0) {
+      return 0;
+    }
+
+    const { data: stateRows, error: statesError } = await supabase
+      .from('notification_user_states')
+      .select('notification_id, is_read, is_deleted')
+      .eq('user_id', user.id)
+      .in('notification_id', notificationIds);
+
+    if (statesError) {
+      console.warn('[Home] Notification states count error:', statesError.message);
+      return notificationIds.length;
+    }
+
+    const stateMap = new Map<string, { is_read: boolean; is_deleted: boolean }>();
+
+    (stateRows ?? []).forEach((state: any) => {
+      stateMap.set(state.notification_id, {
+        is_read: Boolean(state.is_read),
+        is_deleted: Boolean(state.is_deleted),
+      });
+    });
+
+    return notificationIds.filter((notificationId: string) => {
+      const state = stateMap.get(notificationId);
+
+      if (state?.is_deleted === true) return false;
+      if (state?.is_read === true) return false;
+
+      return true;
+    }).length;
+  },
+  refetchInterval: 15000,
+});
 
   const unreadNotificationsCount = notificationsCountQuery.data ?? 0;
 
@@ -533,8 +566,8 @@ const todayVerse = useMemo(() => {
             onPress={() => {
               bellButtonRef.current?.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
                 setBellPosition({ x: pageX + width / 2, y: pageY + height });
-                setShowNotifications(true);
                 void notificationsCountQuery.refetch();
+                setShowNotifications(true);
               });
             }}
           >
@@ -612,11 +645,17 @@ const todayVerse = useMemo(() => {
         <View style={styles.spacer} />
       </ScrollView>
 
-      <NotificationDropdown
-        visible={showNotifications}
-        onClose={() => setShowNotifications(false)}
-        anchorPosition={bellPosition}
-      />
+<NotificationDropdown
+  visible={showNotifications}
+  onClose={() => {
+    setShowNotifications(false);
+    void notificationsCountQuery.refetch();
+  }}
+  anchorPosition={bellPosition}
+  onNotificationsChanged={() => {
+    void notificationsCountQuery.refetch();
+  }}
+/>
     </SafeAreaView>
   );
 }

@@ -14,65 +14,193 @@ import { Bell, Calendar, Heart, MessageCircle, X, Trash2 } from 'lucide-react-na
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 interface NotificationDropdownProps {
   visible: boolean;
   onClose: () => void;
   anchorPosition?: { x: number; y: number };
+  onNotificationsChanged?: () => void;
 }
 
+type NotificationItem = {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdAt: Date;
+};
 
 const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   visible,
   onClose,
   anchorPosition,
+  onNotificationsChanged,
 }) => {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
+const refreshNotificationCounts = () => {
+  void notificationsQuery.refetch();
+  void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+  void queryClient.invalidateQueries({ queryKey: ['notifications', 'count', user?.id] });
+  onNotificationsChanged?.();
+};
   const notificationsQuery = useQuery({
     queryKey: ['notifications', user?.id],
-    queryFn: async () => {
-      let query = supabase
+    enabled: !!user?.id,
+    queryFn: async (): Promise<NotificationItem[]> => {
+      if (!user?.id) return [];
+
+      const { data: notificationsData, error: notificationsError } = await supabase
         .from('notifications')
         .select('*')
+        .or(`user_id.eq.${user.id},user_id.is.null`)
         .order('created_at', { ascending: false });
 
-      if (user?.id) {
-        query = query.or(`user_id.eq.${user.id},user_id.is.null`);
+      if (notificationsError) {
+        throw new Error(notificationsError.message);
       }
 
-      const { data, error } = await query;
-      
-      if (error) throw new Error(error.message);
-      
-      return (data || []).map((notification: any) => ({
-        id: notification.id,
-        type: notification.type,
-        title: notification.title,
-        message: notification.body || '',
-        isRead: false,
-        createdAt: new Date(notification.created_at),
-      }));
+      const notificationRows = notificationsData ?? [];
+
+      if (notificationRows.length === 0) {
+        return [];
+      }
+
+      const notificationIds = notificationRows.map((notification: any) => notification.id);
+
+      const { data: stateRows, error: statesError } = await supabase
+        .from('notification_user_states')
+        .select('notification_id, is_read, is_deleted')
+        .eq('user_id', user.id)
+        .in('notification_id', notificationIds);
+
+      if (statesError) {
+        throw new Error(statesError.message);
+      }
+
+      const stateMap = new Map<string, { is_read: boolean; is_deleted: boolean }>();
+
+      (stateRows ?? []).forEach((state: any) => {
+        stateMap.set(state.notification_id, {
+          is_read: Boolean(state.is_read),
+          is_deleted: Boolean(state.is_deleted),
+        });
+      });
+
+      return notificationRows
+        .filter((notification: any) => {
+          const state = stateMap.get(notification.id);
+          return state?.is_deleted !== true;
+        })
+        .map((notification: any) => {
+          const state = stateMap.get(notification.id);
+
+          return {
+            id: notification.id,
+            type: notification.type ?? 'announcement',
+            title: notification.title ?? 'Notification',
+            message: notification.body || notification.message || '',
+            isRead: Boolean(state?.is_read),
+            createdAt: new Date(notification.created_at),
+          };
+        });
     },
     refetchInterval: 30000,
   });
-  
+
+  const notifications = notificationsQuery.data ?? [];
+
   const markReadMutation = useMutation({
-    mutationFn: async (data: { id: string }) => {
-      console.log('Mark read not implemented yet:', data.id);
+    mutationFn: async (notificationId: string) => {
+      if (!user?.id) {
+        throw new Error('You must be logged in.');
+      }
+
+      const { error } = await supabase
+        .from('notification_user_states')
+        .upsert(
+          {
+            notification_id: notificationId,
+            user_id: user.id,
+            is_read: true,
+            is_deleted: false,
+          },
+          {
+            onConflict: 'notification_id,user_id',
+          }
+        );
+
+      if (error) throw new Error(error.message);
     },
-    onSuccess: () => {
-      void notificationsQuery.refetch();
-    },
+      onSuccess: () => {
+        refreshNotificationCounts();
+      },
   });
 
-  const notifications = notificationsQuery.data || [];
+  const deleteOneMutation = useMutation({
+    mutationFn: async (notificationId: string) => {
+      if (!user?.id) {
+        throw new Error('You must be logged in.');
+      }
+
+      const { error } = await supabase
+        .from('notification_user_states')
+        .upsert(
+          {
+            notification_id: notificationId,
+            user_id: user.id,
+            is_read: true,
+            is_deleted: true,
+          },
+          {
+            onConflict: 'notification_id,user_id',
+          }
+        );
+
+      if (error) throw new Error(error.message);
+    },
+      onSuccess: () => {
+        refreshNotificationCounts();
+      },
+  });
+
+  const clearAllMutation = useMutation({
+    mutationFn: async () => {
+      if (!user?.id) {
+        throw new Error('You must be logged in.');
+      }
+
+      if (notifications.length === 0) return;
+
+      const rows = notifications.map((notification) => ({
+        notification_id: notification.id,
+        user_id: user.id,
+        is_read: true,
+        is_deleted: true,
+      }));
+
+      const { error } = await supabase
+        .from('notification_user_states')
+        .upsert(rows, {
+          onConflict: 'notification_id,user_id',
+        });
+
+      if (error) throw new Error(error.message);
+    },
+      onSuccess: () => {
+        refreshNotificationCounts();
+      },
+  });
 
   const getIcon = (type: string) => {
     switch (type) {
       case 'event':
         return <Calendar size={20} color="#3b82f6" />;
+      case 'sabbath':
+        return <Calendar size={20} color="#1e3a8a" />;
       case 'prayer':
         return <Heart size={20} color="#ef4444" />;
       case 'announcement':
@@ -82,30 +210,40 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
     }
   };
 
-  const handleNotificationPress = (notification: { id: string; type: string; isRead: boolean }) => {
-    // Mark as read
+  const handleNotificationPress = (notification: NotificationItem) => {
     if (!notification.isRead) {
-      markReadMutation.mutate({ id: notification.id });
+      markReadMutation.mutate(notification.id);
     }
 
-    // Navigate based on type
     switch (notification.type) {
       case 'event':
         router.push('/(tabs)/events');
+        break;
+      case 'sabbath':
+        router.push('/(tabs)/sabbath');
         break;
       case 'prayer':
         router.push('/(tabs)/prayers');
         break;
       default:
-        // Stay on current screen for announcements
         break;
     }
-    
+
+    onClose();
+  };
+
+  const handleViewAll = () => {
+    router.push('/notifications');
     onClose();
   };
 
   const formatTime = (date: Date | string) => {
     const d = new Date(date);
+
+    if (Number.isNaN(d.getTime())) {
+      return '';
+    }
+
     const now = new Date();
     const diff = now.getTime() - d.getTime();
     const hours = Math.floor(diff / (1000 * 60 * 60));
@@ -113,39 +251,63 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
 
     if (days > 0) {
       return `${days} day${days > 1 ? 's' : ''} ago`;
-    } else if (hours > 0) {
-      return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-    } else {
-      const minutes = Math.floor(diff / (1000 * 60));
-      return minutes > 0 ? `${minutes} min${minutes > 1 ? 's' : ''} ago` : 'Just now';
     }
+
+    if (hours > 0) {
+      return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    }
+
+    const minutes = Math.floor(diff / (1000 * 60));
+    return minutes > 0 ? `${minutes} min${minutes > 1 ? 's' : ''} ago` : 'Just now';
   };
 
-  const deleteOneMutation = useMutation({
-    mutationFn: async (id: string) => {
-      console.log('Deleting notification', id);
-      const { error } = await supabase.from('notifications').delete().eq('id', id);
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: () => notificationsQuery.refetch(),
-  });
+  const renderNotificationItem = (notification: NotificationItem, isWeb: boolean) => (
+    <TouchableOpacity
+      key={notification.id}
+      style={[
+        isWeb ? styles.notificationItem : styles.modalNotificationItem,
+        !notification.isRead && styles.unreadNotification,
+      ]}
+      onPress={() => handleNotificationPress(notification)}
+    >
+      <View style={styles.notificationIcon}>
+        {getIcon(notification.type)}
+      </View>
 
-  const clearAllMutation = useMutation({
-    mutationFn: async () => {
-      console.log('Clearing all notifications');
-      const { error } = await supabase.from('notifications').delete().not('id', 'is', null);
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: () => notificationsQuery.refetch(),
-  });
+      <View style={styles.notificationContent}>
+        <Text
+          style={[
+            styles.notificationTitle,
+            !notification.isRead && styles.unreadText,
+          ]}
+        >
+          {notification.title}
+        </Text>
 
-  const handleViewAll = () => {
-    router.push('/notifications');
-    onClose();
-  };
+        <Text style={styles.notificationMessage} numberOfLines={isWeb ? 2 : 3}>
+          {notification.message}
+        </Text>
+
+        <Text style={styles.notificationTime}>
+          {formatTime(notification.createdAt)}
+        </Text>
+      </View>
+
+      <TouchableOpacity
+        onPress={(e) => {
+          e.stopPropagation();
+          deleteOneMutation.mutate(notification.id);
+        }}
+        style={styles.itemDeleteButton}
+        accessibilityRole="button"
+        testID={`delete-notification-${notification.id}`}
+      >
+        <Trash2 size={18} color="#9ca3af" />
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
 
   if (Platform.OS === 'web') {
-    // Web implementation with absolute positioning
     if (!visible) return null;
 
     return (
@@ -155,6 +317,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
           activeOpacity={1}
           onPress={onClose}
         />
+
         <View
           style={[
             styles.webDropdown,
@@ -166,8 +329,14 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
         >
           <View style={styles.dropdownHeader}>
             <Text style={styles.dropdownTitle}>Notifications</Text>
+
             {notifications.length > 0 && (
-              <TouchableOpacity onPress={() => clearAllMutation.mutate()} accessibilityRole="button" testID="clear-all-notifications">
+              <TouchableOpacity
+                onPress={() => clearAllMutation.mutate()}
+                accessibilityRole="button"
+                testID="clear-all-notifications"
+                disabled={clearAllMutation.isPending}
+              >
                 <Trash2 size={20} color="#ef4444" />
               </TouchableOpacity>
             )}
@@ -184,47 +353,16 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
             </View>
           ) : (
             <ScrollView style={styles.notificationsList} showsVerticalScrollIndicator={false}>
-              {notifications.slice(0, 5).map((notification) => (
-                <TouchableOpacity
-                  key={notification.id}
-                  style={[
-                    styles.notificationItem,
-                    !notification.isRead && styles.unreadNotification,
-                  ]}
-                  onPress={() => handleNotificationPress(notification)}
-                >
-                  <View style={styles.notificationIcon}>
-                    {getIcon(notification.type)}
-                  </View>
-                  <View style={styles.notificationContent}>
-                    <Text style={[
-                      styles.notificationTitle,
-                      !notification.isRead && styles.unreadText,
-                    ]}>
-                      {notification.title}
-                    </Text>
-                    <Text style={styles.notificationMessage} numberOfLines={2}>
-                      {notification.message}
-                    </Text>
-                    <Text style={styles.notificationTime}>
-                      {formatTime(notification.createdAt)}
-                    </Text>
-                  </View>
-                  <TouchableOpacity 
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      deleteOneMutation.mutate(notification.id);
-                    }} 
-                    style={styles.itemDeleteButton} 
-                    accessibilityRole="button" 
-                    testID={`delete-notification-${notification.id}`}
-                  >
-                    <Trash2 size={18} color="#9ca3af" />
-                  </TouchableOpacity>
-                </TouchableOpacity>
-              ))}
+              {notifications.slice(0, 5).map((notification) =>
+                renderNotificationItem(notification, true)
+              )}
+
               {notifications.length > 5 && (
-                <TouchableOpacity style={styles.viewAllButton} onPress={handleViewAll} testID="view-all-notifications">
+                <TouchableOpacity
+                  style={styles.viewAllButton}
+                  onPress={handleViewAll}
+                  testID="view-all-notifications"
+                >
                   <Text style={styles.viewAllText}>View all notifications</Text>
                 </TouchableOpacity>
               )}
@@ -235,7 +373,6 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
     );
   }
 
-  // Mobile implementation with Modal
   return (
     <Modal
       visible={visible}
@@ -249,15 +386,22 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
           activeOpacity={1}
           onPress={onClose}
         />
+
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Notifications</Text>
+
             <View style={styles.modalHeaderActions}>
               {notifications.length > 0 && (
-                <TouchableOpacity onPress={() => clearAllMutation.mutate()} style={styles.markAllButton}>
+                <TouchableOpacity
+                  onPress={() => clearAllMutation.mutate()}
+                  style={styles.markAllButton}
+                  disabled={clearAllMutation.isPending}
+                >
                   <Trash2 size={20} color="#ef4444" />
                 </TouchableOpacity>
               )}
+
               <TouchableOpacity onPress={onClose}>
                 <X size={24} color="#6b7280" />
               </TouchableOpacity>
@@ -275,45 +419,9 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
             </View>
           ) : (
             <ScrollView style={styles.modalNotificationsList} showsVerticalScrollIndicator={false}>
-              {notifications.map((notification) => (
-                <TouchableOpacity
-                  key={notification.id}
-                  style={[
-                    styles.modalNotificationItem,
-                    !notification.isRead && styles.unreadNotification,
-                  ]}
-                  onPress={() => handleNotificationPress(notification)}
-                >
-                  <View style={styles.notificationIcon}>
-                    {getIcon(notification.type)}
-                  </View>
-                  <View style={styles.notificationContent}>
-                    <Text style={[
-                      styles.notificationTitle,
-                      !notification.isRead && styles.unreadText,
-                    ]}>
-                      {notification.title}
-                    </Text>
-                    <Text style={styles.notificationMessage} numberOfLines={3}>
-                      {notification.message}
-                    </Text>
-                    <Text style={styles.notificationTime}>
-                      {formatTime(notification.createdAt)}
-                    </Text>
-                  </View>
-                  <TouchableOpacity 
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      deleteOneMutation.mutate(notification.id);
-                    }} 
-                    style={styles.itemDeleteButton} 
-                    accessibilityRole="button" 
-                    testID={`delete-notification-${notification.id}`}
-                  >
-                    <Trash2 size={18} color="#9ca3af" />
-                  </TouchableOpacity>
-                </TouchableOpacity>
-              ))}
+              {notifications.map((notification) =>
+                renderNotificationItem(notification, false)
+              )}
             </ScrollView>
           )}
         </View>
@@ -323,7 +431,6 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
 };
 
 const styles = StyleSheet.create({
-  // Web styles
   webOverlay: {
     position: 'absolute',
     top: 0,
@@ -431,8 +538,6 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     marginTop: 12,
   },
-
-  // Mobile Modal styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -441,13 +546,13 @@ const styles = StyleSheet.create({
   modalBackground: {
     flex: 1,
   },
-modalContent: {
-  backgroundColor: 'white',
-  borderTopLeftRadius: 24,
-  borderTopRightRadius: 24,
-  maxHeight: Dimensions.get('window').height * 0.85,
-  paddingBottom: 34,
-},
+  modalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: Dimensions.get('window').height * 0.85,
+    paddingBottom: 34,
+  },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
