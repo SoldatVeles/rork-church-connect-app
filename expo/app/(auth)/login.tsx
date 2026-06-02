@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowLeft, Eye, EyeOff, Mail, Lock } from 'lucide-react-native';
+import { Eye, EyeOff, Mail, Lock } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
@@ -75,12 +75,6 @@ const handleLogin = () => {
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.header}>
-              <TouchableOpacity
-                style={styles.backButton}
-                onPress={() => router.replace('/(auth)/login')}
-              >
-                <ArrowLeft size={24} color="white" />
-              </TouchableOpacity>
               <Text style={styles.title}>Welcome Back</Text>
               <Text style={styles.subtitle}>Sign in to continue</Text>
             </View>
@@ -195,9 +189,6 @@ const styles = StyleSheet.create({
   header: {
     padding: 24,
     paddingTop: 60,
-  },
-  backButton: {
-    marginBottom: 24,
   },
   title: {
     fontSize: 32,
