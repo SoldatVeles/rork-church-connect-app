@@ -36,14 +36,25 @@ export default function LoginScreen() {
     }
   }, [params?.registered, params?.email]);
 
-  const handleLogin = () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
+const isValidEmail = (value: string) => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+};
 
-    login({ email, password });
-  };
+const handleLogin = () => {
+  const cleanedEmail = email.trim().toLowerCase();
+
+  if (!cleanedEmail || !password.trim()) {
+    Alert.alert('Missing information', 'Please enter your email and password.');
+    return;
+  }
+
+  if (!isValidEmail(cleanedEmail)) {
+    Alert.alert('Invalid email', 'Please enter a valid email address.');
+    return;
+  }
+
+  login({ email: cleanedEmail, password });
+};
 
   return (
     <SafeAreaView style={styles.container}>
@@ -66,7 +77,7 @@ export default function LoginScreen() {
             <View style={styles.header}>
               <TouchableOpacity
                 style={styles.backButton}
-                onPress={() => router.back()}
+                onPress={() => router.replace('/(auth)/login')}
               >
                 <ArrowLeft size={24} color="white" />
               </TouchableOpacity>
@@ -142,14 +153,19 @@ export default function LoginScreen() {
 
           <TouchableOpacity
             style={styles.forgotLink}
-            onPress={() => router.push('/(auth)/forgot-password')}
+            onPress={() =>
+            router.push({
+              pathname: '/(auth)/forgot-password',
+              params: { email: email.trim().toLowerCase() },
+            })
+          }
           >
             <Text style={styles.forgotText}>Forgot password?</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.registerLink}
-            onPress={() => router.push('/(auth)/register')}
+            onPress={() => router.replace('/(auth)/register')}
           >
             <Text style={styles.registerText}>
               Don&apos;t have an account? <Text style={styles.registerTextBold}>Join us</Text>

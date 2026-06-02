@@ -1,8 +1,8 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, Mail, CheckCircle } from 'lucide-react-native';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -19,19 +19,34 @@ import {
 import { supabase } from '@/lib/supabase';
 
 export default function ForgotPasswordScreen() {
+  const params = useLocalSearchParams<{ email?: string }>();
   const [email, setEmail] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isSent, setIsSent] = useState<boolean>(false);
 
-  const handleResetPassword = async () => {
-    if (!email.trim()) {
-      Alert.alert('Error', 'Please enter your email address');
-      return;
+  useEffect(() => {
+    const paramEmail = typeof params.email === 'string' ? params.email : '';
+    if (paramEmail) {
+      setEmail(paramEmail);
     }
+  }, [params.email]);
+
+  const handleResetPassword = async () => {
+const cleanedEmail = email.trim().toLowerCase();
+
+if (!cleanedEmail) {
+  Alert.alert('Missing email', 'Please enter your email address.');
+  return;
+}
+
+if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanedEmail)) {
+  Alert.alert('Invalid email', 'Please enter a valid email address.');
+  return;
+}
 
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanedEmail, {
         redirectTo: undefined,
       });
 
@@ -39,8 +54,9 @@ export default function ForgotPasswordScreen() {
         console.log('[ForgotPassword] Error:', error.message);
         Alert.alert('Error', error.message);
       } else {
-        console.log('[ForgotPassword] Reset email sent to:', email);
-        setIsSent(true);
+      console.log('[ForgotPassword] Reset email sent to:', cleanedEmail);
+      setEmail(cleanedEmail);
+      setIsSent(true);
       }
     } catch (err) {
       console.log('[ForgotPassword] Unexpected error:', err);

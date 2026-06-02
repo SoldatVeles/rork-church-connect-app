@@ -293,11 +293,74 @@ return visible.map((prayer: any) => {
         error = retry.error;
       }
 
-      if (error) throw new Error(error.message);
-      return data;
+if (error) throw new Error(error.message);
+
+try {
+  const notificationTitle = prayerData.isUrgent
+    ? 'Urgent Prayer Request'
+    : 'New Prayer Request';
+
+  const notificationBody = prayerData.isAnonymous
+    ? 'A new anonymous prayer request has been shared.'
+    : `${prayerData.requestedByName} shared a new prayer request.`;
+
+  if (prayerData.isSharedAllChurches) {
+    const { error: notificationError } = await supabase
+      .from('notifications')
+      .insert({
+        type: 'prayer',
+        title: notificationTitle,
+        body: notificationBody,
+        user_id: null,
+      });
+
+    if (notificationError) {
+      console.warn('[Prayers] Failed to create global notification:', notificationError.message);
+    }
+  } else if (groupForInsert) {
+    const { data: members, error: membersError } = await supabase
+      .from('group_members')
+      .select('user_id')
+      .eq('group_id', groupForInsert);
+
+    if (membersError) {
+      console.warn('[Prayers] Failed to fetch group members for notification:', membersError.message);
+    }
+
+    const recipientIds = Array.from(
+      new Set([
+        prayerData.requestedBy,
+        ...((members ?? []).map((member: any) => member.user_id as string)),
+      ])
+    ).filter(Boolean);
+
+    if (recipientIds.length > 0) {
+      const notificationRows = recipientIds.map((recipientId) => ({
+        type: 'prayer',
+        title: notificationTitle,
+        body: notificationBody,
+        user_id: recipientId,
+      }));
+
+      const { error: notificationError } = await supabase
+        .from('notifications')
+        .insert(notificationRows);
+
+      if (notificationError) {
+        console.warn('[Prayers] Failed to create member notifications:', notificationError.message);
+      }
+    }
+  }
+} catch (notificationError) {
+  console.warn('[Prayers] Notification creation failed:', notificationError);
+}
+
+return data;
+
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['prayers'] });
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
       setNewPrayer({
         title: '',
         description: '',

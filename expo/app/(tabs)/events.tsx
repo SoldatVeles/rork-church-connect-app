@@ -308,13 +308,71 @@ export default function EventsScreen() {
         throw new Error('Event was not created. You may not have permission to create events.');
       }
 
-      console.log('[Events] Insert succeeded, created event:', data.id);
-      return true;
+console.log('[Events] Insert succeeded, created event:', data.id);
+
+try {
+  const notificationTitle = 'New Event';
+  const notificationBody = `${eventData.title} has been added${effectiveChurchName ? ` at ${effectiveChurchName}` : ''}.`;
+
+  if (eventData.isSharedAllChurches) {
+    const { error: notificationError } = await supabase
+      .from('notifications')
+      .insert({
+        type: 'event',
+        title: notificationTitle,
+        body: notificationBody,
+        user_id: null,
+      });
+
+    if (notificationError) {
+      console.warn('[Events] Failed to create global notification:', notificationError.message);
+    }
+  } else if (userHomeGroupId) {
+    const { data: members, error: membersError } = await supabase
+      .from('group_members')
+      .select('user_id')
+      .eq('group_id', userHomeGroupId);
+
+    if (membersError) {
+      console.warn('[Events] Failed to fetch group members for notification:', membersError.message);
+    }
+
+    const recipientIds = Array.from(
+      new Set([
+        eventData.createdBy,
+        ...((members ?? []).map((member: any) => member.user_id as string)),
+      ])
+    ).filter(Boolean);
+
+    if (recipientIds.length > 0) {
+      const notificationRows = recipientIds.map((recipientId) => ({
+        type: 'event',
+        title: notificationTitle,
+        body: notificationBody,
+        user_id: recipientId,
+      }));
+
+      const { error: notificationError } = await supabase
+        .from('notifications')
+        .insert(notificationRows);
+
+      if (notificationError) {
+        console.warn('[Events] Failed to create member notifications:', notificationError.message);
+      }
+    }
+  }
+} catch (notificationError) {
+  console.warn('[Events] Notification creation failed:', notificationError);
+}
+
+return data;
+
     },
     onSuccess: async () => {
       console.log('[Events] Mutation success, invalidating + refetching events');
       await queryClient.invalidateQueries({ queryKey: ['events'] });
       await listQuery.refetch();
+      await queryClient.invalidateQueries({ queryKey: ['notifications'] });
       const now = new Date();
       setForm({
         title: '',

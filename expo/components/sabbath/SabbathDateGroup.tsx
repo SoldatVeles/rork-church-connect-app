@@ -283,4 +283,4 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
     color: '#15803d',
   },
-});
+})      ;   
