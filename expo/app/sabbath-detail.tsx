@@ -526,10 +526,10 @@ const publishMutation = useMutation({
     [attendance, user?.id]
   );
 
-  const myAssignment = useMemo(
-    () => assignments.find((a) => a.user_id === user?.id),
-    [assignments, user?.id]
-  );
+const myAssignments = useMemo(
+  () => assignments.filter((a) => a.user_id === user?.id),
+  [assignments, user?.id]
+);
 
   const assignmentMap = useMemo(() => {
     const map = new Map<SabbathRole, SabbathAssignment>();
@@ -672,19 +672,21 @@ const publishMutation = useMutation({
     [sabbath, assigningRole, assignRoleMutation]
   );
 
-  const handleAcceptAssignment = useCallback(() => {
-    if (!myAssignment) return;
+const handleAcceptAssignment = useCallback(
+  (assignment: SabbathAssignment) => {
     acceptMutation.mutate(
-      { assignmentId: myAssignment.id },
+      { assignmentId: assignment.id },
       {
         onSuccess: () => {
-          console.log('[SabbathDetail] Accepted assignment:', myAssignment.id);
+          console.log('[SabbathDetail] Accepted assignment:', assignment.id);
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         },
         onError: (err) => Alert.alert('Error', err.message || 'Failed to accept assignment.'),
       }
     );
-  }, [myAssignment, acceptMutation]);
+  },
+  [acceptMutation]
+);
 
   const handleDeclineAssignment = useCallback(() => {
     if (!decliningAssignment) return;
@@ -761,7 +763,12 @@ const publishMutation = useMutation({
   }
 
   const statusStyle = STATUS_COLORS[sabbath.status];
-  const myAssignmentCanRespond = canRespondAssignment && myAssignment && myAssignment.status !== 'declined' && myAssignment.status !== 'replacement_suggested';
+  const myAssignmentsCanRespond = myAssignments.filter(
+      (assignment) =>
+        canRespondAssignment &&
+        assignment.status !== 'declined' &&
+        assignment.status !== 'replacement_suggested'
+    );
   const isPublishedAndNotCancelled = sabbath.status === 'published';
   const isHomeChurch = detail?.isHomeChurch ?? false;
 
@@ -873,72 +880,86 @@ const publishMutation = useMutation({
               </View>
             )}
 
-            {myAssignmentCanRespond && upcoming && (
-              <View style={styles.myAssignmentBanner}>
-                <View style={styles.bannerHeader}>
-                  <ClipboardList size={18} color="#1e3a8a" />
-                  <Text style={styles.bannerTitle}>You're assigned as</Text>
-                </View>
-                <Text style={styles.bannerRole}>{ROLE_LABELS[myAssignment!.role]}</Text>
-                {myAssignment!.status === 'accepted' && (
-                  <View style={styles.acceptedBadgeRow}>
-                    <Check size={14} color="#065f46" />
-                    <Text style={styles.acceptedBadgeText}>You accepted this assignment</Text>
-                  </View>
-                )}
-                <View style={styles.bannerActions}>
-                  {(myAssignment!.status === 'pending' || myAssignment!.status === 'accepted') && (
-                    <TouchableOpacity
-                      style={[
-                        styles.acceptBtn,
-                        myAssignment!.status === 'accepted' && styles.acceptBtnAlreadyAccepted,
-                      ]}
-                      onPress={handleAcceptAssignment}
-                      disabled={acceptMutation.isPending || myAssignment!.status === 'accepted'}
-                      testID="accept-assignment-button"
-                    >
-                      {acceptMutation.isPending ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <>
-                          <Check size={16} color={myAssignment!.status === 'accepted' ? '#065f46' : '#fff'} />
-                          <Text style={[
-                            styles.acceptBtnText,
-                            myAssignment!.status === 'accepted' && styles.acceptBtnTextAccepted,
-                          ]}>
-                            {myAssignment!.status === 'accepted' ? 'Accepted' : 'Accept'}
-                          </Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-                  )}
-                  <TouchableOpacity
-                    style={styles.declineBtn}
-                    onPress={() => {
-                      setDecliningAssignment(myAssignment!);
-                      setShowDeclineModal(true);
-                    }}
-                    disabled={declineMutation.isPending}
-                    testID="decline-assignment-button"
+{myAssignmentsCanRespond.length > 0 && upcoming && (
+  <>
+    {myAssignmentsCanRespond.map((assignment) => (
+      <View key={assignment.id} style={styles.myAssignmentBanner}>
+        <View style={styles.bannerHeader}>
+          <ClipboardList size={18} color="#1e3a8a" />
+          <Text style={styles.bannerTitle}>You're assigned as</Text>
+        </View>
+
+        <Text style={styles.bannerRole}>{ROLE_LABELS[assignment.role]}</Text>
+
+        {assignment.status === 'accepted' && (
+          <View style={styles.acceptedBadgeRow}>
+            <Check size={14} color="#065f46" />
+            <Text style={styles.acceptedBadgeText}>You accepted this assignment</Text>
+          </View>
+        )}
+
+        <View style={styles.bannerActions}>
+          {(assignment.status === 'pending' || assignment.status === 'accepted') && (
+            <TouchableOpacity
+              style={[
+                styles.acceptBtn,
+                assignment.status === 'accepted' && styles.acceptBtnAlreadyAccepted,
+              ]}
+              onPress={() => handleAcceptAssignment(assignment)}
+              disabled={acceptMutation.isPending || assignment.status === 'accepted'}
+              testID={`accept-assignment-button-${assignment.id}`}
+            >
+              {acceptMutation.isPending ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Check
+                    size={16}
+                    color={assignment.status === 'accepted' ? '#065f46' : '#fff'}
+                  />
+                  <Text
+                    style={[
+                      styles.acceptBtnText,
+                      assignment.status === 'accepted' && styles.acceptBtnTextAccepted,
+                    ]}
                   >
-                    <X size={16} color="#ef4444" />
-                    <Text style={styles.declineBtnText}>Decline</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.suggestBtn}
-                    onPress={() => {
-                      setSuggestingAssignment(myAssignment!);
-                      setShowSuggestModal(true);
-                    }}
-                    disabled={suggestReplacementMutation.isPending}
-                    testID="suggest-replacement-button"
-                  >
-                    <RefreshCw size={16} color="#3730a3" />
-                    <Text style={styles.suggestBtnText}>Suggest Replacement</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
+                    {assignment.status === 'accepted' ? 'Accepted' : 'Accept'}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            style={styles.declineBtn}
+            onPress={() => {
+              setDecliningAssignment(assignment);
+              setShowDeclineModal(true);
+            }}
+            disabled={declineMutation.isPending}
+            testID={`decline-assignment-button-${assignment.id}`}
+          >
+            <X size={16} color="#ef4444" />
+            <Text style={styles.declineBtnText}>Decline</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.suggestBtn}
+            onPress={() => {
+              setSuggestingAssignment(assignment);
+              setShowSuggestModal(true);
+            }}
+            disabled={suggestReplacementMutation.isPending}
+            testID={`suggest-replacement-button-${assignment.id}`}
+          >
+            <RefreshCw size={16} color="#3730a3" />
+            <Text style={styles.suggestBtnText}>Suggest Replacement</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    ))}
+  </>
+)}
 
             {shouldShowAssignments && !(isCancelledForNormalMember) && (
               <View style={styles.assignmentsSection}>
