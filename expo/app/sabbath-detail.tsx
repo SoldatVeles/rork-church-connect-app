@@ -394,17 +394,133 @@ const publishMutation = useMutation({
   },
 });
 
-  const cancelMutation = useMutation({
-    mutationFn: async ({ sabbathId: sid, cancellationReason }: { sabbathId: string; cancellationReason: string | null }) => {
-      if (!user?.id) throw new Error('Not authenticated');
-      const { error } = await supabase
-        .from('sabbaths')
-        .update({ status: 'cancelled', cancelled_by: user.id, cancelled_at: new Date().toISOString(), cancellation_reason: cancellationReason, updated_by: user.id })
-        .eq('id', sid);
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: invalidateAll,
-  });
+const cancelMutation = useMutation({
+  mutationFn: async ({
+    sabbathId: sid,
+    cancellationReason,
+  }: {
+    sabbathId: string;
+    cancellationReason: string | null;
+  }) => {
+    if (!user?.id) throw new Error('Not authenticated');
+
+    const { data: sabbathRow, error: sabbathError } = await supabase
+      .from('sabbaths')
+      .select('id, group_id, sabbath_date, status')
+      .eq('id', sid)
+      .single();
+
+    if (sabbathError || !sabbathRow) {
+      throw new Error(sabbathError?.message ?? 'Sabbath not found');
+    }
+
+    const currentSabbath = sabbathRow as {
+      id: string;
+      group_id: string;
+      sabbath_date: string;
+      status: string;
+    };
+
+    const wasPublished = currentSabbath.status === 'published';
+
+    const { error } = await supabase
+      .from('sabbaths')
+      .update({
+        status: 'cancelled',
+        cancelled_by: user.id,
+        cancelled_at: new Date().toISOString(),
+        cancellation_reason: cancellationReason,
+        updated_by: user.id,
+      })
+      .eq('id', sid);
+
+    if (error) throw new Error(error.message);
+
+    if (!wasPublished) {
+      return;
+    }
+
+    try {
+      const { data: group } = await supabase
+        .from('groups')
+        .select('id, name')
+        .eq('id', currentSabbath.group_id)
+        .maybeSingle();
+
+      const { data: assignments, error: assignmentsError } = await supabase
+        .from('sabbath_assignments')
+        .select('user_id')
+        .eq('sabbath_id', sid);
+
+      if (assignmentsError) {
+        console.warn(
+          '[SabbathDetail] Failed to fetch assignments for cancellation notification:',
+          assignmentsError.message
+        );
+      }
+
+      const { data: groupMembers, error: membersError } = await supabase
+        .from('group_members')
+        .select('user_id')
+        .eq('group_id', currentSabbath.group_id);
+
+      if (membersError) {
+        console.warn(
+          '[SabbathDetail] Failed to fetch group members for cancellation notification:',
+          membersError.message
+        );
+      }
+
+      const assignedUserIds = ((assignments ?? []) as any[])
+        .map((assignment) => assignment.user_id as string | null)
+        .filter(Boolean) as string[];
+
+      const groupMemberIds = ((groupMembers ?? []) as any[])
+        .map((member) => member.user_id as string | null)
+        .filter(Boolean) as string[];
+
+      const recipientIds = Array.from(
+        new Set([
+          ...assignedUserIds,
+          ...groupMemberIds,
+          user.id,
+        ])
+      ).filter(Boolean);
+
+      const churchName = (group as any)?.name ?? 'your church';
+      const readableDate = formatSabbathDate(currentSabbath.sabbath_date);
+      const reasonText = cancellationReason?.trim()
+        ? ` Reason: ${cancellationReason.trim()}`
+        : '';
+
+      const notificationRows = recipientIds.map((recipientId) => ({
+        type: 'sabbath',
+        title: 'Sabbath Cancelled',
+        body: `The Sabbath service for ${churchName} on ${readableDate} has been cancelled.${reasonText}`,
+        user_id: recipientId,
+      }));
+
+      if (notificationRows.length > 0) {
+        const { error: notificationError } = await supabase
+          .from('notifications')
+          .insert(notificationRows);
+
+        if (notificationError) {
+          console.warn(
+            '[SabbathDetail] Failed to create Sabbath cancellation notifications:',
+            notificationError.message
+          );
+        }
+      }
+    } catch (notificationError) {
+      console.warn('[SabbathDetail] Cancellation notification creation failed:', notificationError);
+    }
+  },
+  onSuccess: () => {
+    invalidateAll();
+    void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+  },
+});
 
   const revertMutation = useMutation({
     mutationFn: async ({ sabbathId: sid }: { sabbathId: string }) => {
