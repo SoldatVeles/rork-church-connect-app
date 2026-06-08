@@ -90,6 +90,30 @@ export default function SabbathPlannerScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const userProfileQuery = useQuery({
+  queryKey: ['sabbath-planner-profile', user?.id],
+  enabled: !!user?.id,
+  queryFn: async () => {
+    if (!user?.id) return null;
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, role, home_group_id')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (error) {
+      console.warn('[SabbathPlanner] profile fetch error:', error.message);
+      return null;
+    }
+
+    return data as {
+      id: string;
+      role: string;
+      home_group_id: string | null;
+    } | null;
+  },
+});
 
   const pastorGroupsQuery = useQuery({
     queryKey: ['sabbath-pastor-groups', user?.id],
@@ -125,7 +149,25 @@ export default function SabbathPlannerScreen() {
   });
   const pastorGroups = useMemo(() => pastorGroupsQuery.data ?? [], [pastorGroupsQuery.data]);
   const pastorGroupIds = useMemo(() => pastorGroups.map((gp) => gp.group_id as string), [pastorGroups]);
-  const churchScope = useMemo(() => buildChurchScope(user, null, pastorGroupIds), [user, pastorGroupIds]);
+const userHomeGroupId =
+  userProfileQuery.data?.home_group_id ??
+  (user as any)?.homeGroupId ??
+  (user as any)?.home_group_id ??
+  null;
+
+const effectiveUser = useMemo(() => {
+  if (!user) return user;
+
+  return {
+    ...user,
+    role: (userProfileQuery.data?.role ?? user.role) as any,
+  };
+}, [user, userProfileQuery.data?.role]);
+
+const churchScope = useMemo(
+  () => buildChurchScope(effectiveUser, userHomeGroupId, pastorGroupIds),
+  [effectiveUser, userHomeGroupId, pastorGroupIds]
+);
 
   const sabbathsQuery = useQuery({
     queryKey: ['sabbaths-all'],
@@ -208,7 +250,10 @@ export default function SabbathPlannerScreen() {
   const [activeFilter, setActiveFilter] = useState<FilterType>('upcoming');
   const [refreshing, setRefreshing] = useState(false);
 
-  const canManage = canManageAnySabbath(churchScope);
+  const canManage =
+   canManageAnySabbath(churchScope) ||
+    userProfileQuery.data?.role === 'church_leader' ||
+   userProfileQuery.data?.role === 'admin';
 
   const groupsQuery = useQuery({
     queryKey: ['user-groups-for-sabbath', user?.id],
@@ -228,11 +273,23 @@ export default function SabbathPlannerScreen() {
 
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
-  const availableGroups = useMemo(() => {
-    const groups = groupsQuery.data || [];
-    if (checkIsAdmin(user)) return groups;
-    return groups.filter((g) => canManageSabbathForGroup(churchScope, g.id));
-  }, [groupsQuery.data, churchScope, user]);
+const availableGroups = useMemo(() => {
+  const groups = groupsQuery.data || [];
+
+  if (checkIsAdmin(effectiveUser)) return groups;
+
+  if (userProfileQuery.data?.role === 'church_leader' && userHomeGroupId) {
+    return groups.filter((group) => group.id === userHomeGroupId);
+  }
+
+  return groups.filter((group) => canManageSabbathForGroup(churchScope, group.id));
+}, [
+  groupsQuery.data,
+  churchScope,
+  effectiveUser,
+  userProfileQuery.data?.role,
+  userHomeGroupId,
+]);
 
   const groupNameMap = useMemo(() => {
     const map = new Map<string, string>();

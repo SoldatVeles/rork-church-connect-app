@@ -231,7 +231,52 @@ export default function HomeScreen() {
   const userIsAdmin = isAdmin(user);
   const pastorGroupsQuery = trpc.sabbaths.getMyPastorGroups.useQuery();
   const pastorGroupIds = useMemo(() => (pastorGroupsQuery.data ?? []).map((g: any) => g.group_id as string), [pastorGroupsQuery.data]);
-  const canManageSabbath = canManageAnySabbath(buildChurchScope(user, null, pastorGroupIds));
+  const homeProfileQuery = useQuery({
+  queryKey: ['home-profile-for-sabbath', user?.id],
+  enabled: !!user?.id,
+  queryFn: async () => {
+    if (!user?.id) return null;
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, role, home_group_id')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (error) {
+      console.warn('[Home] profile fetch error:', error.message);
+      return null;
+    }
+
+    return data as {
+      id: string;
+      role: string;
+      home_group_id: string | null;
+    } | null;
+  },
+});
+
+const homeUserGroupIdForSabbath =
+  homeProfileQuery.data?.home_group_id ??
+  (user as any)?.homeGroupId ??
+  (user as any)?.home_group_id ??
+  null;
+
+const effectiveHomeUser = useMemo(() => {
+  if (!user) return user;
+
+  return {
+    ...user,
+    role: (homeProfileQuery.data?.role ?? user.role) as any,
+  };
+}, [user, homeProfileQuery.data?.role]);
+
+const canManageSabbath =
+  canManageAnySabbath(
+    buildChurchScope(effectiveHomeUser, homeUserGroupIdForSabbath, pastorGroupIds)
+  ) ||
+  homeProfileQuery.data?.role === 'church_leader' ||
+  homeProfileQuery.data?.role === 'admin';
   const [showNotifications, setShowNotifications] = useState(false);
   const bellButtonRef = useRef<View>(null);
   const [bellPosition, setBellPosition] = useState({ x: 0, y: 0 });

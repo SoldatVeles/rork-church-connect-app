@@ -208,59 +208,37 @@ export default function SabbathDetailScreen() {
 
   const upcoming = sabbath ? isUpcoming(sabbath.sabbath_date) : false;
 
-  const fetchGroupedMembers = useCallback(async (primaryGroupId: string) => {
-    const [groupsRes, profilesRes, pastorsRes] = await Promise.all([
-      supabase.from('groups').select('id, name').order('name', { ascending: true }),
-      supabase.from('profiles').select('id, full_name, display_name, home_group_id').order('full_name', { ascending: true }),
-      supabase.from('group_pastors').select('user_id, group_id'),
-    ]);
-    const allGroups = (groupsRes.data || []) as Array<{ id: string; name: string }>;
-    const allProfiles = (profilesRes.data || []) as Array<{ id: string; full_name: string | null; display_name: string | null; home_group_id: string | null }>;
-    const allPastors = (pastorsRes.data || []) as Array<{ user_id: string; group_id: string }>;
+const fetchGroupedMembers = useCallback(async (primaryGroupId: string) => {
+  const { data, error } = await supabase.rpc('get_sabbath_assignable_members', {
+    target_group_id: primaryGroupId,
+  });
 
-    const groupNameMap = new Map<string, string>();
-    allGroups.forEach((g) => groupNameMap.set(g.id, g.name));
+  if (error) {
+    console.warn('[SabbathDetail] assignable members rpc error:', error.message);
+    return [] as {
+      groupId: string;
+      groupName: string;
+      members: { id: string; name: string }[];
+    }[];
+  }
 
-    const pastorGroupMap = new Map<string, Set<string>>();
-    allPastors.forEach((p) => {
-      if (!pastorGroupMap.has(p.user_id)) pastorGroupMap.set(p.user_id, new Set());
-      pastorGroupMap.get(p.user_id)!.add(p.group_id);
-    });
+  const { data: group } = await supabase
+    .from('groups')
+    .select('id, name')
+    .eq('id', primaryGroupId)
+    .maybeSingle();
 
-    type Section = { groupId: string; groupName: string; members: { id: string; name: string }[] };
-    const sectionMap = new Map<string, Section>();
-    const addedToGroup = new Map<string, Set<string>>();
-    const addMember = (gId: string, mId: string, mName: string) => {
-      if (!addedToGroup.has(gId)) addedToGroup.set(gId, new Set());
-      if (addedToGroup.get(gId)!.has(mId)) return;
-      addedToGroup.get(gId)!.add(mId);
-      if (!sectionMap.has(gId)) {
-        sectionMap.set(gId, { groupId: gId, groupName: groupNameMap.get(gId) || 'Unknown Church', members: [] });
-      }
-      sectionMap.get(gId)!.members.push({ id: mId, name: mName });
-    };
-
-    allProfiles.forEach((p) => {
-      const name = (p.full_name?.trim()) || (p.display_name?.trim()) || 'Unknown';
-      const homeGroup = p.home_group_id;
-      if (homeGroup && groupNameMap.has(homeGroup)) addMember(homeGroup, p.id, name);
-      const pgs = pastorGroupMap.get(p.id);
-      if (pgs) pgs.forEach((gId) => { if (groupNameMap.has(gId)) addMember(gId, p.id, name); });
-      if (!homeGroup && !pgs) addMember('__unassigned__', p.id, name);
-    });
-    if (sectionMap.has('__unassigned__')) sectionMap.get('__unassigned__')!.groupName = 'Unassigned Members';
-
-    const sections = Array.from(sectionMap.values());
-    sections.sort((a, b) => {
-      if (a.groupId === primaryGroupId) return -1;
-      if (b.groupId === primaryGroupId) return 1;
-      if (a.groupId === '__unassigned__') return 1;
-      if (b.groupId === '__unassigned__') return -1;
-      return a.groupName.localeCompare(b.groupName);
-    });
-    sections.forEach((s) => s.members.sort((a, b) => a.name.localeCompare(b.name)));
-    return sections;
-  }, []);
+  return [
+    {
+      groupId: primaryGroupId,
+      groupName: (group as any)?.name ?? 'Your Church',
+      members: ((data ?? []) as any[]).map((member) => ({
+        id: member.id as string,
+        name: member.name as string,
+      })),
+    },
+  ];
+}, []);
 
   const groupedMembersQuery = useQuery({
     queryKey: ['sabbath-grouped-members', sabbath?.group_id],
@@ -544,17 +522,28 @@ const cancelMutation = useMutation({
     onSuccess: invalidateAll,
   });
 
-  const assignRoleMutation = useMutation({
-    mutationFn: async ({ sabbathId: sid, role, userId }: { sabbathId: string; role: SabbathRole; userId: string }) => {
-      const { error } = await supabase
-        .from('sabbath_assignments')
-        .update({ user_id: userId, status: 'pending', decline_reason: null, suggested_user_id: null })
-        .eq('sabbath_id', sid)
-        .eq('role', role);
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: invalidateAll,
-  });
+const assignRoleMutation = useMutation({
+  mutationFn: async ({
+    sabbathId: sid,
+    role,
+    userId,
+  }: {
+    sabbathId: string;
+    role: SabbathRole;
+    userId: string;
+  }) => {
+    const { error } = await supabase.rpc('assign_sabbath_role', {
+      target_sabbath_id: sid,
+      target_role: role,
+      target_user_id: userId,
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+  },
+  onSuccess: invalidateAll,
+});
 
   const acceptMutation = useMutation({
     mutationFn: async ({ assignmentId }: { assignmentId: string }) => {
@@ -1048,7 +1037,10 @@ const myAssignments = useMemo(
             setAssigningRole(null);
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           },
-          onError: (err) => Alert.alert('Error', err.message || 'Failed to assign role.'),
+          onError: (err) => {
+  console.error('[SabbathDetail] Assign role error:', err);
+  Alert.alert('Error', err.message || 'Failed to assign role.');
+},
         }
       );
     },

@@ -49,13 +49,25 @@ export function canManageSabbathForGroup(
   groupId: string
 ): boolean {
   if (isAdmin(ctx.user)) return true;
-  if (ctx.pastorGroupIds.includes(groupId)) return true;
+
+  // Church leaders can manage Sabbath plans for their own home church.
+  if (isChurchLeaderLevel(ctx.user) && ctx.userHomeGroupId === groupId) return true;
+
+  // Pastors can manage Sabbath plans for groups assigned in group_pastors.
+  if (isPastorLevel(ctx.user) && ctx.pastorGroupIds.includes(groupId)) return true;
+
   return false;
 }
 
 export function canManageAnySabbath(ctx: ChurchScopeContext): boolean {
   if (isAdmin(ctx.user)) return true;
-  if (ctx.pastorGroupIds.length > 0) return true;
+
+  // Church leaders can manage Sabbath plans for their own home church.
+  if (isChurchLeaderLevel(ctx.user) && !!ctx.userHomeGroupId) return true;
+
+  // Pastors can manage Sabbath plans for assigned pastor groups.
+  if (isPastorLevel(ctx.user) && ctx.pastorGroupIds.length > 0) return true;
+
   return false;
 }
 
