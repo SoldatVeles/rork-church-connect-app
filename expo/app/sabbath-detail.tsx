@@ -275,26 +275,124 @@ export default function SabbathDetailScreen() {
     void queryClient.invalidateQueries({ queryKey: ['sabbath-grouped-members'] });
   }, [queryClient, sabbathId]);
 
-  const publishMutation = useMutation({
-    mutationFn: async ({ sabbathId: sid }: { sabbathId: string }) => {
-      if (!user?.id) throw new Error('Not authenticated');
-      const { data: assignments } = await supabase
-        .from('sabbath_assignments')
-        .select('role, user_id')
-        .eq('sabbath_id', sid);
-      for (const role of ALL_ROLES) {
-        const a = (assignments || []).find((x: any) => x.role === role);
-        if (!a) throw new Error(`Cannot publish: missing assignment for "${role}". Please recreate the Sabbath.`);
-        if (!(a as any).user_id) throw new Error(`Cannot publish: role "${role}" has no assigned user. Please assign all roles before publishing.`);
+const publishMutation = useMutation({
+  mutationFn: async ({ sabbathId: sid }: { sabbathId: string }) => {
+    if (!user?.id) throw new Error('Not authenticated');
+
+    const { data: sabbathRow, error: sabbathError } = await supabase
+      .from('sabbaths')
+      .select('id, group_id, sabbath_date, status')
+      .eq('id', sid)
+      .single();
+
+    if (sabbathError || !sabbathRow) {
+      throw new Error(sabbathError?.message ?? 'Sabbath not found');
+    }
+
+    const currentSabbath = sabbathRow as {
+      id: string;
+      group_id: string;
+      sabbath_date: string;
+      status: string;
+    };
+
+    if (currentSabbath.status !== 'draft') {
+      throw new Error('Only draft Sabbaths can be published.');
+    }
+
+    const { data: assignments, error: assignmentsError } = await supabase
+      .from('sabbath_assignments')
+      .select('role, user_id')
+      .eq('sabbath_id', sid);
+
+    if (assignmentsError) {
+      throw new Error(assignmentsError.message);
+    }
+
+    for (const role of ALL_ROLES) {
+      const assignment = (assignments || []).find((item: any) => item.role === role);
+
+      if (!assignment) {
+        throw new Error(`Cannot publish: missing assignment for "${role}". Please recreate the Sabbath.`);
       }
-      const { error } = await supabase
-        .from('sabbaths')
-        .update({ status: 'published', published_by: user.id, published_at: new Date().toISOString(), updated_by: user.id })
-        .eq('id', sid);
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: invalidateAll,
-  });
+
+      if (!(assignment as any).user_id) {
+        throw new Error(`Cannot publish: role "${role}" has no assigned user. Please assign all roles before publishing.`);
+      }
+    }
+
+    const { error } = await supabase
+      .from('sabbaths')
+      .update({
+        status: 'published',
+        published_by: user.id,
+        published_at: new Date().toISOString(),
+        updated_by: user.id,
+      })
+      .eq('id', sid);
+
+    if (error) throw new Error(error.message);
+
+    try {
+      const { data: group } = await supabase
+        .from('groups')
+        .select('id, name')
+        .eq('id', currentSabbath.group_id)
+        .maybeSingle();
+
+      const { data: groupMembers, error: membersError } = await supabase
+        .from('group_members')
+        .select('user_id')
+        .eq('group_id', currentSabbath.group_id);
+
+      if (membersError) {
+        console.warn('[SabbathDetail] Failed to fetch group members for notification:', membersError.message);
+      }
+
+      const assignedUserIds = ((assignments ?? []) as any[])
+        .map((assignment) => assignment.user_id as string | null)
+        .filter(Boolean) as string[];
+
+      const groupMemberIds = ((groupMembers ?? []) as any[])
+        .map((member) => member.user_id as string | null)
+        .filter(Boolean) as string[];
+
+      const recipientIds = Array.from(
+        new Set([
+          ...assignedUserIds,
+          ...groupMemberIds,
+          user.id,
+        ])
+      ).filter(Boolean);
+
+      const churchName = (group as any)?.name ?? 'your church';
+      const readableDate = formatSabbathDate(currentSabbath.sabbath_date);
+
+      const notificationRows = recipientIds.map((recipientId) => ({
+        type: 'sabbath',
+        title: 'New Sabbath Published',
+        body: `A Sabbath service for ${churchName} on ${readableDate} has been published.`,
+        user_id: recipientId,
+      }));
+
+      if (notificationRows.length > 0) {
+        const { error: notificationError } = await supabase
+          .from('notifications')
+          .insert(notificationRows);
+
+        if (notificationError) {
+          console.warn('[SabbathDetail] Failed to create Sabbath notifications:', notificationError.message);
+        }
+      }
+    } catch (notificationError) {
+      console.warn('[SabbathDetail] Notification creation failed:', notificationError);
+    }
+  },
+  onSuccess: () => {
+    invalidateAll();
+    void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+  },
+});
 
   const cancelMutation = useMutation({
     mutationFn: async ({ sabbathId: sid, cancellationReason }: { sabbathId: string; cancellationReason: string | null }) => {
