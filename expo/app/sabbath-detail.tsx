@@ -567,16 +567,146 @@ const cancelMutation = useMutation({
     onSuccess: invalidateAll,
   });
 
-  const declineMutation = useMutation({
-    mutationFn: async ({ assignmentId, reason }: { assignmentId: string; reason: string | null }) => {
-      const { error } = await supabase
-        .from('sabbath_assignments')
-        .update({ status: 'declined', decline_reason: reason })
-        .eq('id', assignmentId);
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: invalidateAll,
-  });
+const declineMutation = useMutation({
+  mutationFn: async ({
+    assignmentId,
+    reason,
+  }: {
+    assignmentId: string;
+    reason: string | null;
+  }) => {
+    if (!user?.id) throw new Error('Not authenticated');
+
+    const { data: assignmentRow, error: assignmentFetchError } = await supabase
+      .from('sabbath_assignments')
+      .select('id, sabbath_id, role, user_id')
+      .eq('id', assignmentId)
+      .single();
+
+    if (assignmentFetchError || !assignmentRow) {
+      throw new Error(assignmentFetchError?.message ?? 'Assignment not found');
+    }
+
+    const assignment = assignmentRow as {
+      id: string;
+      sabbath_id: string;
+      role: SabbathRole;
+      user_id: string | null;
+    };
+
+    const { error } = await supabase
+      .from('sabbath_assignments')
+      .update({
+        status: 'declined',
+        decline_reason: reason,
+      })
+      .eq('id', assignmentId);
+
+    if (error) throw new Error(error.message);
+
+    try {
+      const { data: sabbathRow } = await supabase
+        .from('sabbaths')
+        .select('id, group_id, sabbath_date, created_by, published_by')
+        .eq('id', assignment.sabbath_id)
+        .maybeSingle();
+
+      if (!sabbathRow) return;
+
+      const currentSabbath = sabbathRow as {
+        id: string;
+        group_id: string;
+        sabbath_date: string;
+        created_by: string | null;
+        published_by: string | null;
+      };
+
+      const { data: group } = await supabase
+        .from('groups')
+        .select('id, name')
+        .eq('id', currentSabbath.group_id)
+        .maybeSingle();
+
+      const { data: pastors, error: pastorsError } = await supabase
+        .from('group_pastors')
+        .select('user_id')
+        .eq('group_id', currentSabbath.group_id);
+
+      if (pastorsError) {
+        console.warn(
+          '[SabbathDetail] Failed to fetch pastors for decline notification:',
+          pastorsError.message
+        );
+      }
+
+      const { data: leaders, error: leadersError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('home_group_id', currentSabbath.group_id)
+        .in('role', ['church_leader', 'admin']);
+
+      if (leadersError) {
+        console.warn(
+          '[SabbathDetail] Failed to fetch leaders for decline notification:',
+          leadersError.message
+        );
+      }
+
+      const recipientIds = Array.from(
+        new Set([
+          currentSabbath.created_by,
+          currentSabbath.published_by,
+          ...((pastors ?? []).map((pastor: any) => pastor.user_id as string | null)),
+          ...((leaders ?? []).map((leader: any) => leader.id as string | null)),
+        ])
+      )
+        .filter(Boolean)
+        .filter((id) => id !== user.id) as string[];
+
+      if (recipientIds.length === 0) return;
+
+      const { data: currentUserProfile } = await supabase
+        .from('profiles')
+        .select('full_name, display_name')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      const responderName =
+        (currentUserProfile as any)?.display_name ||
+        (currentUserProfile as any)?.full_name ||
+        `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() ||
+        'A member';
+
+      const churchName = (group as any)?.name ?? 'your church';
+      const readableDate = formatSabbathDate(currentSabbath.sabbath_date);
+      const reasonText = reason?.trim() ? ` Reason: ${reason.trim()}` : '';
+
+      const notificationRows = recipientIds.map((recipientId) => ({
+        type: 'sabbath',
+        title: 'Assignment Declined',
+        body: `${responderName} declined the ${ROLE_LABELS[assignment.role]} assignment for ${churchName} on ${readableDate}.${reasonText}`,
+        user_id: recipientId,
+      }));
+
+      const { error: notificationError } = await supabase
+        .from('notifications')
+        .insert(notificationRows);
+
+      if (notificationError) {
+        console.warn(
+          '[SabbathDetail] Failed to create assignment declined notifications:',
+          notificationError.message
+        );
+      }
+    } catch (notificationError) {
+      console.warn('[SabbathDetail] Decline notification creation failed:', notificationError);
+    }
+  },
+  onSuccess: () => {
+    invalidateAll();
+    void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+  },
+});
 
   const attendanceMutation = useMutation({
     mutationFn: async ({ sabbathId: sid, status }: { sabbathId: string; status: SabbathAttendanceStatus }) => {
@@ -603,16 +733,153 @@ const cancelMutation = useMutation({
     onSuccess: invalidateAll,
   });
 
-  const suggestReplacementMutation = useMutation({
-    mutationFn: async ({ assignmentId, suggestedUserId }: { assignmentId: string; suggestedUserId: string }) => {
-      const { error } = await supabase
-        .from('sabbath_assignments')
-        .update({ status: 'replacement_suggested', suggested_user_id: suggestedUserId })
-        .eq('id', assignmentId);
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: invalidateAll,
-  });
+const suggestReplacementMutation = useMutation({
+  mutationFn: async ({
+    assignmentId,
+    suggestedUserId,
+  }: {
+    assignmentId: string;
+    suggestedUserId: string;
+  }) => {
+    if (!user?.id) throw new Error('Not authenticated');
+
+    const { data: assignmentRow, error: assignmentFetchError } = await supabase
+      .from('sabbath_assignments')
+      .select('id, sabbath_id, role, user_id')
+      .eq('id', assignmentId)
+      .single();
+
+    if (assignmentFetchError || !assignmentRow) {
+      throw new Error(assignmentFetchError?.message ?? 'Assignment not found');
+    }
+
+    const assignment = assignmentRow as {
+      id: string;
+      sabbath_id: string;
+      role: SabbathRole;
+      user_id: string | null;
+    };
+
+    const { error } = await supabase
+      .from('sabbath_assignments')
+      .update({
+        status: 'replacement_suggested',
+        suggested_user_id: suggestedUserId,
+      })
+      .eq('id', assignmentId);
+
+    if (error) throw new Error(error.message);
+
+    try {
+      const { data: sabbathRow } = await supabase
+        .from('sabbaths')
+        .select('id, group_id, sabbath_date, created_by, published_by')
+        .eq('id', assignment.sabbath_id)
+        .maybeSingle();
+
+      if (!sabbathRow) return;
+
+      const currentSabbath = sabbathRow as {
+        id: string;
+        group_id: string;
+        sabbath_date: string;
+        created_by: string | null;
+        published_by: string | null;
+      };
+
+      const { data: group } = await supabase
+        .from('groups')
+        .select('id, name')
+        .eq('id', currentSabbath.group_id)
+        .maybeSingle();
+
+      const { data: pastors, error: pastorsError } = await supabase
+        .from('group_pastors')
+        .select('user_id')
+        .eq('group_id', currentSabbath.group_id);
+
+      if (pastorsError) {
+        console.warn(
+          '[SabbathDetail] Failed to fetch pastors for replacement notification:',
+          pastorsError.message
+        );
+      }
+
+      const { data: leaders, error: leadersError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('home_group_id', currentSabbath.group_id)
+        .in('role', ['church_leader', 'admin']);
+
+      if (leadersError) {
+        console.warn(
+          '[SabbathDetail] Failed to fetch leaders for replacement notification:',
+          leadersError.message
+        );
+      }
+
+      const recipientIds = Array.from(
+        new Set([
+          currentSabbath.created_by,
+          currentSabbath.published_by,
+          ...((pastors ?? []).map((pastor: any) => pastor.user_id as string | null)),
+          ...((leaders ?? []).map((leader: any) => leader.id as string | null)),
+        ])
+      )
+        .filter(Boolean)
+        .filter((id) => id !== user.id) as string[];
+
+      if (recipientIds.length === 0) return;
+
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, display_name')
+        .in('id', [user.id, suggestedUserId]);
+
+      const profileMap = new Map<string, string>();
+
+      (profiles ?? []).forEach((profile: any) => {
+        profileMap.set(
+          profile.id,
+          profile.display_name || profile.full_name || 'Unknown'
+        );
+      });
+
+      const requesterName =
+        profileMap.get(user.id) ||
+        `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() ||
+        'A member';
+
+      const suggestedName = profileMap.get(suggestedUserId) || 'another member';
+      const churchName = (group as any)?.name ?? 'your church';
+      const readableDate = formatSabbathDate(currentSabbath.sabbath_date);
+
+      const notificationRows = recipientIds.map((recipientId) => ({
+        type: 'sabbath',
+        title: 'Replacement Suggested',
+        body: `${requesterName} suggested ${suggestedName} as replacement for the ${ROLE_LABELS[assignment.role]} assignment at ${churchName} on ${readableDate}.`,
+        user_id: recipientId,
+      }));
+
+      const { error: notificationError } = await supabase
+        .from('notifications')
+        .insert(notificationRows);
+
+      if (notificationError) {
+        console.warn(
+          '[SabbathDetail] Failed to create replacement suggested notifications:',
+          notificationError.message
+        );
+      }
+    } catch (notificationError) {
+      console.warn('[SabbathDetail] Replacement notification creation failed:', notificationError);
+    }
+  },
+  onSuccess: () => {
+    invalidateAll();
+    void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+  },
+});
 
   const isStatusUpdating = publishMutation.isPending || cancelMutation.isPending || revertMutation.isPending;
 
