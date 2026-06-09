@@ -205,11 +205,11 @@ export default function GroupChatScreen() {
           headerTitle: () => (
             <View style={styles.headerTitle}>
               <Text style={styles.headerTitleText} numberOfLines={1}>
-                {groupName || 'Group Chat'}
+                {groupName || 'Church Chat'}
               </Text>
               <View style={styles.headerSubtitle}>
                 <Users size={12} color="#64748b" />
-                <Text style={styles.headerSubtitleText}>Group Chat</Text>
+                <Text style={styles.headerSubtitleText}>Church Chat</Text>
               </View>
             </View>
           ),

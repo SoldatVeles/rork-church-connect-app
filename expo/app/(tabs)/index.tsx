@@ -556,10 +556,10 @@ const todayVerse = useMemo(() => {
     },
     {
       icon: MessageCircle,
-      title: 'Group Chats',
+      title: 'Church Chats',
       subtitle: unreadChatsCount > 0
         ? `${unreadChatsCount} new ${unreadChatsCount === 1 ? 'message' : 'messages'}`
-        : 'Connect with your groups',
+        : 'Connect with your churches',
       color: '#8b5cf6',
       badge: unreadChatsCount,
       onPress: () => router.push('/groups'),

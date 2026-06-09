@@ -114,7 +114,7 @@ export default function GroupsScreen() {
       <Stack.Screen
         options={{
           headerShown: true,
-          headerTitle: 'Group Chats',
+          headerTitle: 'Church Chats',
           headerTitleStyle: { fontWeight: '600', color: '#1e293b' },
           headerLeft: () => (
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -130,7 +130,7 @@ export default function GroupsScreen() {
         {groupsQuery.isLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#1e3a8a" />
-            <Text style={styles.loadingText}>Loading groups...</Text>
+            <Text style={styles.loadingText}>Loading churches...</Text>
           </View>
         ) : groupsQuery.data && groupsQuery.data.length > 0 ? (
           groupsQuery.data.map((group) => (
@@ -197,9 +197,9 @@ export default function GroupsScreen() {
         ) : (
           <View style={styles.emptyContainer}>
             <MessageCircle size={48} color="#cbd5e1" />
-            <Text style={styles.emptyTitle}>No Groups Yet</Text>
+            <Text style={styles.emptyTitle}>No Churches Yet</Text>
             <Text style={styles.emptySubtitle}>
-              Ask your admin to add you to a church group to start chatting.
+              Ask your admin to add you to a church to start chatting.
             </Text>
           </View>
         )}
