@@ -268,7 +268,7 @@ type AdminUserRow = {
       return insertedData;
     },
     onSuccess: () => {
-      Alert.alert('Success', 'Church group created');
+      Alert.alert('Success', 'Church created');
       setGroupName('');
       void queryClient.invalidateQueries({ queryKey: ['groups'] });
       void queryClient.invalidateQueries({ queryKey: ['user-groups'] });
@@ -422,7 +422,7 @@ type AdminUserRow = {
       }
     },
     onSuccess: () => {
-      Alert.alert('Success', 'Member removed from group');
+      Alert.alert('Success', 'Member removed from church');
       void queryClient.invalidateQueries({ queryKey: ['group-members', expandedGroupId] });
       void queryClient.invalidateQueries({ queryKey: ['groups'] });
       void queryClient.invalidateQueries({ queryKey: ['churches'] });
@@ -453,7 +453,7 @@ type AdminUserRow = {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      Alert.alert('Success', 'Group deleted');
+      Alert.alert('Success', 'Church deleted');
       setExpandedGroupId(null);
       void queryClient.invalidateQueries({ queryKey: ['groups'] });
     },
@@ -462,7 +462,7 @@ type AdminUserRow = {
 
   const handleDeleteGroup = (groupId: string, groupName: string) => {
     Alert.alert(
-      'Delete Group',
+      'Delete Church',
       `Are you sure you want to delete "${groupName}"? All members and messages will be removed.`,
       [
         { text: 'Cancel', style: 'cancel' },
@@ -474,7 +474,7 @@ type AdminUserRow = {
   const handleRemoveMemberFromGroup = (groupId: string, userId: string, name: string) => {
     Alert.alert(
       'Remove Member',
-      `Remove ${name} from this group?`,
+      `Remove ${name} from this church?`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Remove', style: 'destructive', onPress: () => removeMemberFromGroupMutation.mutate({ groupId, userId }) },
@@ -521,7 +521,7 @@ type AdminUserRow = {
       }
     },
     onSuccess: () => {
-      Alert.alert('Success', 'Members added to church group');
+      Alert.alert('Success', 'Members added to church');
       setSelectedGroupForAdding('');
       setSelectedUsersForGroup([]);
       void queryClient.invalidateQueries({ queryKey: ['groups'] });
@@ -1325,7 +1325,7 @@ const addUserCountryMutation = useMutation({
 
   const handleAddMembersToGroup = () => {
     if (!selectedGroupForAdding) {
-      Alert.alert('Error', 'Please select a group first');
+      Alert.alert('Error', 'Please select a church first');
       return;
     }
     if (selectedUsersForGroup.length === 0) {
@@ -1348,13 +1348,13 @@ const addUserCountryMutation = useMutation({
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <Church size={20} color="#1e3a8a" />
-          <Text style={styles.cardTitle}>Create Church Group</Text>
+          <Text style={styles.cardTitle}>Create Church</Text>
         </View>
 
         <View style={styles.row}>
           <TextInput 
             style={styles.input} 
-            placeholder="Group name (e.g. Youth Ministry)" 
+            placeholder="Church name (e.g. Zürich)" 
             value={groupName} 
             onChangeText={setGroupName}
             placeholderTextColor="#94a3b8"
@@ -1382,7 +1382,7 @@ const addUserCountryMutation = useMutation({
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <Church size={20} color="#1e3a8a" />
-          <Text style={styles.cardTitle}>Existing Groups</Text>
+          <Text style={styles.cardTitle}>Existing Churches</Text>
         </View>
 
         {groupsQuery.isLoading ? (
@@ -1441,7 +1441,7 @@ const addUserCountryMutation = useMutation({
 
               {expandedGroupId === group.id && (
                 <View style={styles.membersPanel}>
-                  <Text style={styles.membersPanelTitle}>Group Members</Text>
+                  <Text style={styles.membersPanelTitle}>Church Members</Text>
                   {groupMembersQuery.isLoading ? (
                     <ActivityIndicator color="#1e3a8a" style={{ paddingVertical: 12 }} />
                   ) : groupMembersQuery.data && groupMembersQuery.data.length > 0 ? (
@@ -1468,7 +1468,7 @@ const addUserCountryMutation = useMutation({
                       </View>
                     ))
                   ) : (
-                    <Text style={styles.noMembersText}>No members in this group</Text>
+                    <Text style={styles.noMembersText}>No members in this church</Text>
                   )}
 
                   <View style={{ marginTop: 18 }}>
@@ -1580,7 +1580,7 @@ const addUserCountryMutation = useMutation({
             </View>
           ))
         ) : (
-          <Text style={styles.emptyText}>No groups yet. Create your first one!</Text>
+          <Text style={styles.emptyText}>No churches yet. Create your first one!</Text>
         )}
       </View>
 
@@ -1588,10 +1588,10 @@ const addUserCountryMutation = useMutation({
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <UserPlus size={20} color="#1e3a8a" />
-            <Text style={styles.cardTitle}>Add Members to Group</Text>
+            <Text style={styles.cardTitle}>Add Members to Church</Text>
           </View>
 
-          <Text style={styles.helpText}>Select members to add to this group:</Text>
+          <Text style={styles.helpText}>Select members to add to this church:</Text>
 
           {usersQuery.isLoading ? (
             <View style={styles.loadingRow}>
@@ -1871,7 +1871,7 @@ const addUserCountryMutation = useMutation({
                 onPress={() => setActiveTab('groups')}
               >
                 <Church size={16} color={activeTab === 'groups' ? '#1e3a8a' : '#64748b'} />
-                <Text style={[styles.tabText, activeTab === 'groups' && styles.tabTextActive]}>Groups</Text>
+                <Text style={[styles.tabText, activeTab === 'groups' && styles.tabTextActive]}>Churches</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
