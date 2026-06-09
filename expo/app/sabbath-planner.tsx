@@ -186,31 +186,65 @@ const churchScope = useMemo(
         throw new Error('Sabbath date must be a Saturday');
       }
 
-      const { data: existing } = await supabase
+      const { data: existing, error: existingError } = await supabase
         .from('sabbaths')
-        .select('id')
+        .select('id, status')
         .eq('group_id', input.groupId)
         .eq('sabbath_date', input.sabbathDate)
         .maybeSingle();
-      if (existing) {
-        throw new Error('A Sabbath already exists for this church on this date');
+
+      if (existingError) {
+        console.error('[SabbathPlanner] existing sabbath check error:', existingError);
+        throw new Error(existingError.message);
       }
 
-      const { data: sabbath, error: insertError } = await supabase
-        .from('sabbaths')
-        .insert({
-          group_id: input.groupId,
-          sabbath_date: input.sabbathDate,
-          status: 'draft',
-          notes: input.notes,
-          created_by: user.id,
-          updated_by: user.id,
-        })
-        .select()
-        .single();
-      if (insertError || !sabbath) {
-        console.error('[SabbathPlanner] insert error:', insertError);
-        throw new Error(insertError?.message ?? 'Failed to create Sabbath');
+      let sabbath: Sabbath;
+
+      if (existing) {
+        if ((existing as any).status !== 'cancelled') {
+          throw new Error('A Sabbath already exists for this church on this date');
+        }
+
+        const { data: reactivated, error: reactivateError } = await supabase
+          .from('sabbaths')
+          .update({
+            status: 'draft',
+            notes: input.notes,
+            cancellation_reason: null,
+            cancelled_by: null,
+            cancelled_at: null,
+            updated_by: user.id,
+          })
+          .eq('id', (existing as any).id)
+          .select()
+          .single();
+
+        if (reactivateError || !reactivated) {
+          console.error('[SabbathPlanner] reactivate cancelled sabbath error:', reactivateError);
+          throw new Error(reactivateError?.message ?? 'Failed to reactivate Sabbath');
+        }
+
+        sabbath = reactivated as Sabbath;
+      } else {
+        const { data: inserted, error: insertError } = await supabase
+          .from('sabbaths')
+          .insert({
+            group_id: input.groupId,
+            sabbath_date: input.sabbathDate,
+            status: 'draft',
+            notes: input.notes,
+            created_by: user.id,
+            updated_by: user.id,
+          })
+          .select()
+          .single();
+
+        if (insertError || !inserted) {
+          console.error('[SabbathPlanner] insert error:', insertError);
+          throw new Error(insertError?.message ?? 'Failed to create Sabbath');
+        }
+
+        sabbath = inserted as Sabbath;
       }
 
       const assignmentRows = ALL_ROLES.map((role) => ({
@@ -354,8 +388,9 @@ const availableGroups = useMemo(() => {
 
   const groupSabbathDates = useMemo(() => {
     if (!effectiveGroupId) return [] as string[];
+
     return sabbaths
-      .filter((s) => s.group_id === effectiveGroupId)
+      .filter((s) => s.group_id === effectiveGroupId && s.status !== 'cancelled')
       .map((s) => s.sabbath_date);
   }, [sabbaths, effectiveGroupId]);
 
