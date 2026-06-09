@@ -107,12 +107,25 @@ export default function AdminScreen() {
     },
   });
   
-  const updateRoleMutation = trpc.users.updateRole.useMutation({
+  const updateRoleMutation = useMutation({
+    mutationFn: async (input: { userId: string; role: Role }) => {
+      const { error } = await supabase.rpc('update_user_role_admin', {
+        target_user_id: input.userId,
+        target_role: input.role,
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return input;
+    },
     onSuccess: () => {
       Alert.alert('Success', 'User role updated successfully');
       void usersQuery.refetch();
+      void queryClient.invalidateQueries({ queryKey: ['users', 'getAll'] });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       Alert.alert('Error', error.message);
     },
   });
