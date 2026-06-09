@@ -141,12 +141,20 @@ type AdminUserRow = {
     refetchOnWindowFocus: false,
   });
   
-  const [newUser, setNewUser] = useState({ firstName: '', lastName: '', email: '', phone: '', password: '', role: 'member' as Role });
+  const [newUser, setNewUser] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    password: '',
+    role: 'member' as Role,
+  });
   const [groupName, setGroupName] = useState('');
   const [selectedGroupForAdding, setSelectedGroupForAdding] = useState<string>('');
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   const [selectedUsersForGroup, setSelectedUsersForGroup] = useState<string[]>([]);
-  
+  const [selectedPastorForGroup, setSelectedPastorForGroup] = useState<string>('');
+
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [addUserExpanded, setAddUserExpanded] = useState(false);
   const [editingSermon, setEditingSermon] = useState<Sermon | null>(null);
@@ -267,7 +275,24 @@ type AdminUserRow = {
     },
     onError: (e: Error) => Alert.alert('Error', e.message ?? 'Failed to create group'),
   });
-  
+  const groupPastorsQuery = useQuery<{ groupId: string; userId: string }[]>({
+    queryKey: ['group-pastors'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('group_pastors')
+        .select('group_id, user_id');
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return (data ?? []).map((row: any) => ({
+        groupId: row.group_id,
+        userId: row.user_id,
+      }));
+    },
+    enabled: isAdminUser,
+  });  
   const groupMembersQuery = useQuery<{ userId: string; fullName: string; email: string; role: string }[]>({
     queryKey: ['group-members', expandedGroupId],
     queryFn: async () => {
@@ -315,6 +340,47 @@ type AdminUserRow = {
       });
     },
     enabled: !!expandedGroupId,
+  });
+
+  const assignPastorToGroupMutation = useMutation({
+    mutationFn: async (input: { groupId: string; userId: string }) => {
+      const { error } = await supabase.rpc('admin_assign_pastor_to_church', {
+        target_group_id: input.groupId,
+        target_user_id: input.userId,
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+    },
+    onSuccess: () => {
+      Alert.alert('Success', 'Pastor assigned to church');
+      setSelectedPastorForGroup('');
+      void groupPastorsQuery.refetch();
+    },
+    onError: (error: Error) => {
+      Alert.alert('Error', error.message);
+    },
+  });
+
+  const removePastorFromGroupMutation = useMutation({
+    mutationFn: async (input: { groupId: string; userId: string }) => {
+      const { error } = await supabase.rpc('admin_remove_pastor_from_church', {
+        target_group_id: input.groupId,
+        target_user_id: input.userId,
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+    },
+    onSuccess: () => {
+      Alert.alert('Success', 'Pastor removed from church');
+      void groupPastorsQuery.refetch();
+    },
+    onError: (error: Error) => {
+      Alert.alert('Error', error.message);
+    },
   });
 
   const removeMemberFromGroupMutation = useMutation({
@@ -1272,7 +1338,12 @@ const addUserCountryMutation = useMutation({
     });
   };
 
-  const renderGroupsTab = () => (
+  const renderGroupsTab = () => {
+    const allUsers = usersQuery.data ?? [];
+    const allPastorAssignments = groupPastorsQuery.data ?? [];
+    const allPastors = allUsers.filter((member) => member.role === 'pastor');
+
+    return (
     <>
       <View style={styles.card}>
         <View style={styles.cardHeader}>
@@ -1399,6 +1470,111 @@ const addUserCountryMutation = useMutation({
                   ) : (
                     <Text style={styles.noMembersText}>No members in this group</Text>
                   )}
+
+                  <View style={{ marginTop: 18 }}>
+                    <Text style={styles.membersPanelTitle}>Assigned Pastors</Text>
+
+                    {allPastorAssignments.filter((assignment) => assignment.groupId === group.id).length > 0 ? (
+                      allPastorAssignments
+                        .filter((assignment) => assignment.groupId === group.id)
+                        .map((assignment) => {
+                          const pastor = allUsers.find((member) => member.id === assignment.userId);
+
+                          return (
+                            <View key={`${assignment.groupId}-${assignment.userId}`} style={styles.memberRow}>
+                              <View style={styles.memberAvatar}>
+                                <Text style={styles.memberAvatarText}>
+                                  {(pastor?.firstName?.[0] || 'P').toUpperCase()}
+                                </Text>
+                              </View>
+
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.memberName}>
+                                  {pastor ? `${pastor.firstName} ${pastor.lastName}` : 'Pastor'}
+                                </Text>
+                                {pastor?.email ? (
+                                  <Text style={styles.memberEmail}>{pastor.email}</Text>
+                                ) : null}
+                              </View>
+
+                              <TouchableOpacity
+                                style={styles.removeMemberBtn}
+                                onPress={() =>
+                                  removePastorFromGroupMutation.mutate({
+                                    groupId: group.id,
+                                    userId: assignment.userId,
+                                  })
+                                }
+                                disabled={removePastorFromGroupMutation.isPending}
+                              >
+                                <X size={14} color="#ef4444" />
+                              </TouchableOpacity>
+                            </View>
+                          );
+                        })
+                    ) : (
+                      <Text style={styles.noMembersText}>No pastors assigned to this church</Text>
+                    )}
+
+                    <Text style={[styles.roleLabel, { marginTop: 14 }]}>Add Pastor:</Text>
+
+                    <View style={styles.roleSelector}>
+                      {allPastors
+                        .filter(
+                          (pastor) =>
+                            !allPastorAssignments.some(
+                              (assignment) =>
+                                assignment.groupId === group.id && assignment.userId === pastor.id
+                            )
+                        )
+                        .map((pastor) => (
+                          <TouchableOpacity
+                            key={pastor.id}
+                            style={[
+                              styles.roleChip,
+                              selectedPastorForGroup === pastor.id && styles.roleChipActive,
+                            ]}
+                            onPress={() => setSelectedPastorForGroup(pastor.id)}
+                          >
+                            <Text
+                              style={[
+                                styles.roleChipText,
+                                selectedPastorForGroup === pastor.id && styles.roleChipTextActive,
+                              ]}
+                            >
+                              {pastor.firstName} {pastor.lastName}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                    </View>
+
+                    {allPastors.length === 0 ? (
+                      <Text style={styles.noMembersText}>No users with Pastor role found</Text>
+                    ) : null}
+
+                    {selectedPastorForGroup ? (
+                      <TouchableOpacity
+                        style={[
+                          styles.primaryButton,
+                          { marginTop: 12 },
+                          assignPastorToGroupMutation.isPending && { opacity: 0.7 },
+                        ]}
+                        onPress={() =>
+                          assignPastorToGroupMutation.mutate({
+                            groupId: group.id,
+                            userId: selectedPastorForGroup,
+                          })
+                        }
+                        disabled={assignPastorToGroupMutation.isPending}
+                      >
+                        {assignPastorToGroupMutation.isPending ? (
+                          <ActivityIndicator color="#fff" />
+                        ) : (
+                          <Text style={styles.primaryButtonText}>Assign Pastor</Text>
+                        )}
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
                 </View>
               )}
             </View>
@@ -1473,8 +1649,9 @@ const addUserCountryMutation = useMutation({
           )}
         </View>
       )}
-    </>
-  );
+      </>
+    );
+  };
 
   const renderCountriesTab = () => {
     const countries = countriesQuery.data ?? [];
