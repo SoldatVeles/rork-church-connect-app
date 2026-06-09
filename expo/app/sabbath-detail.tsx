@@ -401,16 +401,10 @@ const cancelMutation = useMutation({
 
     const wasPublished = currentSabbath.status === 'published';
 
-    const { error } = await supabase
-      .from('sabbaths')
-      .update({
-        status: 'cancelled',
-        cancelled_by: user.id,
-        cancelled_at: new Date().toISOString(),
-        cancellation_reason: cancellationReason,
-        updated_by: user.id,
-      })
-      .eq('id', sid);
+    const { error } = await supabase.rpc('cancel_sabbath_plan', {
+      target_sabbath_id: sid,
+      target_cancellation_reason: cancellationReason,
+    });
 
     if (error) throw new Error(error.message);
 

@@ -166,7 +166,7 @@ const churchScope = useMemo(
       const { data, error } = await supabase
         .from('sabbaths')
         .select('*')
-        .order('sabbath_date', { ascending: false });
+        .order('sabbath_date', { ascending: true });
       if (error) {
         console.error('[SabbathPlanner] getAll error:', error.message);
         throw new Error(error.message);
@@ -314,6 +314,7 @@ const availableGroups = useMemo(() => {
 
   const filteredSabbaths = useMemo(() => {
     let filtered = [...sabbaths];
+
     switch (activeFilter) {
       case 'upcoming':
         filtered = filtered.filter((s) => isUpcoming(s.sabbath_date) && s.status !== 'cancelled');
@@ -331,7 +332,12 @@ const availableGroups = useMemo(() => {
         filtered = filtered.filter((s) => s.status === 'cancelled');
         break;
     }
-    return filtered;
+
+    return filtered.sort(
+      (a, b) =>
+        new Date(a.sabbath_date + 'T00:00:00').getTime() -
+        new Date(b.sabbath_date + 'T00:00:00').getTime()
+    );
   }, [sabbaths, activeFilter]);
 
   const onRefresh = useCallback(async () => {
