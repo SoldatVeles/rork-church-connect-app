@@ -1,3 +1,4 @@
+import * as Linking from 'expo-linking';
 import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -46,9 +47,11 @@ if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanedEmail)) {
 
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(cleanedEmail, {
-        redirectTo: undefined,
-      });
+const redirectTo = Linking.createURL('/reset-password');
+
+const { error } = await supabase.auth.resetPasswordForEmail(cleanedEmail, {
+  redirectTo,
+});
 
       if (error) {
         console.log('[ForgotPassword] Error:', error.message);
