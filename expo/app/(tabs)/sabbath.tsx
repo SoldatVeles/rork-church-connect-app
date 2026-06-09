@@ -325,13 +325,76 @@ return (
 export default function SabbathScreen() {
   const { user } = useAuth();
   const router = useRouter();
-  const pastorGroupsQuery = trpc.sabbaths.getMyPastorGroups.useQuery();
-  const pastorGroupIds = useMemo(() => (pastorGroupsQuery.data ?? []).map((g: any) => g.group_id as string), [pastorGroupsQuery.data]);
+  const userProfileQuery = useQuery({
+    queryKey: ['sabbath-profile-for-permissions', user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      if (!user?.id) return null;
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, role, home_group_id')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (error) {
+        console.warn('[Sabbath] profile fetch error:', error.message);
+        return null;
+      }
+
+      return data as {
+        id: string;
+        role: string;
+        home_group_id: string | null;
+      } | null;
+    },
+  });
+
+  const pastorGroupsQuery = useQuery({
+    queryKey: ['sabbath-pastor-groups-direct', user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      if (!user?.id) return [] as { id: string; group_id: string; user_id: string }[];
+
+      const { data, error } = await supabase
+        .from('group_pastors')
+        .select('id, group_id, user_id')
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.warn('[Sabbath] pastor groups fetch error:', error.message);
+        return [] as { id: string; group_id: string; user_id: string }[];
+      }
+
+      return (data ?? []) as { id: string; group_id: string; user_id: string }[];
+    },
+  });
+
+  const pastorGroupIds = useMemo(
+    () => (pastorGroupsQuery.data ?? []).map((g) => g.group_id),
+    [pastorGroupsQuery.data]
+  );
+
+  const effectiveSabbathUser = useMemo(() => {
+    if (!user) return user;
+
+    return {
+      ...user,
+      role: (userProfileQuery.data?.role ?? user.role) as any,
+    };
+  }, [user, userProfileQuery.data?.role]);
+
+  const userHomeGroupId =
+    userProfileQuery.data?.home_group_id ??
+    (user as any)?.homeGroupId ??
+    (user as any)?.home_group_id ??
+    null;
+
   const [activeTab, setActiveTab] = useState<TabKey>('myChurch');
   const [selectedCountryId, setSelectedCountryId] = useState<string | null>(null);
   const [showCountryPicker, setShowCountryPicker] = useState<boolean>(false);
 
-  const churchScope = buildChurchScope(user, null, pastorGroupIds);
+  const churchScope = buildChurchScope(effectiveSabbathUser, userHomeGroupId, pastorGroupIds);
   const canManage = canManageAnySabbath(churchScope);
 
   const accessibleCountriesQuery = useQuery({

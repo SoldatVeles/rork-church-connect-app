@@ -18,7 +18,6 @@ import { router } from 'expo-router';
 import NotificationDropdown from '@/components/NotificationDropdown';
 import { supabase } from '@/lib/supabase';
 import { useQuery } from '@tanstack/react-query';
-import { trpc } from '@/lib/trpc';
 import { getLastReadMap } from '@/utils/chat-read';
 
 const _bibleVerses = [
@@ -229,8 +228,30 @@ export default function HomeScreen() {
   const { currentChurch } = useChurch();
   const currentChurchId = currentChurch?.id ?? null;
   const userIsAdmin = isAdmin(user);
-  const pastorGroupsQuery = trpc.sabbaths.getMyPastorGroups.useQuery();
-  const pastorGroupIds = useMemo(() => (pastorGroupsQuery.data ?? []).map((g: any) => g.group_id as string), [pastorGroupsQuery.data]);
+  const pastorGroupsQuery = useQuery({
+    queryKey: ['home-pastor-groups', user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      if (!user?.id) return [] as { id: string; group_id: string; user_id: string }[];
+
+      const { data, error } = await supabase
+        .from('group_pastors')
+        .select('id, group_id, user_id')
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.warn('[Home] pastor groups fetch error:', error.message);
+        return [] as { id: string; group_id: string; user_id: string }[];
+      }
+
+      return (data ?? []) as { id: string; group_id: string; user_id: string }[];
+    },
+  });
+
+  const pastorGroupIds = useMemo(
+    () => (pastorGroupsQuery.data ?? []).map((g) => g.group_id),
+    [pastorGroupsQuery.data]
+  );
   const homeProfileQuery = useQuery({
   queryKey: ['home-profile-for-sabbath', user?.id],
   enabled: !!user?.id,

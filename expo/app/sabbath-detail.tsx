@@ -83,7 +83,7 @@ export default function SabbathDetailScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-
+  
   const detailQuery = useQuery<SabbathDetailView>({
     queryKey: ['sabbath-detail', sabbathId, user?.id],
     enabled: !!sabbathId && !!user?.id,
