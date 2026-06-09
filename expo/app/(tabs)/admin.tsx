@@ -4,8 +4,7 @@ import { Stack } from 'expo-router';
 import { Users, Shield, Plus, Check, UserPlus, Church, BookOpen, Youtube, Edit, Trash2, Ban, RefreshCw, ChevronDown, ChevronUp, X, Globe } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
-import { canAccessAdminPanel } from '@/utils/permissions';
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '@/lib/trpc';
 import type { Sermon } from '@/types/sermon';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -25,28 +24,69 @@ export default function AdminTabScreen() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<AdminTab>('users');
+
+  const isAdminUser = user?.role === 'admin';
+  const isChurchLeaderUser = user?.role === 'church_leader';
+
+  const currentUserProfileQuery = useQuery({
+    queryKey: ['admin-current-user-profile', user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, role, home_group_id')
+        .eq('id', user!.id)
+        .single();
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return data as {
+        id: string;
+        role: Role;
+        home_group_id: string | null;
+      };
+    },
+  });
+
+  const userHomeGroupId =
+    currentUserProfileQuery.data?.home_group_id ??
+    ((user as any)?.home_group_id ?? (user as any)?.homeGroupId ?? null) as string | null;
   
   // Direct Supabase query (bypasses cold-starting Hono backend so the list
   // loads quickly and reliably). Admin uses RLS-permitted access to profiles.
-  type AdminUserRow = {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-    role: Role;
-    isBlocked: boolean;
-    createdAt: string;
-    displayName: string;
-    phone?: string;
-  };
+type AdminUserRow = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: Role;
+  isBlocked: boolean;
+  createdAt: string;
+  displayName: string;
+  phone?: string;
+  homeGroupId?: string | null;
+};
 
   const usersQuery = useQuery<AdminUserRow[]>({
-    queryKey: ['users', 'getAll'],
+    queryKey: ['users', 'getAll', user?.role, userHomeGroupId],
+    enabled: isAdminUser || (isChurchLeaderUser && !currentUserProfileQuery.isLoading),
     queryFn: async (): Promise<AdminUserRow[]> => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('profiles')
-        .select('id, email, full_name, display_name, role, is_blocked, created_at, phone')
+        .select('id, email, full_name, display_name, role, is_blocked, created_at, phone, home_group_id')
         .order('created_at', { ascending: false });
+
+      if (user?.role === 'church_leader') {
+        if (!userHomeGroupId) {
+          return [];
+        }
+
+        query = query.eq('home_group_id', userHomeGroupId);
+      }
+
+      const { data, error } = await query;
       if (error) throw new Error(error.message);
       const rows = (data ?? []) as Array<{
         id: string;
@@ -57,6 +97,7 @@ export default function AdminTabScreen() {
         is_blocked: boolean | null;
         created_at: string;
         phone: string | null;
+        home_group_id: string | null;
       }>;
       return rows
         .filter((p) => Boolean(p.email))
@@ -73,6 +114,7 @@ export default function AdminTabScreen() {
             createdAt: p.created_at,
             displayName: fullName,
             phone: p.phone ?? undefined,
+            homeGroupId: p.home_group_id,
           };
         });
     },
@@ -721,7 +763,15 @@ const addUserCountryMutation = useMutation({
     );
   };
 
-  if (!canAccessAdminPanel(user)) {
+  const canAccessChurchManagement = isAdminUser || isChurchLeaderUser;
+
+  React.useEffect(() => {
+    if (!isAdminUser && activeTab !== 'users') {
+      setActiveTab('users');
+    }
+  }, [isAdminUser, activeTab]);
+
+  if (!canAccessChurchManagement) {
     return (
       <View style={styles.container}>
         <Stack.Screen options={{ headerShown: false }} />
@@ -764,8 +814,15 @@ const addUserCountryMutation = useMutation({
           </TouchableOpacity>
         </View>
 
-        {usersQuery.isLoading ? (
+        {usersQuery.isLoading || currentUserProfileQuery.isLoading ? (
           <View style={styles.loadingRow}><ActivityIndicator color="#1e3a8a" /></View>
+        ) : isChurchLeaderUser && !userHomeGroupId ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorTitle}>No church assigned</Text>
+            <Text style={styles.errorMessage}>
+              This church leader does not have a home church assigned yet.
+            </Text>
+          </View>
         ) : usersQuery.isError ? (
           <View style={styles.errorContainer}>
             <Text style={styles.errorTitle}>Unable to load members</Text>
@@ -820,6 +877,8 @@ const addUserCountryMutation = useMutation({
                     <Text style={styles.userDetailValue}>{u.email}</Text>
                   </View>
 
+              {user?.role === 'admin' && (
+                <>
                   <Text style={styles.roleLabel}>Change Role:</Text>
                   <View style={styles.roleSelector}>
                     {roles.map((r) => (
@@ -848,27 +907,32 @@ const addUserCountryMutation = useMutation({
                       </TouchableOpacity>
                     ))}
                   </View>
+                </>
+              )}
 
-                  <View style={styles.userExpandedActions}>
-                    <TouchableOpacity
-                      style={[styles.userActionButton, u.isBlocked ? styles.userActionButtonWarning : styles.userActionButtonDefault]}
-                      onPress={() => handleBlockUser(u.id, `${u.firstName} ${u.lastName}`, u.isBlocked)}
-                      disabled={blockUserMutation.isPending}
-                    >
-                      <Ban size={14} color={u.isBlocked ? "#f97316" : "#64748b"} />
-                      <Text style={[styles.userActionButtonText, u.isBlocked && styles.userActionButtonTextWarning]}>
-                        {u.isBlocked ? 'Unblock' : 'Block'}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.userActionButton, styles.userActionButtonDanger]}
-                      onPress={() => handleDeleteUser(u.id, `${u.firstName} ${u.lastName}`)}
-                      disabled={deleteUserMutation.isPending}
-                    >
-                      <Trash2 size={14} color="#ef4444" />
-                      <Text style={styles.userActionButtonTextDanger}>Remove</Text>
-                    </TouchableOpacity>
-                  </View>
+              {user?.role === 'admin' && (
+                <View style={styles.userExpandedActions}>
+                  <TouchableOpacity
+                    style={[styles.userActionButton, u.isBlocked ? styles.userActionButtonWarning : styles.userActionButtonDefault]}
+                    onPress={() => handleBlockUser(u.id, `${u.firstName} ${u.lastName}`, u.isBlocked)}
+                    disabled={blockUserMutation.isPending}
+                  >
+                    <Ban size={14} color={u.isBlocked ? "#f97316" : "#64748b"} />
+                    <Text style={[styles.userActionButtonText, u.isBlocked && styles.userActionButtonTextWarning]}>
+                      {u.isBlocked ? 'Unblock' : 'Block'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.userActionButton, styles.userActionButtonDanger]}
+                    onPress={() => handleDeleteUser(u.id, `${u.firstName} ${u.lastName}`)}
+                    disabled={deleteUserMutation.isPending}
+                  >
+                    <Trash2 size={14} color="#ef4444" />
+                    <Text style={styles.userActionButtonTextDanger}>Remove</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
                 </View>
               )}
             </View>
@@ -877,80 +941,128 @@ const addUserCountryMutation = useMutation({
           <Text style={styles.emptyText}>No members found</Text>
         )}
       </View>
+    
+      {user?.role === 'admin' && (
+        <View style={styles.userSection}>
+          <TouchableOpacity
+            style={[
+              styles.userCardCollapsed,
+              addUserExpanded && styles.userCardCollapsedActive,
+            ]}
+            onPress={() => setAddUserExpanded(!addUserExpanded)}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.userAvatarCircle, { backgroundColor: '#16a34a' }]}>
+              <UserPlus size={18} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.userName}>Add New Member</Text>
+              <Text style={styles.userEmail}>Tap to expand and fill in details</Text>
+            </View>
+            {addUserExpanded ? (
+              <ChevronUp size={18} color="#1e3a8a" />
+            ) : (
+              <ChevronDown size={18} color="#64748b" />
+            )}
+          </TouchableOpacity>
 
-      <View style={styles.userSection}>
-        <TouchableOpacity
-          style={[
-            styles.userCardCollapsed,
-            addUserExpanded && styles.userCardCollapsedActive,
-          ]}
-          onPress={() => setAddUserExpanded(!addUserExpanded)}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.userAvatarCircle, { backgroundColor: '#16a34a' }]}>
-            <UserPlus size={18} color="#fff" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.userName}>Add New Member</Text>
-            <Text style={styles.userEmail}>Tap to expand and fill in details</Text>
-          </View>
-          {addUserExpanded ? (
-            <ChevronUp size={18} color="#1e3a8a" />
-          ) : (
-            <ChevronDown size={18} color="#64748b" />
+          {addUserExpanded && (
+            <View style={styles.userExpandedPanel}>
+              <View style={styles.row}>
+                <TextInput
+                  style={styles.inputInPanel}
+                  placeholder="First name"
+                  value={newUser.firstName}
+                  onChangeText={(t) => setNewUser((p) => ({ ...p, firstName: t }))}
+                  placeholderTextColor="#94a3b8"
+                />
+                <TextInput
+                  style={styles.inputInPanel}
+                  placeholder="Last name"
+                  value={newUser.lastName}
+                  onChangeText={(t) => setNewUser((p) => ({ ...p, lastName: t }))}
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
+
+              <TextInput
+                style={styles.inputInPanel}
+                placeholder="Email"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={newUser.email}
+                onChangeText={(t) => setNewUser((p) => ({ ...p, email: t }))}
+                placeholderTextColor="#94a3b8"
+              />
+
+              <TextInput
+                style={styles.inputInPanel}
+                placeholder="Phone (optional)"
+                keyboardType="phone-pad"
+                value={newUser.phone}
+                onChangeText={(t) => setNewUser((p) => ({ ...p, phone: t }))}
+                placeholderTextColor="#94a3b8"
+              />
+
+              <TextInput
+                style={styles.inputInPanel}
+                placeholder="Password"
+                secureTextEntry
+                value={newUser.password}
+                onChangeText={(t) => setNewUser((p) => ({ ...p, password: t }))}
+                placeholderTextColor="#94a3b8"
+              />
+
+              <Text style={styles.roleLabel}>Select Role:</Text>
+              <View style={styles.roleSelectorInline}>
+                {roles.map((r) => (
+                  <TouchableOpacity
+                    key={r}
+                    style={[styles.roleChip, newUser.role === r && styles.roleChipActive]}
+                    onPress={() => setNewUser((p) => ({ ...p, role: r }))}
+                  >
+                    <Text style={[styles.roleChipText, newUser.role === r && styles.roleChipTextActive]}>
+                      {getRoleDisplayName(r)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <TouchableOpacity
+                testID="create-user-button"
+                style={[styles.primaryButton, createUserMutation.isPending && { opacity: 0.7 }]}
+                onPress={() => {
+                  if (!newUser.firstName || !newUser.lastName || !newUser.email || !newUser.password) {
+                    Alert.alert('Missing Information', 'Please fill in first name, last name, email, and password.');
+                    return;
+                  }
+
+                  createUserMutation.mutate({
+                    email: newUser.email,
+                    password: newUser.password,
+                    firstName: newUser.firstName,
+                    lastName: newUser.lastName,
+                    phone: newUser.phone || undefined,
+                    role: newUser.role,
+                    permissions: [],
+                  });
+                }}
+              >
+                {createUserMutation.isPending ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <View style={styles.buttonContent}>
+                    <Plus size={18} color="#fff" />
+                    <Text style={styles.primaryButtonText}>Add Member</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
           )}
-        </TouchableOpacity>
-
-        {addUserExpanded && (
-          <View style={styles.userExpandedPanel}>
-            <View style={styles.row}>
-              <TextInput style={styles.inputInPanel} placeholder="First name" value={newUser.firstName} onChangeText={(t)=>setNewUser((p)=>({...p, firstName:t}))} placeholderTextColor="#94a3b8" />
-              <TextInput style={styles.inputInPanel} placeholder="Last name" value={newUser.lastName} onChangeText={(t)=>setNewUser((p)=>({...p, lastName:t}))} placeholderTextColor="#94a3b8" />
-            </View>
-            <TextInput style={styles.inputInPanel} placeholder="Email" autoCapitalize="none" keyboardType="email-address" value={newUser.email} onChangeText={(t)=>setNewUser((p)=>({...p, email:t}))} placeholderTextColor="#94a3b8" />
-            <TextInput style={styles.inputInPanel} placeholder="Phone (optional)" keyboardType="phone-pad" value={newUser.phone} onChangeText={(t)=>setNewUser((p)=>({...p, phone:t}))} placeholderTextColor="#94a3b8" />
-            <TextInput style={styles.inputInPanel} placeholder="Password" secureTextEntry value={newUser.password} onChangeText={(t)=>setNewUser((p)=>({...p, password:t}))} placeholderTextColor="#94a3b8" />
-
-            <Text style={styles.roleLabel}>Select Role:</Text>
-            <View style={styles.roleSelectorInline}>
-              {roles.map((r) => (
-                <TouchableOpacity key={r} style={[styles.roleChip, newUser.role === r && styles.roleChipActive]} onPress={()=>setNewUser((p)=>({...p, role: r}))}>
-                  <Text style={[styles.roleChipText, newUser.role === r && styles.roleChipTextActive]}>{getRoleDisplayName(r)}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <TouchableOpacity
-              testID="create-user-button"
-              style={[styles.primaryButton, createUserMutation.isPending && { opacity: 0.7 }]}
-              onPress={() => {
-                if (!newUser.firstName || !newUser.lastName || !newUser.email || !newUser.password) {
-                  Alert.alert('Missing Information', 'Please fill in first name, last name, email, and password.');
-                  return;
-                }
-                createUserMutation.mutate({
-                  email: newUser.email,
-                  password: newUser.password,
-                  firstName: newUser.firstName,
-                  lastName: newUser.lastName,
-                  phone: newUser.phone || undefined,
-                  role: newUser.role,
-                  permissions: [],
-                });
-              }}
-            >
-              {createUserMutation.isPending ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <View style={styles.buttonContent}><Plus size={18} color="#fff" /><Text style={styles.primaryButtonText}>Add Member</Text></View>
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
+        </View>
+      )}
     </>
-  );
-
+  );  
   const renderSermonsTab = () => (
     <>
       <View style={styles.card}>
@@ -1566,33 +1678,40 @@ const addUserCountryMutation = useMutation({
             <Users size={16} color={activeTab === 'users' ? '#1e3a8a' : '#64748b'} />
             <Text style={[styles.tabText, activeTab === 'users' && styles.tabTextActive]}>Members</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'sermons' && styles.tabActive]}
-            onPress={() => setActiveTab('sermons')}
-          >
-            <BookOpen size={16} color={activeTab === 'sermons' ? '#1e3a8a' : '#64748b'} />
-            <Text style={[styles.tabText, activeTab === 'sermons' && styles.tabTextActive]}>Sermons</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'groups' && styles.tabActive]}
-            onPress={() => setActiveTab('groups')}
-          >
-            <Church size={16} color={activeTab === 'groups' ? '#1e3a8a' : '#64748b'} />
-            <Text style={[styles.tabText, activeTab === 'groups' && styles.tabTextActive]}>Groups</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'countries' && styles.tabActive]}
-            onPress={() => setActiveTab('countries')}
-          >
-            <Globe size={16} color={activeTab === 'countries' ? '#1e3a8a' : '#64748b'} />
-            <Text style={[styles.tabText, activeTab === 'countries' && styles.tabTextActive]}>Countries</Text>
-          </TouchableOpacity>
+
+          {isAdminUser && (
+            <>
+              <TouchableOpacity
+                style={[styles.tab, activeTab === 'sermons' && styles.tabActive]}
+                onPress={() => setActiveTab('sermons')}
+              >
+                <BookOpen size={16} color={activeTab === 'sermons' ? '#1e3a8a' : '#64748b'} />
+                <Text style={[styles.tabText, activeTab === 'sermons' && styles.tabTextActive]}>Sermons</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.tab, activeTab === 'groups' && styles.tabActive]}
+                onPress={() => setActiveTab('groups')}
+              >
+                <Church size={16} color={activeTab === 'groups' ? '#1e3a8a' : '#64748b'} />
+                <Text style={[styles.tabText, activeTab === 'groups' && styles.tabTextActive]}>Groups</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.tab, activeTab === 'countries' && styles.tabActive]}
+                onPress={() => setActiveTab('countries')}
+              >
+                <Globe size={16} color={activeTab === 'countries' ? '#1e3a8a' : '#64748b'} />
+                <Text style={[styles.tabText, activeTab === 'countries' && styles.tabTextActive]}>Countries</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
         {activeTab === 'users' && renderUsersTab()}
-        {activeTab === 'sermons' && renderSermonsTab()}
-        {activeTab === 'groups' && renderGroupsTab()}
-        {activeTab === 'countries' && renderCountriesTab()}
+        {isAdminUser && activeTab === 'sermons' && renderSermonsTab()}
+        {isAdminUser && activeTab === 'groups' && renderGroupsTab()}
+        {isAdminUser && activeTab === 'countries' && renderCountriesTab()}
 
         <View style={styles.spacer} />
       </ScrollView>
