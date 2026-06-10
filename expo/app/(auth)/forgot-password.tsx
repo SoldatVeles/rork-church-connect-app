@@ -1,8 +1,7 @@
-import * as Linking from 'expo-linking';
 import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowLeft, Mail, CheckCircle } from 'lucide-react-native';
+import { ArrowLeft, Mail, CheckCircle, Lock, Eye, EyeOff } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
@@ -19,11 +18,18 @@ import {
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 
+type ResetStep = 'email' | 'code' | 'password' | 'done';
+
 export default function ForgotPasswordScreen() {
   const params = useLocalSearchParams<{ email?: string }>();
   const [email, setEmail] = useState<string>('');
+  const [code, setCode] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
+  const [confirmPassword, setConfirmPassword] = useState<string>('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState<boolean>(false);
+  const [step, setStep] = useState<ResetStep>('email');
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [isSent, setIsSent] = useState<boolean>(false);
 
   useEffect(() => {
     const paramEmail = typeof params.email === 'string' ? params.email : '';
@@ -32,42 +38,289 @@ export default function ForgotPasswordScreen() {
     }
   }, [params.email]);
 
-  const handleResetPassword = async () => {
-const cleanedEmail = email.trim().toLowerCase();
+  const cleanEmail = () => email.trim().toLowerCase();
 
-if (!cleanedEmail) {
-  Alert.alert('Missing email', 'Please enter your email address.');
-  return;
-}
+  const isValidEmail = (value: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+  };
 
-if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanedEmail)) {
-  Alert.alert('Invalid email', 'Please enter a valid email address.');
-  return;
-}
+  const handleSendCode = async () => {
+    const cleanedEmail = cleanEmail();
+
+    if (!cleanedEmail) {
+      Alert.alert('Missing email', 'Please enter your email address.');
+      return;
+    }
+
+    if (!isValidEmail(cleanedEmail)) {
+      Alert.alert('Invalid email', 'Please enter a valid email address.');
+      return;
+    }
 
     setIsLoading(true);
-    try {
-const redirectTo = Linking.createURL('/reset-password');
 
-const { error } = await supabase.auth.resetPasswordForEmail(cleanedEmail, {
-  redirectTo,
-});
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanedEmail);
 
       if (error) {
-        console.log('[ForgotPassword] Error:', error.message);
         Alert.alert('Error', error.message);
-      } else {
-      console.log('[ForgotPassword] Reset email sent to:', cleanedEmail);
-      setEmail(cleanedEmail);
-      setIsSent(true);
+        return;
       }
+
+      setEmail(cleanedEmail);
+      setCode('');
+      setStep('code');
+      Alert.alert('Code sent', 'Please check your email for the 6-digit reset code.');
     } catch (err) {
-      console.log('[ForgotPassword] Unexpected error:', err);
+      console.log('[ForgotPassword] Send code error:', err);
       Alert.alert('Error', 'Something went wrong. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
+
+  const handleVerifyCode = async () => {
+    const cleanedEmail = cleanEmail();
+    const cleanedCode = code.trim();
+
+    if (!cleanedEmail || !cleanedCode) {
+      Alert.alert('Missing information', 'Please enter your email and reset code.');
+      return;
+    }
+
+    if (cleanedCode.length !== 6) {
+      Alert.alert('Invalid code', 'Please enter the 6-digit code from your email.');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        email: cleanedEmail,
+        token: cleanedCode,
+        type: 'recovery',
+      });
+
+      if (error) {
+        Alert.alert('Invalid code', error.message);
+        return;
+      }
+
+      setStep('password');
+    } catch (err) {
+      console.log('[ForgotPassword] Verify code error:', err);
+      Alert.alert('Error', 'Could not verify the code. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUpdatePassword = async () => {
+    const cleanedPassword = password.trim();
+    const cleanedConfirmPassword = confirmPassword.trim();
+
+    if (!cleanedPassword || !cleanedConfirmPassword) {
+      Alert.alert('Missing information', 'Please enter and confirm your new password.');
+      return;
+    }
+
+    if (cleanedPassword.length < 6) {
+      Alert.alert('Password too short', 'Please use at least 6 characters.');
+      return;
+    }
+
+    if (cleanedPassword !== cleanedConfirmPassword) {
+      Alert.alert('Passwords do not match', 'Please enter the same password twice.');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: cleanedPassword,
+      });
+
+      if (error) {
+        Alert.alert('Error', error.message);
+        return;
+      }
+
+      setStep('done');
+    } catch (err) {
+      console.log('[ForgotPassword] Update password error:', err);
+      Alert.alert('Error', 'Could not update your password. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const renderEmailStep = () => (
+    <>
+      <View style={styles.inputContainer}>
+        <Mail size={20} color="#64748b" style={styles.inputIcon} />
+        <TextInput
+          style={styles.input}
+          placeholder="Email address"
+          placeholderTextColor="#64748b"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoComplete="email"
+          autoFocus
+          testID="email-input"
+        />
+      </View>
+
+      <TouchableOpacity
+        style={[styles.primaryButton, isLoading && styles.primaryButtonDisabled]}
+        onPress={handleSendCode}
+        disabled={isLoading}
+        testID="send-code-button"
+      >
+        {isLoading ? (
+          <ActivityIndicator color="white" />
+        ) : (
+          <Text style={styles.primaryButtonText}>Send Reset Code</Text>
+        )}
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.loginLink} onPress={() => router.back()}>
+        <Text style={styles.loginText}>
+          Remember your password? <Text style={styles.loginTextBold}>Sign In</Text>
+        </Text>
+      </TouchableOpacity>
+    </>
+  );
+
+  const renderCodeStep = () => (
+    <>
+      <Text style={styles.infoText}>
+        We sent a 6-digit reset code to{'\n'}
+        <Text style={styles.infoEmail}>{email}</Text>
+      </Text>
+
+      <View style={styles.inputContainer}>
+        <CheckCircle size={20} color="#64748b" style={styles.inputIcon} />
+        <TextInput
+          style={styles.input}
+          placeholder="6-digit code"
+          placeholderTextColor="#64748b"
+          value={code}
+          onChangeText={(value) => setCode(value.replace(/\D/g, '').slice(0, 6))}
+          keyboardType="number-pad"
+          autoFocus
+          maxLength={6}
+          testID="code-input"
+        />
+      </View>
+
+      <TouchableOpacity
+        style={[styles.primaryButton, isLoading && styles.primaryButtonDisabled]}
+        onPress={handleVerifyCode}
+        disabled={isLoading}
+        testID="verify-code-button"
+      >
+        {isLoading ? (
+          <ActivityIndicator color="white" />
+        ) : (
+          <Text style={styles.primaryButtonText}>Verify Code</Text>
+        )}
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.loginLink}
+        onPress={handleSendCode}
+        disabled={isLoading}
+      >
+        <Text style={styles.loginText}>
+          Didn&apos;t receive it? <Text style={styles.loginTextBold}>Send again</Text>
+        </Text>
+      </TouchableOpacity>
+    </>
+  );
+
+  const renderPasswordStep = () => (
+    <>
+      <Text style={styles.infoText}>Enter your new password.</Text>
+
+      <View style={styles.inputContainer}>
+        <Lock size={20} color="#64748b" style={styles.inputIcon} />
+        <TextInput
+          style={styles.input}
+          placeholder="New password"
+          placeholderTextColor="#64748b"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry={!showPassword}
+          autoComplete="new-password"
+          testID="new-password-input"
+        />
+        <TouchableOpacity style={styles.eyeButton} onPress={() => setShowPassword(!showPassword)}>
+          {showPassword ? <EyeOff size={20} color="#64748b" /> : <Eye size={20} color="#64748b" />}
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.inputContainer}>
+        <Lock size={20} color="#64748b" style={styles.inputIcon} />
+        <TextInput
+          style={styles.input}
+          placeholder="Confirm new password"
+          placeholderTextColor="#64748b"
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+          secureTextEntry={!showConfirmPassword}
+          autoComplete="new-password"
+          testID="confirm-password-input"
+        />
+        <TouchableOpacity
+          style={styles.eyeButton}
+          onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+        >
+          {showConfirmPassword ? (
+            <EyeOff size={20} color="#64748b" />
+          ) : (
+            <Eye size={20} color="#64748b" />
+          )}
+        </TouchableOpacity>
+      </View>
+
+      <TouchableOpacity
+        style={[styles.primaryButton, isLoading && styles.primaryButtonDisabled]}
+        onPress={handleUpdatePassword}
+        disabled={isLoading}
+        testID="update-password-button"
+      >
+        {isLoading ? (
+          <ActivityIndicator color="white" />
+        ) : (
+          <Text style={styles.primaryButtonText}>Update Password</Text>
+        )}
+      </TouchableOpacity>
+    </>
+  );
+
+  const renderDoneStep = () => (
+    <View style={styles.successContainer} testID="reset-success">
+      <View style={styles.successIconWrapper}>
+        <CheckCircle size={56} color="#16a34a" />
+      </View>
+      <Text style={styles.successTitle}>Password updated</Text>
+      <Text style={styles.successText}>
+        Your password has been changed successfully. You can now sign in.
+      </Text>
+
+      <TouchableOpacity
+        style={styles.primaryButton}
+        onPress={() => router.replace('/(auth)/login')}
+        testID="back-to-login"
+      >
+        <Text style={styles.primaryButtonText}>Back to Sign In</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -77,10 +330,7 @@ const { error } = await supabase.auth.resetPasswordForEmail(cleanedEmail, {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
       >
-        <LinearGradient
-          colors={['#1e3a8a', '#3b82f6']}
-          style={styles.gradient}
-        >
+        <LinearGradient colors={['#1e3a8a', '#3b82f6']} style={styles.gradient}>
           <ScrollView
             style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
@@ -97,88 +347,21 @@ const { error } = await supabase.auth.resetPasswordForEmail(cleanedEmail, {
               </TouchableOpacity>
               <Text style={styles.title}>Reset Password</Text>
               <Text style={styles.subtitle}>
-                We&apos;ll send you a link to reset your password
+                {step === 'email'
+                  ? 'We will send you a 6-digit reset code'
+                  : step === 'code'
+                    ? 'Enter the code from your email'
+                    : step === 'password'
+                      ? 'Create a new password'
+                      : 'Your password was updated'}
               </Text>
             </View>
 
             <View style={styles.form}>
-              {isSent ? (
-                <View style={styles.successContainer} testID="reset-success">
-                  <View style={styles.successIconWrapper}>
-                    <CheckCircle size={56} color="#16a34a" />
-                  </View>
-                  <Text style={styles.successTitle}>Check your inbox</Text>
-                  <Text style={styles.successText}>
-                    We sent a password reset link to{'\n'}
-                    <Text style={styles.successEmail}>{email}</Text>
-                  </Text>
-                  <Text style={styles.successHint}>
-                    If you don&apos;t see the email, check your spam folder.
-                  </Text>
-
-                  <TouchableOpacity
-                    style={styles.backToLoginButton}
-                    onPress={() => router.replace('/(auth)/login')}
-                    testID="back-to-login"
-                  >
-                    <Text style={styles.backToLoginText}>Back to Sign In</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.resendLink}
-                    onPress={() => {
-                      setIsSent(false);
-                    }}
-                    testID="resend-button"
-                  >
-                    <Text style={styles.resendText}>
-                      Didn&apos;t receive it?{' '}
-                      <Text style={styles.resendTextBold}>Send again</Text>
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <>
-                  <View style={styles.inputContainer}>
-                    <Mail size={20} color="#64748b" style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Email address"
-                      placeholderTextColor="#64748b"
-                      value={email}
-                      onChangeText={setEmail}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      autoComplete="email"
-                      autoFocus
-                      testID="email-input"
-                    />
-                  </View>
-
-                  <TouchableOpacity
-                    style={[styles.resetButton, isLoading && styles.resetButtonDisabled]}
-                    onPress={handleResetPassword}
-                    disabled={isLoading}
-                    testID="reset-button"
-                  >
-                    {isLoading ? (
-                      <ActivityIndicator color="white" />
-                    ) : (
-                      <Text style={styles.resetButtonText}>Send Reset Link</Text>
-                    )}
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.loginLink}
-                    onPress={() => router.back()}
-                  >
-                    <Text style={styles.loginText}>
-                      Remember your password?{' '}
-                      <Text style={styles.loginTextBold}>Sign In</Text>
-                    </Text>
-                  </TouchableOpacity>
-                </>
-              )}
+              {step === 'email' && renderEmailStep()}
+              {step === 'code' && renderCodeStep()}
+              {step === 'password' && renderPasswordStep()}
+              {step === 'done' && renderDoneStep()}
             </View>
           </ScrollView>
         </LinearGradient>
@@ -242,17 +425,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#1e293b',
   },
-  resetButton: {
+  eyeButton: {
+    padding: 4,
+  },
+  primaryButton: {
     backgroundColor: '#1e3a8a',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center' as const,
     marginTop: 8,
+    width: '100%',
   },
-  resetButtonDisabled: {
+  primaryButtonDisabled: {
     opacity: 0.7,
   },
-  resetButtonText: {
+  primaryButtonText: {
     fontSize: 16,
     fontWeight: '600' as const,
     color: 'white',
@@ -266,6 +453,17 @@ const styles = StyleSheet.create({
     color: '#64748b',
   },
   loginTextBold: {
+    fontWeight: '600' as const,
+    color: '#1e3a8a',
+  },
+  infoText: {
+    fontSize: 15,
+    color: '#475569',
+    textAlign: 'center' as const,
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  infoEmail: {
     fontWeight: '600' as const,
     color: '#1e3a8a',
   },
@@ -293,41 +491,6 @@ const styles = StyleSheet.create({
     color: '#475569',
     textAlign: 'center' as const,
     lineHeight: 22,
-    marginBottom: 8,
-  },
-  successEmail: {
-    fontWeight: '600' as const,
-    color: '#1e3a8a',
-  },
-  successHint: {
-    fontSize: 13,
-    color: '#94a3b8',
-    textAlign: 'center' as const,
-    marginBottom: 32,
-  },
-  backToLoginButton: {
-    backgroundColor: '#1e3a8a',
-    paddingVertical: 16,
-    paddingHorizontal: 48,
-    borderRadius: 12,
-    alignItems: 'center' as const,
-    width: '100%',
-  },
-  backToLoginText: {
-    fontSize: 16,
-    fontWeight: '600' as const,
-    color: 'white',
-  },
-  resendLink: {
-    marginTop: 20,
-    alignItems: 'center' as const,
-  },
-  resendText: {
-    fontSize: 14,
-    color: '#64748b',
-  },
-  resendTextBold: {
-    fontWeight: '600' as const,
-    color: '#1e3a8a',
+    marginBottom: 24,
   },
 });
