@@ -62,6 +62,35 @@ const ASSIGNMENT_COLORS: Record<SabbathAssignmentStatus, { bg: string; text: str
   reassigned: { bg: '#f3e8ff', text: '#6b21a8' },
 };
 
+type AssignableMember = {
+  id: string;
+  name: string;
+  role: string | null;
+};
+
+type AssignableMemberSection = {
+  groupId: string;
+  groupName: string;
+  countryName: string | null;
+  isTargetChurch: boolean;
+  members: AssignableMember[];
+};
+
+function formatAssignableRole(role: string | null | undefined): string {
+  switch (role) {
+    case 'admin':
+      return 'Admin';
+    case 'church_leader':
+      return 'Church Leader';
+    case 'pastor':
+      return 'Pastor';
+    case 'member':
+      return 'Member';
+    default:
+      return '';
+  }
+}
+
 function formatSabbathDate(dateStr: string): string {
   const date = new Date(dateStr + 'T00:00:00');
   return date.toLocaleDateString('en-US', {
@@ -124,9 +153,10 @@ export default function SabbathDetailScreen() {
       const assignmentsList = (assignmentsRes.data ?? []) as any[];
       const isAssignedUserVal = assignmentsList.some((a) => a.user_id === user.id);
 
-      const shouldShowAssignmentsVal =
-        sabbathRec.status === 'published' ||
-        (canManageVal && (sabbathRec.status === 'draft' || sabbathRec.status === 'cancelled'));
+const shouldShowAssignmentsVal =
+  sabbathRec.status === 'published' ||
+  (sabbathRec.status !== 'cancelled' && isAssignedUserVal) ||
+  (canManageVal && (sabbathRec.status === 'draft' || sabbathRec.status === 'cancelled'));
 
       let assignmentsOut: SabbathAssignment[] = [];
       if (shouldShowAssignmentsVal && assignmentsList.length > 0) {
@@ -176,7 +206,7 @@ export default function SabbathDetailScreen() {
 
       const myAttendanceStatusVal = (myAttRes.data as any)?.status ?? null;
       const canRespondAttendanceVal = sabbathRec.status === 'published';
-      const canRespondAssignmentVal = sabbathRec.status === 'published' && isAssignedUserVal;
+      const canRespondAssignmentVal = sabbathRec.status !== 'cancelled' && isAssignedUserVal;
 
       return {
         sabbath: sabbathRec,
@@ -208,36 +238,67 @@ export default function SabbathDetailScreen() {
 
   const upcoming = sabbath ? isUpcoming(sabbath.sabbath_date) : false;
 
-const fetchGroupedMembers = useCallback(async (primaryGroupId: string) => {
+const fetchGroupedMembers = useCallback(async (primaryGroupId: string): Promise<AssignableMemberSection[]> => {
   const { data, error } = await supabase.rpc('get_sabbath_assignable_members', {
     target_group_id: primaryGroupId,
   });
 
   if (error) {
     console.warn('[SabbathDetail] assignable members rpc error:', error.message);
-    return [] as {
-      groupId: string;
-      groupName: string;
-      members: { id: string; name: string }[];
-    }[];
+    return [];
   }
 
-  const { data: group } = await supabase
-    .from('groups')
-    .select('id, name')
-    .eq('id', primaryGroupId)
-    .maybeSingle();
+  const sectionMap = new Map<
+    string,
+    AssignableMemberSection & { memberIds: Set<string> }
+  >();
 
-  return [
-    {
-      groupId: primaryGroupId,
-      groupName: (group as any)?.name ?? 'Your Church',
-      members: ((data ?? []) as any[]).map((member) => ({
-        id: member.id as string,
-        name: member.name as string,
-      })),
-    },
-  ];
+  ((data ?? []) as any[]).forEach((row) => {
+    const memberId = (row.id ?? row.user_id) as string | undefined;
+    const groupId = (row.group_id ?? row.home_group_id) as string | undefined;
+
+    if (!memberId || !groupId) return;
+
+    const groupName = (row.group_name ?? row.home_church_name ?? 'Unknown Church') as string;
+    const countryName = (row.country_name ?? null) as string | null;
+    const isTargetChurch = Boolean(row.is_target_church) || groupId === primaryGroupId;
+
+    if (!sectionMap.has(groupId)) {
+      sectionMap.set(groupId, {
+        groupId,
+        groupName,
+        countryName,
+        isTargetChurch,
+        members: [],
+        memberIds: new Set<string>(),
+      });
+    }
+
+    const section = sectionMap.get(groupId)!;
+
+    if (section.memberIds.has(memberId)) return;
+
+    section.memberIds.add(memberId);
+    section.members.push({
+      id: memberId,
+      name: (row.name ?? row.full_name ?? row.display_name ?? row.email ?? 'Unknown') as string,
+      role: (row.role ?? null) as string | null,
+    });
+  });
+
+  return Array.from(sectionMap.values())
+    .map((section) => ({
+      groupId: section.groupId,
+      groupName: section.groupName,
+      countryName: section.countryName,
+      isTargetChurch: section.isTargetChurch,
+      members: section.members.sort((a, b) => a.name.localeCompare(b.name)),
+    }))
+    .sort((a, b) => {
+      if (a.isTargetChurch && !b.isTargetChurch) return -1;
+      if (!a.isTargetChurch && b.isTargetChurch) return 1;
+      return a.groupName.localeCompare(b.groupName);
+    });
 }, []);
 
   const groupedMembersQuery = useQuery({
@@ -351,6 +412,7 @@ const publishMutation = useMutation({
         title: 'New Sabbath Published',
         body: `A Sabbath service for ${churchName} on ${readableDate} has been published.`,
         user_id: recipientId,
+        sabbath_id: sid,
       }));
 
       if (notificationRows.length > 0) {
@@ -470,6 +532,7 @@ const cancelMutation = useMutation({
         title: 'Sabbath Cancelled',
         body: `The Sabbath service for ${churchName} on ${readableDate} has been cancelled.${reasonText}`,
         user_id: recipientId,
+        sabbath_id: sid,
       }));
 
       if (notificationRows.length > 0) {
@@ -526,6 +589,37 @@ const assignRoleMutation = useMutation({
     role: SabbathRole;
     userId: string;
   }) => {
+    const { data: sabbathRow, error: sabbathError } = await supabase
+      .from('sabbaths')
+      .select('id, group_id, sabbath_date')
+      .eq('id', sid)
+      .single();
+
+    if (sabbathError || !sabbathRow) {
+      throw new Error(sabbathError?.message ?? 'Sabbath not found');
+    }
+
+    const currentSabbath = sabbathRow as {
+      id: string;
+      group_id: string;
+      sabbath_date: string;
+    };
+
+    const { data: existingAssignment } = await supabase
+      .from('sabbath_assignments')
+      .select('user_id')
+      .eq('sabbath_id', sid)
+      .eq('role', role)
+      .maybeSingle();
+
+    const previousUserId = (existingAssignment as any)?.user_id as string | null | undefined;
+
+    const { data: groupRow } = await supabase
+      .from('groups')
+      .select('id, name')
+      .eq('id', currentSabbath.group_id)
+      .maybeSingle();
+
     const { error } = await supabase.rpc('assign_sabbath_role', {
       target_sabbath_id: sid,
       target_role: role,
@@ -535,8 +629,36 @@ const assignRoleMutation = useMutation({
     if (error) {
       throw new Error(error.message);
     }
+
+    if (previousUserId === userId) {
+      return;
+    }
+
+    const churchName = (groupRow as any)?.name ?? 'a church';
+    const readableDate = formatSabbathDate(currentSabbath.sabbath_date);
+    const roleName = ROLE_LABELS[role] ?? role;
+
+    const { error: notificationError } = await supabase
+      .from('notifications')
+      .insert({
+        type: 'sabbath',
+        title: 'New Sabbath Assignment',
+        body: `You have been assigned as ${roleName} for ${churchName} on ${readableDate}.`,
+        user_id: userId,
+        sabbath_id: sid,
+      });
+
+    if (notificationError) {
+      console.warn(
+        '[SabbathDetail] Failed to create assignment notification:',
+        notificationError.message
+      );
+    }
   },
-  onSuccess: invalidateAll,
+  onSuccess: () => {
+    invalidateAll();
+    void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+  },
 });
 
   const acceptMutation = useMutation({
@@ -669,6 +791,7 @@ const declineMutation = useMutation({
         title: 'Assignment Declined',
         body: `${responderName} declined the ${ROLE_LABELS[assignment.role]} assignment for ${churchName} on ${readableDate}.${reasonText}`,
         user_id: recipientId,
+        sabbath_id: assignment.sabbath_id,
       }));
 
       const { error: notificationError } = await supabase
@@ -842,6 +965,7 @@ const suggestReplacementMutation = useMutation({
         title: 'Replacement Suggested',
         body: `${requesterName} suggested ${suggestedName} as replacement for the ${ROLE_LABELS[assignment.role]} assignment at ${churchName} on ${readableDate}.`,
         user_id: recipientId,
+        sabbath_id: assignment.sabbath_id,
       }));
 
       const { error: notificationError } = await supabase
@@ -868,6 +992,7 @@ const suggestReplacementMutation = useMutation({
 
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assigningRole, setAssigningRole] = useState<SabbathRole | null>(null);
+  const [expandedAssignableChurchIds, setExpandedAssignableChurchIds] = useState<Set<string>>(new Set());
   const [declineReason, setDeclineReason] = useState('');
   const [showDeclineModal, setShowDeclineModal] = useState(false);
   const [decliningAssignment, setDecliningAssignment] = useState<SabbathAssignment | null>(null);
@@ -878,6 +1003,34 @@ const suggestReplacementMutation = useMutation({
   const [suggestingAssignment, setSuggestingAssignment] = useState<SabbathAssignment | null>(null);
 
   const groupedMembers = useMemo(() => groupedMembersQuery.data ?? [], [groupedMembersQuery.data]);
+  const targetChurchSections = useMemo(
+  () => groupedMembers.filter((section) => section.isTargetChurch),
+  [groupedMembers]
+);
+
+const otherCountrySections = useMemo(
+  () => groupedMembers.filter((section) => !section.isTargetChurch),
+  [groupedMembers]
+);
+
+const assignableCountryName =
+  otherCountrySections[0]?.countryName ??
+  targetChurchSections[0]?.countryName ??
+  'Same Country';
+
+const toggleAssignableChurch = useCallback((groupId: string) => {
+  setExpandedAssignableChurchIds((prev) => {
+    const next = new Set(prev);
+
+    if (next.has(groupId)) {
+      next.delete(groupId);
+    } else {
+      next.add(groupId);
+    }
+
+    return next;
+  });
+}, []);
 
   const suggestGroupedMembersQuery = useQuery({
     queryKey: ['sabbath-grouped-members', sabbath?.group_id, 'suggest'],
@@ -1528,52 +1681,116 @@ const handleAcceptAssignment = useCallback(
             <Text style={styles.modalTitle}>
               Assign {assigningRole ? ROLE_LABELS[assigningRole] : ''}
             </Text>
-            <ScrollView style={styles.membersList} showsVerticalScrollIndicator={false}>
-              {groupedMembers.length === 0 ? (
-                <View style={styles.emptyMembers}>
-                  <Users size={32} color="#cbd5e1" />
-                  <Text style={styles.emptyMembersText}>No group members found</Text>
-                </View>
-              ) : (
-                groupedMembers.map((section) => (
-                  <View key={section.groupId}>
-                    <View style={styles.groupSectionHeader}>
-                      <View style={[
-                        styles.groupSectionDot,
-                        section.groupId === sabbath?.group_id && styles.groupSectionDotPrimary,
-                      ]} />
-                      <Text style={[
-                        styles.groupSectionTitle,
-                        section.groupId === sabbath?.group_id && styles.groupSectionTitlePrimary,
-                      ]}>
-                        {section.groupName}
-                      </Text>
-                      {section.groupId === sabbath?.group_id && (
-                        <View style={styles.yourChurchBadge}>
-                          <Text style={styles.yourChurchBadgeText}>Your Church</Text>
-                        </View>
-                      )}
-                    </View>
-                    {section.members.map((m) => (
-                      <TouchableOpacity
-                        key={m.id}
-                        style={styles.memberItem}
-                        onPress={() => handleAssign(m.id)}
-                        disabled={assignRoleMutation.isPending}
-                      >
-                        <View style={styles.memberAvatar}>
-                          <Text style={styles.memberAvatarText}>
-                            {m.name.charAt(0).toUpperCase()}
-                          </Text>
-                        </View>
-                        <Text style={styles.memberName}>{m.name}</Text>
-                        <ChevronDown size={16} color="#94a3b8" style={{ transform: [{ rotate: '-90deg' }] }} />
-                      </TouchableOpacity>
-                    ))}
+<ScrollView style={styles.membersList} showsVerticalScrollIndicator={false}>
+  {groupedMembersQuery.isLoading ? (
+    <View style={styles.emptyMembers}>
+      <ActivityIndicator size="large" color="#1e3a8a" />
+      <Text style={styles.emptyMembersText}>Loading members...</Text>
+    </View>
+  ) : groupedMembers.length === 0 ? (
+    <View style={styles.emptyMembers}>
+      <Users size={32} color="#cbd5e1" />
+      <Text style={styles.emptyMembersText}>No assignable members found</Text>
+    </View>
+  ) : (
+    <>
+      {targetChurchSections.map((section) => (
+        <View key={section.groupId}>
+          <View style={styles.groupSectionHeader}>
+            <View style={[styles.groupSectionDot, styles.groupSectionDotPrimary]} />
+            <Text style={[styles.groupSectionTitle, styles.groupSectionTitlePrimary]}>
+              {section.groupName}
+            </Text>
+            <View style={styles.yourChurchBadge}>
+              <Text style={styles.yourChurchBadgeText}>Selected Church</Text>
+            </View>
+          </View>
+
+          {section.members.map((m) => (
+            <TouchableOpacity
+              key={m.id}
+              style={styles.memberItem}
+              onPress={() => handleAssign(m.id)}
+              disabled={assignRoleMutation.isPending}
+            >
+              <View style={styles.memberAvatar}>
+                <Text style={styles.memberAvatarText}>
+                  {m.name.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+
+              <View style={styles.memberTextBlock}>
+                <Text style={styles.memberName}>{m.name}</Text>
+                {!!formatAssignableRole(m.role) && (
+                  <Text style={styles.memberRole}>{formatAssignableRole(m.role)}</Text>
+                )}
+              </View>
+
+              <ChevronDown size={16} color="#94a3b8" style={{ transform: [{ rotate: '-90deg' }] }} />
+            </TouchableOpacity>
+          ))}
+        </View>
+      ))}
+
+      {otherCountrySections.length > 0 && (
+        <View style={styles.countrySection}>
+          <Text style={styles.countrySectionTitle}>{assignableCountryName}</Text>
+
+          {otherCountrySections.map((section) => {
+            const isExpanded = expandedAssignableChurchIds.has(section.groupId);
+
+            return (
+              <View key={section.groupId}>
+                <TouchableOpacity
+                  style={styles.collapsibleGroupHeader}
+                  onPress={() => toggleAssignableChurch(section.groupId)}
+                >
+                  <View style={styles.groupHeaderMain}>
+                    <Text style={styles.collapsibleGroupTitle}>{section.groupName}</Text>
+                    <Text style={styles.groupMemberCount}>
+                      {section.members.length} {section.members.length === 1 ? 'person' : 'people'}
+                    </Text>
                   </View>
-                ))
-              )}
-            </ScrollView>
+
+                  <ChevronDown
+                    size={18}
+                    color="#64748b"
+                    style={{ transform: [{ rotate: isExpanded ? '180deg' : '0deg' }] }}
+                  />
+                </TouchableOpacity>
+
+                {isExpanded &&
+                  section.members.map((m) => (
+                    <TouchableOpacity
+                      key={m.id}
+                      style={styles.memberItem}
+                      onPress={() => handleAssign(m.id)}
+                      disabled={assignRoleMutation.isPending}
+                    >
+                      <View style={styles.memberAvatar}>
+                        <Text style={styles.memberAvatarText}>
+                          {m.name.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+
+                      <View style={styles.memberTextBlock}>
+                        <Text style={styles.memberName}>{m.name}</Text>
+                        {!!formatAssignableRole(m.role) && (
+                          <Text style={styles.memberRole}>{formatAssignableRole(m.role)}</Text>
+                        )}
+                      </View>
+
+                      <ChevronDown size={16} color="#94a3b8" style={{ transform: [{ rotate: '-90deg' }] }} />
+                    </TouchableOpacity>
+                  ))}
+              </View>
+            );
+          })}
+        </View>
+      )}
+    </>
+  )}
+</ScrollView>
             <TouchableOpacity
               style={styles.modalCloseBtn}
               onPress={() => {
@@ -2479,4 +2696,49 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
     color: '#1e3a8a',
   },
+  countrySection: {
+  marginTop: 18,
+},
+countrySectionTitle: {
+  fontSize: 14,
+  fontWeight: '800' as const,
+  color: '#0f172a',
+  textTransform: 'uppercase' as const,
+  letterSpacing: 0.6,
+  marginBottom: 8,
+  paddingHorizontal: 4,
+},
+collapsibleGroupHeader: {
+  flexDirection: 'row' as const,
+  alignItems: 'center' as const,
+  justifyContent: 'space-between' as const,
+  backgroundColor: '#f8fafc',
+  borderRadius: 12,
+  paddingVertical: 12,
+  paddingHorizontal: 14,
+  marginBottom: 8,
+  borderWidth: 1,
+  borderColor: '#e2e8f0',
+},
+groupHeaderMain: {
+  flex: 1,
+},
+collapsibleGroupTitle: {
+  fontSize: 15,
+  fontWeight: '700' as const,
+  color: '#1e293b',
+},
+groupMemberCount: {
+  fontSize: 12,
+  color: '#64748b',
+  marginTop: 2,
+},
+memberTextBlock: {
+  flex: 1,
+},
+memberRole: {
+  fontSize: 12,
+  color: '#64748b',
+  marginTop: 2,
+},
 });

@@ -10,7 +10,7 @@ import {
   Dimensions,
   ActivityIndicator,
 } from 'react-native';
-import { Bell, Calendar, Heart, MessageCircle, X, Trash2 } from 'lucide-react-native';
+import { Bell, Calendar, Heart, MessageCircle, X, Trash2, Sun } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
@@ -30,6 +30,7 @@ type NotificationItem = {
   message: string;
   isRead: boolean;
   createdAt: Date;
+  sabbathId: string | null;
 };
 
 const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
@@ -98,14 +99,15 @@ const refreshNotificationCounts = () => {
         .map((notification: any) => {
           const state = stateMap.get(notification.id);
 
-          return {
-            id: notification.id,
-            type: notification.type ?? 'announcement',
-            title: notification.title ?? 'Notification',
-            message: notification.body || notification.message || '',
-            isRead: Boolean(state?.is_read),
-            createdAt: new Date(notification.created_at),
-          };
+      return {
+        id: notification.id,
+        type: notification.type ?? 'announcement',
+        title: notification.title ?? 'Notification',
+        message: notification.body || notification.message || '',
+        isRead: Boolean(state?.is_read),
+        createdAt: new Date(notification.created_at),
+        sabbathId: notification.sabbath_id ?? null,
+      };
         });
     },
     refetchInterval: 30000,
@@ -200,7 +202,7 @@ const refreshNotificationCounts = () => {
       case 'event':
         return <Calendar size={20} color="#3b82f6" />;
       case 'sabbath':
-        return <Calendar size={20} color="#1e3a8a" />;
+        return <Sun size={20} color="#f59e0b" />;
       case 'prayer':
         return <Heart size={20} color="#ef4444" />;
       case 'announcement':
@@ -220,7 +222,14 @@ const refreshNotificationCounts = () => {
         router.push('/(tabs)/events');
         break;
       case 'sabbath':
-        router.push('/(tabs)/sabbath');
+        if (notification.sabbathId) {
+          router.push({
+            pathname: '/sabbath-detail' as any,
+            params: { sabbathId: notification.sabbathId },
+          });
+        } else {
+          router.push('/(tabs)/sabbath');
+        }
         break;
       case 'prayer':
         router.push('/(tabs)/prayers');
