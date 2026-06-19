@@ -311,6 +311,9 @@ export default function EventsScreen() {
 console.log('[Events] Insert succeeded, created event:', data.id);
 
 try {
+  const createdEventId = (data as any).id as string;
+  const eventGroupId = ((data as any).group_id ?? userHomeGroupId) as string | null;
+
   const notificationTitle = 'New Event';
   const notificationBody = `${eventData.title} has been added${effectiveChurchName ? ` at ${effectiveChurchName}` : ''}.`;
 
@@ -322,27 +325,28 @@ try {
         title: notificationTitle,
         body: notificationBody,
         user_id: null,
+        event_id: createdEventId,
       });
 
     if (notificationError) {
       console.warn('[Events] Failed to create global notification:', notificationError.message);
     }
-  } else if (userHomeGroupId) {
-    const { data: members, error: membersError } = await supabase
-      .from('group_members')
-      .select('user_id')
-      .eq('group_id', userHomeGroupId);
+  } else if (eventGroupId) {
+    const { data: recipients, error: recipientsError } = await supabase.rpc(
+      'get_church_notification_recipient_ids',
+      {
+        target_group_id: eventGroupId,
+        extra_user_ids: [eventData.createdBy],
+      }
+    );
 
-    if (membersError) {
-      console.warn('[Events] Failed to fetch group members for notification:', membersError.message);
+    if (recipientsError) {
+      console.warn('[Events] Failed to fetch notification recipients:', recipientsError.message);
     }
 
-    const recipientIds = Array.from(
-      new Set([
-        eventData.createdBy,
-        ...((members ?? []).map((member: any) => member.user_id as string)),
-      ])
-    ).filter(Boolean);
+    const recipientIds = ((recipients ?? []) as any[])
+      .map((recipient) => recipient.user_id as string | null)
+      .filter(Boolean) as string[];
 
     if (recipientIds.length > 0) {
       const notificationRows = recipientIds.map((recipientId) => ({
@@ -350,6 +354,7 @@ try {
         title: notificationTitle,
         body: notificationBody,
         user_id: recipientId,
+        event_id: createdEventId,
       }));
 
       const { error: notificationError } = await supabase

@@ -296,6 +296,8 @@ return visible.map((prayer: any) => {
 if (error) throw new Error(error.message);
 
 try {
+  const createdPrayerId = (data as any).id as string;
+
   const notificationTitle = prayerData.isUrgent
     ? 'Urgent Prayer Request'
     : 'New Prayer Request';
@@ -312,27 +314,28 @@ try {
         title: notificationTitle,
         body: notificationBody,
         user_id: null,
+        prayer_id: createdPrayerId,
       });
 
     if (notificationError) {
       console.warn('[Prayers] Failed to create global notification:', notificationError.message);
     }
   } else if (groupForInsert) {
-    const { data: members, error: membersError } = await supabase
-      .from('group_members')
-      .select('user_id')
-      .eq('group_id', groupForInsert);
+    const { data: recipients, error: recipientsError } = await supabase.rpc(
+      'get_church_notification_recipient_ids',
+      {
+        target_group_id: groupForInsert,
+        extra_user_ids: [prayerData.requestedBy],
+      }
+    );
 
-    if (membersError) {
-      console.warn('[Prayers] Failed to fetch group members for notification:', membersError.message);
+    if (recipientsError) {
+      console.warn('[Prayers] Failed to fetch notification recipients:', recipientsError.message);
     }
 
-    const recipientIds = Array.from(
-      new Set([
-        prayerData.requestedBy,
-        ...((members ?? []).map((member: any) => member.user_id as string)),
-      ])
-    ).filter(Boolean);
+    const recipientIds = ((recipients ?? []) as any[])
+      .map((recipient) => recipient.user_id as string | null)
+      .filter(Boolean) as string[];
 
     if (recipientIds.length > 0) {
       const notificationRows = recipientIds.map((recipientId) => ({
@@ -340,6 +343,7 @@ try {
         title: notificationTitle,
         body: notificationBody,
         user_id: recipientId,
+        prayer_id: createdPrayerId,
       }));
 
       const { error: notificationError } = await supabase
