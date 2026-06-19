@@ -1,7 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { Calendar, MapPin, Users, Plus, Clock, AlertCircle, X, CalendarPlus, Globe, Church } from 'lucide-react-native';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   StyleSheet,
   Text,
@@ -54,6 +54,18 @@ const normalizeEventType = (value: unknown): EventType | null => {
 const fallbackEventImage = 'https://images.unsplash.com/photo-1530023367847-a683933f4177?w=1200&q=80&auto=format&fit=crop' as const;
 
 export default function EventsScreen() {
+  const params = useLocalSearchParams<{
+    eventId?: string | string[];
+    notificationId?: string | string[];
+  }>();
+
+  const eventIdParam = Array.isArray(params.eventId) ? params.eventId[0] : params.eventId;
+  const notificationIdParam = Array.isArray(params.notificationId)
+    ? params.notificationId[0]
+    : params.notificationId;
+
+  const openedEventNotificationRef = useRef<string | null>(null);
+
   const { user, isAuthenticated, isLoading } = useAuth();
   const { currentChurch } = useChurch();
   const currentChurchId = currentChurch?.id ?? null;
@@ -218,7 +230,11 @@ export default function EventsScreen() {
             createdAt: new Date(event.created_at ?? new Date().toISOString()),
           } as Event;
         })
-        .filter((item): item is Event => item !== null);
+        .filter((item): item is Event => item !== null)
+        .filter((item) => {
+          const eventEnd = item.endDate ?? item.date;
+          return eventEnd.getTime() >= Date.now();
+        });
 
       return sanitizedEvents;
     },
@@ -440,6 +456,31 @@ return data;
     setSelectedEvent(event);
     setShowDetailsModal(true);
   }, []);
+
+  useEffect(() => {
+    if (!eventIdParam) return;
+
+    const openKey = notificationIdParam ?? eventIdParam;
+
+    if (openedEventNotificationRef.current === openKey) {
+      return;
+    }
+
+    if (listQuery.isLoading) {
+      return;
+    }
+
+    const eventToOpen = allEvents.find((event) => event.id === eventIdParam);
+
+    if (!eventToOpen) {
+      console.warn('[Events] Event from notification not found or already past:', eventIdParam);
+      return;
+    }
+
+    openedEventNotificationRef.current = openKey;
+    setSelectedEvent(eventToOpen);
+    setShowDetailsModal(true);
+  }, [eventIdParam, notificationIdParam, allEvents, listQuery.isLoading]);
 
   const handleCloseDetails = useCallback(() => {
     console.log('[Events] Closing event details modal');

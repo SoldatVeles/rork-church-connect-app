@@ -30,6 +30,8 @@ type NotificationItem = {
   message: string;
   isRead: boolean;
   createdAt: Date;
+  eventId: string | null;
+  prayerId: string | null;
   sabbathId: string | null;
 };
 
@@ -106,6 +108,8 @@ const refreshNotificationCounts = () => {
         message: notification.body || notification.message || '',
         isRead: Boolean(state?.is_read),
         createdAt: new Date(notification.created_at),
+        eventId: notification.event_id ?? null,
+        prayerId: notification.prayer_id ?? null,
         sabbathId: notification.sabbath_id ?? null,
       };
         });
@@ -219,7 +223,17 @@ const refreshNotificationCounts = () => {
 
     switch (notification.type) {
       case 'event':
-        router.push('/(tabs)/events');
+        if (notification.eventId) {
+          router.push({
+            pathname: '/(tabs)/events' as any,
+            params: {
+              eventId: notification.eventId,
+              notificationId: notification.id,
+            },
+          });
+        } else {
+          router.push('/(tabs)/events');
+        }
         break;
       case 'sabbath':
         if (notification.sabbathId) {
