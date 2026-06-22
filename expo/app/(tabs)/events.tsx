@@ -496,60 +496,18 @@ const registerMutation = useMutation({
       throw new Error('You must be logged in.');
     }
 
-    const { data: current, error: fetchError } = await supabase
-      .from('events')
-      .select('id, registered_users, current_attendees, max_attendees, is_registration_open')
-      .eq('id', eventId)
-      .maybeSingle();
+    const { data, error } = await supabase.rpc('toggle_event_registration', {
+      target_event_id: eventId,
+    });
 
-    if (fetchError) {
-      throw new Error(fetchError.message ?? 'Failed to load event');
-    }
+if (error) {
+  console.error('[Events] Registration RPC failed:', error);
+  throw new Error(error.message ?? 'Failed to update registration');
+}
 
-    if (!current) {
-      throw new Error('Event not found.');
-    }
+console.log('[Events] Registration RPC success:', data);
 
-    const regUsers: string[] = Array.isArray((current as any).registered_users)
-      ? (current as any).registered_users
-      : [];
-
-    const already = regUsers.includes(user.id);
-    const capacity: number | null = (current as any).max_attendees ?? null;
-    const open: boolean = Boolean((current as any).is_registration_open);
-    const currentCount: number = Number((current as any).current_attendees ?? 0);
-
-    if (!open) {
-      throw new Error('Registration is closed for this event.');
-    }
-
-    if (!already && capacity !== null && currentCount >= capacity) {
-      throw new Error('This event is at full capacity.');
-    }
-
-    const nextUsers = already
-      ? regUsers.filter((id: string) => id !== user.id)
-      : [...regUsers, user.id];
-
-    const nextCount = already
-      ? Math.max(0, currentCount - 1)
-      : currentCount + 1;
-
-    const { data: updated, error: updateError } = await supabase
-      .from('events')
-      .update({
-        registered_users: nextUsers,
-        current_attendees: nextCount,
-      })
-      .eq('id', eventId)
-      .select()
-      .maybeSingle();
-
-    if (updateError) {
-      throw new Error(updateError.message ?? 'Failed to update registration');
-    }
-
-    return updated;
+return data;
   },
   onSuccess: async () => {
     setRegisteringEventId(null);
