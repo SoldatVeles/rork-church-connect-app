@@ -246,7 +246,17 @@ const refreshNotificationCounts = () => {
         }
         break;
       case 'prayer':
-        router.push('/(tabs)/prayers');
+        if (notification.prayerId) {
+          router.push({
+            pathname: '/(tabs)/prayers' as any,
+            params: {
+              prayerId: notification.prayerId,
+              notificationId: notification.id,
+            },
+          });
+        } else {
+          router.push('/(tabs)/prayers');
+        }
         break;
       default:
         break;

@@ -1,6 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { Heart, Plus, Clock, User, AlertCircle, CheckCircle, MessageSquarePlus, ChevronDown, ChevronUp, Sparkles, Globe, Church } from 'lucide-react-native';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
 import {
   StyleSheet,
   Text,
@@ -22,6 +23,17 @@ import { supabase } from '@/lib/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export default function PrayersScreen() {
+  const params = useLocalSearchParams<{
+    prayerId?: string | string[];
+    notificationId?: string | string[];
+  }>();
+
+  const prayerIdParam = Array.isArray(params.prayerId) ? params.prayerId[0] : params.prayerId;
+  const notificationIdParam = Array.isArray(params.notificationId)
+    ? params.notificationId[0]
+    : params.notificationId;
+
+  const openedPrayerNotificationRef = useRef<string | null>(null);
   const { user } = useAuth();
   const { currentChurch } = useChurch();
   const [selectedFilter, setSelectedFilter] = useState<PrayerStatus | 'all'>('all');
@@ -38,6 +50,7 @@ export default function PrayersScreen() {
   const [updateContent, setUpdateContent] = useState('');
   const [isAnsweredUpdate, setIsAnsweredUpdate] = useState(false);
   const [expandedPrayers, setExpandedPrayers] = useState<Set<string>>(new Set());
+  const [highlightedPrayerId, setHighlightedPrayerId] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
   const userIsAdmin = isAdmin(user);
@@ -248,8 +261,100 @@ return visible.map((prayer: any) => {
     }));
   }, [allPrayersQuery.data, prayingQuery.data, updatesQuery.data]);
 
-  const visiblePrayers: PrayerRequest[] = mergedPrayers;
-  
+const visiblePrayers: PrayerRequest[] = useMemo(() => {
+  const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+
+  return mergedPrayers.filter((prayer) => {
+    if (prayer.status !== 'answered') {
+      return true;
+    }
+
+    const rawAnsweredAt = prayer.answeredAt ?? prayer.createdAt;
+
+    if (!rawAnsweredAt) {
+      return true;
+    }
+
+    const answeredAt =
+      rawAnsweredAt instanceof Date
+        ? rawAnsweredAt
+        : new Date(rawAnsweredAt);
+
+    if (Number.isNaN(answeredAt.getTime())) {
+      return true;
+    }
+
+    return now - answeredAt.getTime() <= threeDaysMs;
+  });
+}, [mergedPrayers]);
+
+const createPrayerAnsweredNotifications = useCallback(
+  async ({
+    prayerId,
+    actorUserId,
+  }: {
+    prayerId: string;
+    actorUserId: string;
+  }) => {
+    const { data: prayerRow, error: prayerError } = await supabase
+      .from('prayers')
+      .select('id, title, created_by')
+      .eq('id', prayerId)
+      .maybeSingle();
+
+    if (prayerError) {
+      console.warn('[Prayers] Failed to fetch answered prayer:', prayerError.message);
+      return;
+    }
+
+    if (!prayerRow) {
+      return;
+    }
+
+    const { data: prayedRows, error: prayedError } = await supabase
+      .from('prayer_prayers')
+      .select('user_id')
+      .eq('prayer_id', prayerId);
+
+    if (prayedError) {
+      console.warn('[Prayers] Failed to fetch prayer supporters:', prayedError.message);
+    }
+
+    const recipientIds = Array.from(
+      new Set([
+        (prayerRow as any).created_by as string | null,
+        ...((prayedRows ?? []).map((row: any) => row.user_id as string | null)),
+      ])
+    )
+      .filter(Boolean)
+      .filter((recipientId) => recipientId !== actorUserId) as string[];
+
+    if (recipientIds.length === 0) {
+      return;
+    }
+
+    const prayerTitle = (prayerRow as any).title ?? 'A prayer request';
+
+    const notificationRows = recipientIds.map((recipientId) => ({
+      type: 'prayer',
+      title: 'Prayer Answered',
+      body: `A prayer request you prayed for was marked as answered: ${prayerTitle}`,
+      user_id: recipientId,
+      prayer_id: prayerId,
+    }));
+
+    const { error: notificationError } = await supabase
+      .from('notifications')
+      .insert(notificationRows);
+
+    if (notificationError) {
+      console.warn('[Prayers] Failed to create answered prayer notifications:', notificationError.message);
+    }
+  },
+  []
+);
+
   const createPrayerMutation = useMutation({
     mutationFn: async (prayerData: {
       title: string;
@@ -381,33 +486,50 @@ return data;
     },
   });
 
-  const updateStatusMutation = useMutation({
-    mutationFn: async (data: {
-      prayerId: string;
-      status: PrayerStatus;
-      userId: string;
-      userRole: string;
-    }) => {
-      const { error } = await supabase
-        .from('prayers')
-        .update({
-          is_answered: data.status === 'answered',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', data.prayerId);
-      
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['prayers'] });
-      void queryClient.invalidateQueries({ queryKey: ['prayer_updates'] });
-      Alert.alert('Success', 'Prayer status updated');
-    },
-    onError: (error: Error) => {
-      console.error('Error updating prayer status:', error);
-      Alert.alert('Error', error.message || 'Failed to update prayer status');
-    },
-  });
+const updateStatusMutation = useMutation({
+  mutationFn: async (data: {
+    prayerId: string;
+    status: PrayerStatus;
+    userId: string;
+    userRole: string;
+  }) => {
+    const { data: existingPrayer } = await supabase
+      .from('prayers')
+      .select('is_answered')
+      .eq('id', data.prayerId)
+      .maybeSingle();
+
+    const wasAnswered = Boolean((existingPrayer as any)?.is_answered);
+    const willBeAnswered = data.status === 'answered';
+
+    const { error } = await supabase
+      .from('prayers')
+      .update({
+        is_answered: willBeAnswered,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', data.prayerId);
+
+    if (error) throw new Error(error.message);
+
+    if (willBeAnswered && !wasAnswered) {
+      await createPrayerAnsweredNotifications({
+        prayerId: data.prayerId,
+        actorUserId: data.userId,
+      });
+    }
+  },
+  onSuccess: () => {
+    void queryClient.invalidateQueries({ queryKey: ['prayers'] });
+    void queryClient.invalidateQueries({ queryKey: ['prayer_updates'] });
+    void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    Alert.alert('Success', 'Prayer status updated');
+  },
+  onError: (error: Error) => {
+    console.error('Error updating prayer status:', error);
+    Alert.alert('Error', error.message || 'Failed to update prayer status');
+  },
+});
 
   const createUpdateMutation = useMutation({
     mutationFn: async (data: {
@@ -428,16 +550,32 @@ return data;
         }
         throw new Error(error.message);
       }
-      if (data.isAnsweredUpdate) {
-        await supabase
-          .from('prayers')
-          .update({ is_answered: true, updated_at: new Date().toISOString() })
-          .eq('id', data.prayerId);
-      }
+if (data.isAnsweredUpdate) {
+  const { data: existingPrayer } = await supabase
+    .from('prayers')
+    .select('is_answered')
+    .eq('id', data.prayerId)
+    .maybeSingle();
+
+  const wasAnswered = Boolean((existingPrayer as any)?.is_answered);
+
+  await supabase
+    .from('prayers')
+    .update({ is_answered: true, updated_at: new Date().toISOString() })
+    .eq('id', data.prayerId);
+
+  if (!wasAnswered) {
+    await createPrayerAnsweredNotifications({
+      prayerId: data.prayerId,
+      actorUserId: data.createdBy,
+    });
+  }
+}
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['prayers'] });
       void queryClient.invalidateQueries({ queryKey: ['prayer_updates'] });
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
       setShowUpdateModal(false);
       setSelectedPrayerForUpdate(null);
       setUpdateContent('');
@@ -486,12 +624,67 @@ return data;
     });
   };
 
-  const allPrayers = visiblePrayers;
-  
-  const prayers = selectedFilter === 'all' 
-    ? allPrayers 
+const allPrayers = visiblePrayers;
+
+const highlightedPrayer = useMemo(() => {
+  if (!highlightedPrayerId) {
+    return null;
+  }
+
+  return allPrayers.find((prayer) => prayer.id === highlightedPrayerId) ?? null;
+}, [allPrayers, highlightedPrayerId]);
+
+const filteredPrayers = useMemo(() => {
+  const basePrayers = selectedFilter === 'all'
+    ? allPrayers
     : allPrayers.filter((prayer: PrayerRequest) => prayer.status === selectedFilter);
 
+  if (!highlightedPrayerId) {
+    return basePrayers;
+  }
+
+  return basePrayers.filter((prayer) => prayer.id !== highlightedPrayerId);
+}, [allPrayers, selectedFilter, highlightedPrayerId]);
+
+const prayers = filteredPrayers;
+
+useEffect(() => {
+  if (!prayerIdParam) return;
+
+  const openKey = notificationIdParam ?? prayerIdParam;
+
+  if (openedPrayerNotificationRef.current === openKey) {
+    return;
+  }
+
+  if (allPrayersQuery.isLoading || prayingQuery.isLoading || updatesQuery.isLoading) {
+    return;
+  }
+
+  const prayerToOpen = allPrayers.find((prayer) => prayer.id === prayerIdParam);
+
+  if (!prayerToOpen) {
+    console.warn('[Prayers] Prayer from notification not found or no longer visible:', prayerIdParam);
+    return;
+  }
+
+  openedPrayerNotificationRef.current = openKey;
+
+  setSelectedFilter('all');
+  setHighlightedPrayerId(prayerIdParam);
+  setExpandedPrayers((prev) => {
+    const next = new Set(prev);
+    next.add(prayerIdParam);
+    return next;
+  });
+}, [
+  prayerIdParam,
+  notificationIdParam,
+  allPrayers,
+  allPrayersQuery.isLoading,
+  prayingQuery.isLoading,
+  updatesQuery.isLoading,
+]);
 const formatDate = (date?: Date | string | null) => {
   if (!date) {
     return 'Unknown date';
@@ -734,196 +927,326 @@ const formatDate = (date?: Date | string | null) => {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {allPrayersQuery.isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#ef4444" />
-            <Text style={styles.loadingText}>Loading prayers...</Text>
-          </View>
-        ) : prayers.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No prayer requests found</Text>
-            <Text style={styles.emptySubtext}>Be the first to share a prayer request</Text>
-          </View>
-        ) : (
-          prayers.map((prayer: PrayerRequest) => {
+{allPrayersQuery.isLoading ? (
+  <View style={styles.loadingContainer}>
+    <ActivityIndicator size="large" color="#ef4444" />
+    <Text style={styles.loadingText}>Loading prayers...</Text>
+  </View>
+) : (
+  <>
+    {highlightedPrayer && (
+      <>
+        <View style={styles.openedPrayerSectionHeader}>
+          <Sparkles size={14} color="#92400e" />
+          <Text style={styles.openedPrayerSectionText}>Opened from notification</Text>
+        </View>
+
+        {(() => {
+          const prayer = highlightedPrayer;
           const scopeBadge = getScopeBadge(prayer);
+
           return (
-          <View key={prayer.id} style={[styles.prayerCard, prayer.isUrgent && styles.prayerCardUrgent]}>
-            {prayer.isUrgent && (
-              <View style={styles.urgentRibbon}>
-                <AlertCircle size={14} color="white" />
-                <Text style={styles.urgentRibbonText}>URGENT PRAYER</Text>
-              </View>
-            )}
-            <View style={styles.prayerHeader}>
-              <View style={styles.prayerBadges}>
-                <View style={[
-                  styles.statusBadge,
-                  prayer.status === 'answered' && styles.answeredBadge,
-                ]}>
-                  <Text style={[
-                    styles.statusBadgeText,
-                    prayer.status === 'answered' && styles.answeredBadgeText,
+            <View
+              key={`highlighted-${prayer.id}`}
+              style={[
+                styles.prayerCard,
+                prayer.isUrgent && styles.prayerCardUrgent,
+                styles.highlightedPrayerCard,
+              ]}
+            >
+              {prayer.isUrgent && (
+                <View style={styles.urgentRibbon}>
+                  <AlertCircle size={14} color="white" />
+                  <Text style={styles.urgentRibbonText}>URGENT PRAYER</Text>
+                </View>
+              )}
+
+              <View style={styles.prayerHeader}>
+                <View style={styles.prayerBadges}>
+                  <View style={[
+                    styles.statusBadge,
+                    prayer.status === 'answered' && styles.answeredBadge,
                   ]}>
-                    {prayer.status.charAt(0).toUpperCase() + prayer.status.slice(1)}
+                    <Text style={[
+                      styles.statusBadgeText,
+                      prayer.status === 'answered' && styles.answeredBadgeText,
+                    ]}>
+                      {prayer.status.charAt(0).toUpperCase() + prayer.status.slice(1)}
+                    </Text>
+                  </View>
+
+                  {scopeBadge === 'shared' && (
+                    <View style={styles.sharedBadge}>
+                      <Globe size={11} color="#2563eb" />
+                      <Text style={styles.sharedBadgeText}>All Churches</Text>
+                    </View>
+                  )}
+
+                  {scopeBadge === 'local' && prayer.groupId && (
+                    <View style={styles.localBadge}>
+                      <Church size={11} color="#6b7280" />
+                      <Text style={styles.localBadgeText}>My Church</Text>
+                    </View>
+                  )}
+                </View>
+
+                <Text style={styles.prayerTitle}>{prayer.title}</Text>
+                <Text style={styles.prayerDescription}>{prayer.description}</Text>
+              </View>
+
+              <View style={styles.prayerMeta}>
+                <View style={styles.prayerMetaRow}>
+                  <User size={14} color="#64748b" />
+                  <Text style={styles.prayerMetaText}>
+                    {prayer.isAnonymous ? 'Anonymous' : prayer.requestedByName}
                   </Text>
                 </View>
-                {scopeBadge === 'shared' && (
-                  <View style={styles.sharedBadge}>
-                    <Globe size={11} color="#2563eb" />
-                    <Text style={styles.sharedBadgeText}>All Churches</Text>
-                  </View>
-                )}
-                {scopeBadge === 'local' && prayer.groupId && (
-                  <View style={styles.localBadge}>
-                    <Church size={11} color="#6b7280" />
-                    <Text style={styles.localBadgeText}>My Church</Text>
-                  </View>
-                )}
+
+                <View style={styles.prayerMetaRow}>
+                  <Clock size={14} color="#64748b" />
+                  <Text style={styles.prayerMetaText}>
+                    {formatDate(prayer.createdAt)}
+                  </Text>
+                </View>
               </View>
-              
-              <Text style={styles.prayerTitle}>{prayer.title}</Text>
-              <Text style={styles.prayerDescription}>{prayer.description}</Text>
+
+              <View style={styles.prayerActions}>
+                <View style={styles.prayerStats}>
+                  <Heart
+                    size={16}
+                    color={hasUserPrayed(prayer) ? '#ef4444' : '#94a3b8'}
+                    fill={hasUserPrayed(prayer) ? '#ef4444' : 'none'}
+                  />
+                  <Text style={styles.prayerStatsText}>
+                    {prayer.prayedBy.length} {prayer.prayedBy.length === 1 ? 'person' : 'people'} praying
+                  </Text>
+                </View>
+              </View>
+
+              {prayer.updates && prayer.updates.length > 0 && (
+                <View style={styles.updatesSection}>
+                  {prayer.updates.map((upd) => (
+                    <View key={upd.id} style={styles.updateItem}>
+                      {upd.isAnsweredUpdate && (
+                        <View style={styles.answeredUpdateBadge}>
+                          <Sparkles size={12} color="#16a34a" />
+                          <Text style={styles.answeredUpdateBadgeText}>Prayer Answered!</Text>
+                        </View>
+                      )}
+                      <Text style={styles.updateContent}>{upd.content}</Text>
+                      <Text style={styles.updateMeta}>
+                        {upd.createdByName} • {formatDate(upd.createdAt)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          );
+        })()}
+      </>
+    )}
+
+{prayers.length === 0 && !highlightedPrayer ? (
+  <View style={styles.emptyContainer}>
+    <Text style={styles.emptyText}>No prayer requests found</Text>
+    <Text style={styles.emptySubtext}>Be the first to share a prayer request</Text>
+  </View>
+) : (
+  prayers.map((prayer: PrayerRequest) => {
+    const scopeBadge = getScopeBadge(prayer);
+
+    return (
+      <View
+        key={prayer.id}
+        style={[
+          styles.prayerCard,
+          prayer.isUrgent && styles.prayerCardUrgent,
+        ]}
+      >
+        {prayer.isUrgent && (
+          <View style={styles.urgentRibbon}>
+            <AlertCircle size={14} color="white" />
+            <Text style={styles.urgentRibbonText}>URGENT PRAYER</Text>
+          </View>
+        )}
+
+        <View style={styles.prayerHeader}>
+          <View style={styles.prayerBadges}>
+            <View style={[
+              styles.statusBadge,
+              prayer.status === 'answered' && styles.answeredBadge,
+            ]}>
+              <Text style={[
+                styles.statusBadgeText,
+                prayer.status === 'answered' && styles.answeredBadgeText,
+              ]}>
+                {prayer.status.charAt(0).toUpperCase() + prayer.status.slice(1)}
+              </Text>
             </View>
 
-            <View style={styles.prayerMeta}>
-              <View style={styles.prayerMetaRow}>
-                <User size={14} color="#64748b" />
-                <Text style={styles.prayerMetaText}>
-                  {prayer.isAnonymous ? 'Anonymous' : prayer.requestedByName}
-                </Text>
+            {scopeBadge === 'shared' && (
+              <View style={styles.sharedBadge}>
+                <Globe size={11} color="#2563eb" />
+                <Text style={styles.sharedBadgeText}>All Churches</Text>
               </View>
-              
-              <View style={styles.prayerMetaRow}>
-                <Clock size={14} color="#64748b" />
-                <Text style={styles.prayerMetaText}>
-                  {formatDate(prayer.createdAt)}
-                </Text>
-              </View>
-            </View>
+            )}
 
-            <View style={styles.prayerActions}>
-              <View style={styles.prayerStats}>
-                <Heart 
-                  size={16} 
-                  color={hasUserPrayed(prayer) ? "#ef4444" : "#94a3b8"}
-                  fill={hasUserPrayed(prayer) ? "#ef4444" : "none"}
-                />
-                <Text style={styles.prayerStatsText}>
-                  {prayer.prayedBy.length} {prayer.prayedBy.length === 1 ? 'person' : 'people'} praying
-                </Text>
-              </View>
-              
-              <View style={styles.actionButtons}>
-                {canUpdateStatus(prayer) && (
-                  <TouchableOpacity
-                    testID={`status-button-${prayer.id}`}
-                    accessibilityRole="button"
-                    accessibilityLabel={prayer.status === 'answered' ? 'Mark as unanswered' : 'Mark as answered'}
-                    onPress={() => handleToggleAnswered(prayer)}
-                    disabled={updateStatusMutation.isPending}
-                    style={[
-                      styles.statusButton,
-                      prayer.status === 'answered' && styles.answeredStatusButton,
-                      updateStatusMutation.isPending ? { opacity: 0.6 } as const : null,
-                    ]}
-                  >
-                    <CheckCircle 
-                      size={14} 
-                      color="white"
-                      fill={prayer.status === 'answered' ? "white" : "none"}
-                    />
-                    <Text style={styles.statusButtonText}>
-                      {prayer.status === 'answered' ? 'Answered' : 'Mark Answered'}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                testID={`pray-button-${prayer.id}`}
-                accessibilityRole="button"
-                accessibilityLabel={hasUserPrayed(prayer) ? 'Mark not praying' : 'Mark praying'}
-                onPress={() => {
-                  if (!user?.id) {
-                    Alert.alert('Login required', 'Please log in to mark that you are praying.');
-                    return;
-                  }
-                  if (!(user.role === 'member' || user.role === 'pastor' || user.role === 'church_leader' || user.role === 'admin')) {
-                    Alert.alert('Not allowed', 'Only members and priests can use this action.');
-                    return;
-                  }
-                  const willPray = !hasUserPrayed(prayer);
-                  console.log('[Prayers] Toggling pray', { prayerId: prayer.id, willPray, userId: user.id });
-                  togglePrayMutation.mutate({ prayerId: prayer.id, willPray, userId: user.id });
-                }}
-                disabled={togglePrayMutation.isPending}
-                style={[
-                  styles.prayButton,
-                  hasUserPrayed(prayer) && styles.prayedButton,
-                  togglePrayMutation.isPending ? { opacity: 0.6 } as const : null,
-                ]}
-              >
-                <Text style={[
-                  styles.prayButtonText,
-                  hasUserPrayed(prayer) && styles.prayedButtonText,
-                ]}>
-                  {hasUserPrayed(prayer) ? 'Praying' : 'Pray'}
-                </Text>
-              </TouchableOpacity>
-              </View>
-            </View>
-
-            {((prayer.updates && prayer.updates.length > 0) || canUpdateStatus(prayer)) && (
-              <View style={styles.updatesSection}>
-                {prayer.updates && prayer.updates.length > 0 && (
-                  <TouchableOpacity
-                    style={styles.updatesToggle}
-                    onPress={() => togglePrayerExpanded(prayer.id)}
-                  >
-                    <MessageSquarePlus size={14} color="#1e3a8a" />
-                    <Text style={styles.updatesToggleText}>
-                      {prayer.updates.length} update{prayer.updates.length !== 1 ? 's' : ''}
-                    </Text>
-                    {expandedPrayers.has(prayer.id) ? (
-                      <ChevronUp size={16} color="#64748b" />
-                    ) : (
-                      <ChevronDown size={16} color="#64748b" />
-                    )}
-                  </TouchableOpacity>
-                )}
-
-                {expandedPrayers.has(prayer.id) && prayer.updates && prayer.updates.map((upd) => (
-                  <View key={upd.id} style={styles.updateItem}>
-                    {upd.isAnsweredUpdate && (
-                      <View style={styles.answeredUpdateBadge}>
-                        <Sparkles size={12} color="#16a34a" />
-                        <Text style={styles.answeredUpdateBadgeText}>Prayer Answered!</Text>
-                      </View>
-                    )}
-                    <Text style={styles.updateContent}>{upd.content}</Text>
-                    <Text style={styles.updateMeta}>
-                      {upd.createdByName} • {formatDate(upd.createdAt)}
-                    </Text>
-                  </View>
-                ))}
-
-                {canUpdateStatus(prayer) && (
-                  <TouchableOpacity
-                    style={styles.addUpdateButton}
-                    onPress={() => handleOpenUpdateModal(prayer)}
-                  >
-                    <Plus size={14} color="#1e3a8a" />
-                    <Text style={styles.addUpdateButtonText}>Post Update</Text>
-                  </TouchableOpacity>
-                )}
+            {scopeBadge === 'local' && prayer.groupId && (
+              <View style={styles.localBadge}>
+                <Church size={11} color="#6b7280" />
+                <Text style={styles.localBadgeText}>My Church</Text>
               </View>
             )}
           </View>
-          );
-          })
-        )}
 
-        <View style={styles.spacer} />
-      </ScrollView>
+          <Text style={styles.prayerTitle}>{prayer.title}</Text>
+          <Text style={styles.prayerDescription}>{prayer.description}</Text>
+        </View>
+
+        <View style={styles.prayerMeta}>
+          <View style={styles.prayerMetaRow}>
+            <User size={14} color="#64748b" />
+            <Text style={styles.prayerMetaText}>
+              {prayer.isAnonymous ? 'Anonymous' : prayer.requestedByName}
+            </Text>
+          </View>
+
+          <View style={styles.prayerMetaRow}>
+            <Clock size={14} color="#64748b" />
+            <Text style={styles.prayerMetaText}>
+              {formatDate(prayer.createdAt)}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.prayerActions}>
+          <View style={styles.prayerStats}>
+            <Heart
+              size={16}
+              color={hasUserPrayed(prayer) ? '#ef4444' : '#94a3b8'}
+              fill={hasUserPrayed(prayer) ? '#ef4444' : 'none'}
+            />
+            <Text style={styles.prayerStatsText}>
+              {prayer.prayedBy.length} {prayer.prayedBy.length === 1 ? 'person' : 'people'} praying
+            </Text>
+          </View>
+
+          <View style={styles.actionButtons}>
+            {canUpdateStatus(prayer) && (
+              <TouchableOpacity
+                testID={`status-button-${prayer.id}`}
+                accessibilityRole="button"
+                accessibilityLabel={prayer.status === 'answered' ? 'Mark as unanswered' : 'Mark as answered'}
+                onPress={() => handleToggleAnswered(prayer)}
+                disabled={updateStatusMutation.isPending}
+                style={[
+                  styles.statusButton,
+                  prayer.status === 'answered' && styles.answeredStatusButton,
+                  updateStatusMutation.isPending ? { opacity: 0.6 } as const : null,
+                ]}
+              >
+                <CheckCircle
+                  size={14}
+                  color="white"
+                  fill={prayer.status === 'answered' ? 'white' : 'none'}
+                />
+                <Text style={styles.statusButtonText}>
+                  {prayer.status === 'answered' ? 'Answered' : 'Mark Answered'}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              testID={`pray-button-${prayer.id}`}
+              accessibilityRole="button"
+              accessibilityLabel={hasUserPrayed(prayer) ? 'Mark not praying' : 'Mark praying'}
+              onPress={() => {
+                if (!user?.id) {
+                  Alert.alert('Login required', 'Please log in to mark that you are praying.');
+                  return;
+                }
+
+                if (!(user.role === 'member' || user.role === 'pastor' || user.role === 'church_leader' || user.role === 'admin')) {
+                  Alert.alert('Not allowed', 'Only members and priests can use this action.');
+                  return;
+                }
+
+                const willPray = !hasUserPrayed(prayer);
+                console.log('[Prayers] Toggling pray', { prayerId: prayer.id, willPray, userId: user.id });
+                togglePrayMutation.mutate({ prayerId: prayer.id, willPray, userId: user.id });
+              }}
+              disabled={togglePrayMutation.isPending}
+              style={[
+                styles.prayButton,
+                hasUserPrayed(prayer) && styles.prayedButton,
+                togglePrayMutation.isPending ? { opacity: 0.6 } as const : null,
+              ]}
+            >
+              <Text style={[
+                styles.prayButtonText,
+                hasUserPrayed(prayer) && styles.prayedButtonText,
+              ]}>
+                {hasUserPrayed(prayer) ? 'Praying' : 'Pray'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {((prayer.updates && prayer.updates.length > 0) || canUpdateStatus(prayer)) && (
+          <View style={styles.updatesSection}>
+            {prayer.updates && prayer.updates.length > 0 && (
+              <TouchableOpacity
+                style={styles.updatesToggle}
+                onPress={() => togglePrayerExpanded(prayer.id)}
+              >
+                <MessageSquarePlus size={14} color="#1e3a8a" />
+                <Text style={styles.updatesToggleText}>
+                  {prayer.updates.length} update{prayer.updates.length !== 1 ? 's' : ''}
+                </Text>
+                {expandedPrayers.has(prayer.id) ? (
+                  <ChevronUp size={16} color="#64748b" />
+                ) : (
+                  <ChevronDown size={16} color="#64748b" />
+                )}
+              </TouchableOpacity>
+            )}
+
+            {expandedPrayers.has(prayer.id) && prayer.updates && prayer.updates.map((upd) => (
+              <View key={upd.id} style={styles.updateItem}>
+                {upd.isAnsweredUpdate && (
+                  <View style={styles.answeredUpdateBadge}>
+                    <Sparkles size={12} color="#16a34a" />
+                    <Text style={styles.answeredUpdateBadgeText}>Prayer Answered!</Text>
+                  </View>
+                )}
+                <Text style={styles.updateContent}>{upd.content}</Text>
+                <Text style={styles.updateMeta}>
+                  {upd.createdByName} • {formatDate(upd.createdAt)}
+                </Text>
+              </View>
+            ))}
+
+            {canUpdateStatus(prayer) && (
+              <TouchableOpacity
+                style={styles.addUpdateButton}
+                onPress={() => handleOpenUpdateModal(prayer)}
+              >
+                <Plus size={14} color="#1e3a8a" />
+                <Text style={styles.addUpdateButtonText}>Post Update</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+      </View>
+    );
+  })
+)}
+  </>
+)}
+
+<View style={styles.spacer} />
+</ScrollView>
 
       <Modal
         visible={showAddModal}
@@ -1587,4 +1910,42 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
     color: '#1e293b',
   },
+  highlightedPrayerCard: {
+  borderWidth: 2,
+  borderColor: '#f59e0b',
+  backgroundColor: '#fffbeb',
+},
+openedFromNotificationBadge: {
+  alignSelf: 'flex-start' as const,
+  flexDirection: 'row' as const,
+  alignItems: 'center' as const,
+  gap: 4,
+  backgroundColor: '#fef3c7',
+  borderRadius: 999,
+  paddingHorizontal: 10,
+  paddingVertical: 5,
+  marginBottom: 10,
+},
+openedFromNotificationText: {
+  fontSize: 12,
+  fontWeight: '700' as const,
+  color: '#92400e',
+},
+openedPrayerSectionHeader: {
+  flexDirection: 'row' as const,
+  alignItems: 'center' as const,
+  gap: 6,
+  backgroundColor: '#fef3c7',
+  borderRadius: 12,
+  paddingHorizontal: 12,
+  paddingVertical: 8,
+  marginBottom: 10,
+  borderWidth: 1,
+  borderColor: '#fcd34d',
+},
+openedPrayerSectionText: {
+  fontSize: 13,
+  fontWeight: '700' as const,
+  color: '#92400e',
+},
 });
