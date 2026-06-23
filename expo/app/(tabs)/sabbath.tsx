@@ -776,12 +776,43 @@ const respondAttendanceMutation = useMutation({
     },
   });
 
-  const declineMutation = trpc.sabbaths.declineAssignment.useMutation({
+  const declineMutation = useMutation({
+    mutationFn: async ({
+      assignmentId,
+      reason,
+    }: {
+      assignmentId: string;
+      reason: string | null;
+    }) => {
+      if (!user?.id) {
+        throw new Error('Not authenticated');
+      }
+
+      const { data, error } = await supabase.rpc(
+        'decline_sabbath_assignment_with_notifications',
+        {
+          target_assignment_id: assignmentId,
+          target_reason: reason,
+        }
+      );
+
+      if (error) {
+        console.error('[Sabbath] Decline assignment RPC failed:', error);
+        throw new Error(error.message);
+      }
+
+      console.log('[Sabbath] Decline assignment RPC success:', data);
+
+      return data;
+    },
     onSuccess: () => {
       console.log('[Sabbath] Assignment declined');
+      void myChurchQuery.refetch();
       void sabbathDetailQuery.refetch();
+      void countryQuery.refetch();
     },
-    onError: (err) => {
+    onError: (err: Error) => {
+      console.error('[Sabbath] Decline assignment failed:', err);
       Alert.alert('Error', err.message ?? 'Failed to decline');
     },
   });
