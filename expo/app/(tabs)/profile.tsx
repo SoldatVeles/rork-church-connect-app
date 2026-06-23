@@ -8,7 +8,6 @@ import {
   Bell,
   Heart,
   Users,
-  Globe,
   ChevronRight
 } from 'lucide-react-native';
 import React from 'react';
@@ -209,18 +208,7 @@ const menuItems = [
 
         <View style={styles.menuContainer}>
           <Text style={styles.sectionTitle}>{t('profile.settings')}</Text>
-          <View style={styles.languageCard}>
-            <View style={styles.menuItemLeft}>
-              <View style={styles.menuIcon}>
-                <Globe size={20} color="#64748b" />
-              </View>
-              <View style={styles.languageTextBlock}>
-                <Text style={styles.menuItemTitle}>{t('profile.language')}</Text>
-                <Text style={styles.menuItemSubtitle}>{t('profile.languageSubtitle')}</Text>
-              </View>
-            </View>
-            <LanguageSelector />
-          </View>
+          <LanguageSelector variant="profile" />
           {menuItems.map((item, index) => (
             <TouchableOpacity key={index} style={styles.menuItem} onPress={item.onPress}>
               <View style={styles.menuItemLeft}>
@@ -469,22 +457,7 @@ const styles = StyleSheet.create({
   spacer: {
     height: 40,
   },
-  languageCard: {
-  backgroundColor: 'white',
-  borderRadius: 12,
-  padding: 16,
-  marginBottom: 8,
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  gap: 12,
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 1 },
-  shadowOpacity: 0.05,
-  shadowRadius: 4,
-  elevation: 2,
-},
-languageTextBlock: {
-  flexShrink: 1,
+  languageTextBlock: {
+    flexShrink: 1,
 },
 });
