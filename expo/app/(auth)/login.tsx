@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+import LanguageSelector from '@/components/LanguageSelector';
 import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -19,6 +21,7 @@ import {
 import { useAuth } from '@/providers/auth-provider';
 
 export default function LoginScreen() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
@@ -44,12 +47,12 @@ const handleLogin = () => {
   const cleanedEmail = email.trim().toLowerCase();
 
   if (!cleanedEmail || !password.trim()) {
-    Alert.alert('Missing information', 'Please enter your email and password.');
+    Alert.alert(t('auth.missingInfoTitle'), t('auth.missingInfoMessage'));
     return;
   }
 
   if (!isValidEmail(cleanedEmail)) {
-    Alert.alert('Invalid email', 'Please enter a valid email address.');
+    Alert.alert(t('auth.invalidEmailTitle'), t('auth.invalidEmailMessage'));
     return;
   }
 
@@ -74,28 +77,33 @@ const handleLogin = () => {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <View style={styles.header}>
-              <Text style={styles.title}>Welcome Back</Text>
-              <Text style={styles.subtitle}>Sign in to continue</Text>
+          <View style={styles.header}>
+            <View style={styles.languageSelectorContainer}>
+              <LanguageSelector variant="dark" />
             </View>
+            <Text style={styles.title}>{t('auth.welcomeBack')}</Text>
+            <Text style={styles.subtitle}>{t('auth.signInContinue')}</Text>
+          </View>
 
             <View style={styles.form}>
           {showRegisterNotice && (
             <View style={styles.noticeBox} testID="register-success-notice">
-              <Text style={styles.noticeTitle}>Account created</Text>
-              <Text style={styles.noticeText}>
-                {registeredEmail ? `We emailed ${registeredEmail} a confirmation link. Please verify your email before signing in.` : 'We sent you a confirmation link. Please verify your email before signing in.'}
-              </Text>
-              <TouchableOpacity style={styles.noticeButton} onPress={() => setShowRegisterNotice(false)}>
-                <Text style={styles.noticeButtonText}>Got it</Text>
-              </TouchableOpacity>
+            <Text style={styles.noticeTitle}>{t('auth.accountCreated')}</Text>
+            <Text style={styles.noticeText}>
+              {registeredEmail
+                ? t('auth.confirmationEmail', { email: registeredEmail })
+                : t('auth.confirmationGeneric')}
+            </Text>
+            <TouchableOpacity style={styles.noticeButton} onPress={() => setShowRegisterNotice(false)}>
+              <Text style={styles.noticeButtonText}>{t('auth.gotIt')}</Text>
+            </TouchableOpacity>
             </View>
           )}
           <View style={styles.inputContainer}>
             <Mail size={20} color="#64748b" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="Email address"
+              placeholder={t('auth.emailAddress')}
               placeholderTextColor="#64748b"
               value={email}
               onChangeText={setEmail}
@@ -109,7 +117,7 @@ const handleLogin = () => {
             <Lock size={20} color="#64748b" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="Password"
+              placeholder={t('auth.password')}
               placeholderTextColor="#64748b"
               value={password}
               onChangeText={setPassword}
@@ -140,7 +148,7 @@ const handleLogin = () => {
             {isLoginLoading ? (
               <ActivityIndicator color="white" />
             ) : (
-              <Text style={styles.loginButtonText}>Sign In</Text>
+              <Text style={styles.loginButtonText}>{t('auth.signIn')}</Text>
             )}
           </TouchableOpacity>
 
@@ -154,7 +162,7 @@ const handleLogin = () => {
             })
           }
           >
-            <Text style={styles.forgotText}>Forgot password?</Text>
+            <Text style={styles.forgotText}>{t('auth.forgotPassword')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -162,7 +170,7 @@ const handleLogin = () => {
             onPress={() => router.replace('/(auth)/register')}
           >
             <Text style={styles.registerText}>
-              Don&apos;t have an account? <Text style={styles.registerTextBold}>Join us</Text>
+              {t('auth.noAccount')} <Text style={styles.registerTextBold}>{t('auth.joinUs')}</Text>
             </Text>
           </TouchableOpacity>
             </View>
@@ -299,5 +307,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#1e3a8a',
+  },
+  languageSelectorContainer: {
+    alignItems: 'flex-end',
+    marginBottom: 24,
   },
 });

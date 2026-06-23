@@ -8,6 +8,7 @@ import {
   Bell,
   Heart,
   Users,
+  Globe,
   ChevronRight
 } from 'lucide-react-native';
 import React from 'react';
@@ -24,8 +25,11 @@ import { useAuth } from '@/providers/auth-provider';
 import { isChurchLeaderLevel as checkIsChurchLeader } from '@/utils/permissions';
 import { router } from 'expo-router';
 import { trpc } from '@/lib/trpc';
+import { useTranslation } from 'react-i18next';
+import LanguageSelector from '@/components/LanguageSelector';
 
 export default function ProfileScreen() {
+  const { t, i18n } = useTranslation();
   const { user, logout, isLogoutLoading } = useAuth();
 
   const { data: userStats, isLoading: isStatsLoading } = trpc.users.getStats.useQuery(
@@ -41,17 +45,17 @@ export default function ProfileScreen() {
   const handleLogout = () => {
     console.log('handleLogout called');
     Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
+      t('profile.signOutTitle'),
+      t('profile.signOutMessage'),
       [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Sign Out', 
-          style: 'destructive', 
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('profile.signOut'),
+          style: 'destructive',
           onPress: () => {
             console.log('User confirmed logout, calling logout function');
             logout();
-          }
+          },
         },
       ]
     );
@@ -59,19 +63,19 @@ export default function ProfileScreen() {
 
   const profileStats = [
     {
-      label: 'Events Attended',
+      label: t('profile.eventsAttended'),
       value: isStatsLoading ? '...' : String(userStats?.eventsAttended ?? 0),
       icon: Calendar,
       color: '#3b82f6',
     },
     {
-      label: 'Prayers Shared',
+      label: t('profile.prayersShared'),
       value: isStatsLoading ? '...' : String(userStats?.prayersShared ?? 0),
       icon: Heart,
       color: '#ef4444',
     },
     {
-      label: 'Total Users',
+      label: t('profile.totalUsers'),
       value: isTotalCountLoading ? '...' : String(totalCount?.totalUsers ?? 0),
       icon: Users,
       color: '#10b981',
@@ -80,38 +84,38 @@ export default function ProfileScreen() {
 
 const menuItems = [
   {
-    title: 'Notifications',
-    subtitle: 'Manage your notification preferences',
+    title: t('profile.notifications'),
+    subtitle: t('profile.notificationsSubtitle'),
     icon: Bell,
     onPress: () =>
       Alert.alert(
-        'Coming Soon',
-        'Notification settings will be available in a future update.'
+        t('common.comingSoon'),
+        t('profile.privacyComingSoon')
       ),
   },
   {
-    title: 'Privacy & Security',
-    subtitle: 'Control your privacy settings',
+    title: t('profile.privacySecurity'),
+    subtitle: t('profile.privacySecuritySubtitle'),
     icon: Shield,
     onPress: () =>
       Alert.alert(
-        'Coming Soon',
-        'Privacy and security settings will be available in a future update.'
+        t('common.comingSoon'),
+        t('profile.appComingSoon')
       ),
   },
   {
-    title: 'App Settings',
-    subtitle: 'Customize your app experience',
+    title: t('profile.appSettings'),
+    subtitle: t('profile.appSettingsSubtitle'),
     icon: Settings,
     onPress: () =>
       Alert.alert(
-        'Coming Soon',
-        'App settings will be available in a future update.'
+        t('common.comingSoon'),
+        t('profile.privacySecurityComingSoon')
       ),
   },
     ...(checkIsChurchLeader(user) ? [{
-      title: 'Admin Dashboard',
-      subtitle: 'Manage users, sermons, and groups',
+      title: t('profile.adminDashboard'),
+      subtitle: t('profile.adminDashboardSubtitle'),
       icon: Shield,
       onPress: () => router.push('/admin')
     }] : []),
@@ -122,7 +126,7 @@ const menuItems = [
     if (Number.isNaN(date.getTime())) {
       return 'Unknown';
     }
-    return date.toLocaleDateString('en-US', {
+    return date.toLocaleDateString(i18n.language, {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -139,7 +143,10 @@ const menuItems = [
   };
 
   const getRoleLabel = (role: string) => {
-    return role.charAt(0).toUpperCase() + role.slice(1);
+    if (!role) return '';
+    return t(`profile.roles.${role}`, {
+      defaultValue: role.charAt(0).toUpperCase() + role.slice(1),
+    });
   };
 
   return (
@@ -164,13 +171,13 @@ const menuItems = [
               <Text style={styles.userPhone}>{user.phone}</Text>
             )}
             <Text style={styles.joinDate}>
-              Member since {formatDate(user?.joinedAt ?? new Date())}
+              {t('profile.memberSince', { date: formatDate(user?.joinedAt ?? new Date()) })}
             </Text>
           </View>
         </View>
 
         <View style={styles.statsContainer}>
-          <Text style={styles.sectionTitle}>Your Activity</Text>
+          <Text style={styles.sectionTitle}>{t('profile.yourActivity')}</Text>
           <View style={styles.statsGrid}>
             {profileStats.map((stat, index) => (
               <View key={index} style={styles.statCard}>
@@ -186,7 +193,7 @@ const menuItems = [
 
         {user?.permissions && user.permissions.length > 0 && (
           <View style={styles.permissionsContainer}>
-            <Text style={styles.sectionTitle}>Your Permissions</Text>
+            <Text style={styles.sectionTitle}>{t('profile.yourPermissions')}</Text>
             <View style={styles.permissionsList}>
               {user.permissions.map((permission, index) => (
                 <View key={index} style={styles.permissionItem}>
@@ -201,7 +208,19 @@ const menuItems = [
         )}
 
         <View style={styles.menuContainer}>
-          <Text style={styles.sectionTitle}>Settings</Text>
+          <Text style={styles.sectionTitle}>{t('profile.settings')}</Text>
+          <View style={styles.languageCard}>
+            <View style={styles.menuItemLeft}>
+              <View style={styles.menuIcon}>
+                <Globe size={20} color="#64748b" />
+              </View>
+              <View style={styles.languageTextBlock}>
+                <Text style={styles.menuItemTitle}>{t('profile.language')}</Text>
+                <Text style={styles.menuItemSubtitle}>{t('profile.languageSubtitle')}</Text>
+              </View>
+            </View>
+            <LanguageSelector />
+          </View>
           {menuItems.map((item, index) => (
             <TouchableOpacity key={index} style={styles.menuItem} onPress={item.onPress}>
               <View style={styles.menuItemLeft}>
@@ -226,7 +245,7 @@ const menuItems = [
           >
             <LogOut size={20} color={isLogoutLoading ? "#94a3b8" : "#ef4444"} />
             <Text style={[styles.logoutText, isLogoutLoading && styles.logoutTextDisabled]}>
-              {isLogoutLoading ? 'Signing out...' : 'Sign Out'}
+              {isLogoutLoading ? t('profile.signingOut') : t('profile.signOut')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -450,4 +469,22 @@ const styles = StyleSheet.create({
   spacer: {
     height: 40,
   },
+  languageCard: {
+  backgroundColor: 'white',
+  borderRadius: 12,
+  padding: 16,
+  marginBottom: 8,
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  gap: 12,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.05,
+  shadowRadius: 4,
+  elevation: 2,
+},
+languageTextBlock: {
+  flexShrink: 1,
+},
 });
