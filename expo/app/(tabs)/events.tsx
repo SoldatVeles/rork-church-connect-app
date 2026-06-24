@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { StatusBar } from 'expo-status-bar';
 import { Calendar, MapPin, Users, Plus, Clock, AlertCircle, X, CalendarPlus, Globe, Church } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -36,11 +37,11 @@ const eventTypeColors: Record<EventType, string> = {
   conference: '#06b6d4',
 };
 
-const eventTypeLabels: Record<EventType, string> = {
-  bible_study: 'Bible Study',
-  youth: 'Youth',
-  special: 'Special',
-  conference: 'Conference',
+const eventTypeTranslationKeys: Record<EventType, string> = {
+  bible_study: 'events.types.bibleStudy',
+  youth: 'events.types.youth',
+  special: 'events.types.special',
+  conference: 'events.types.conference',
 };
 
 const normalizeEventType = (value: unknown): EventType | null => {
@@ -54,6 +55,7 @@ const normalizeEventType = (value: unknown): EventType | null => {
 const fallbackEventImage = 'https://images.unsplash.com/photo-1530023367847-a683933f4177?w=1200&q=80&auto=format&fit=crop' as const;
 
 export default function EventsScreen() {
+  const { t, i18n } = useTranslation();
   const params = useLocalSearchParams<{
     eventId?: string | string[];
     notificationId?: string | string[];
@@ -106,16 +108,21 @@ export default function EventsScreen() {
     mode: 'date' | 'time';
   }>({ field: null, mode: 'date' });
 
-  const filterOptions = useMemo<{ key: EventType | 'all'; label: string; accent: string }[]>(() => {
-    return [
-      { key: 'all', label: 'All', accent: '#1e293b' },
-      ...Object.entries(eventTypeLabels).map(([key, label]) => ({
-        key: key as EventType,
-        label,
-        accent: eventTypeColors[key as EventType],
-      })),
-    ];
-  }, []);
+  const getEventTypeLabel = useCallback(
+  (type: EventType) => t(eventTypeTranslationKeys[type]),
+  [t]
+);
+
+const filterOptions = useMemo<{ key: EventType | 'all'; label: string; accent: string }[]>(() => {
+  return [
+    { key: 'all', label: t('events.filters.all'), accent: '#1e293b' },
+    ...allowedEventTypes.map((key) => ({
+      key,
+      label: getEventTypeLabel(key),
+      accent: eventTypeColors[key],
+    })),
+  ];
+}, [getEventTypeLabel, t]);
 
   const queryClient = useQueryClient();
 
@@ -521,7 +528,7 @@ return data;
 });
 
   const formatDate = (date: Date) => {
-    return date.toLocaleDateString('en-US', {
+    return date.toLocaleDateString(i18n.language, {
       weekday: 'short',
       month: 'short',
       day: 'numeric',
@@ -529,12 +536,19 @@ return data;
   };
 
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('en-US', {
+    return date.toLocaleTimeString(i18n.language, {
       hour: 'numeric',
       minute: '2-digit',
-      hour12: true,
     });
   };
+
+  const formatAttending = (current: number, max?: number) => {
+  if (max) {
+    return t('events.attendingWithMax', { current, max });
+  }
+
+  return t('events.attending', { count: current });
+ };
 
   const isUserRegistered = (event: Event) => {
     const list = Array.isArray(event?.registeredUsers) ? event.registeredUsers : [] as string[];
@@ -661,7 +675,7 @@ return data;
   };
 
   const formatDateDisplay = (date: Date) => {
-    return date.toLocaleDateString('en-US', {
+    return date.toLocaleDateString(i18n.language, {
       weekday: 'short',
       year: 'numeric',
       month: 'short',
@@ -670,10 +684,9 @@ return data;
   };
 
   const formatTimeDisplay = (date: Date) => {
-    return date.toLocaleTimeString('en-US', {
+    return date.toLocaleTimeString(i18n.language, {
       hour: 'numeric',
       minute: '2-digit',
-      hour12: true,
     });
   };
 
@@ -683,7 +696,7 @@ return data;
       
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <Text style={styles.title}>Church Events</Text>
+          <Text style={styles.title}>{t('events.title')}</Text>
           <TouchableOpacity
             testID="add-event-button"
             style={styles.addButton}
@@ -733,13 +746,13 @@ return data;
         {listQuery.isLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#1e3a8a" />
-            <Text style={styles.loadingText}>Loading events...</Text>
+            <Text style={styles.loadingText}>{t('events.loading')}</Text>
           </View>
         ) : events.length === 0 ? (
           <View style={styles.emptyContainer}>
             <AlertCircle size={20} color="#94a3b8" />
-            <Text style={styles.emptyText}>No events yet</Text>
-            <Text style={styles.emptySubtext}>Tap + to create the first one</Text>
+            <Text style={styles.emptyText}>{t('events.emptyTitle')}</Text>
+            <Text style={styles.emptySubtext}>{t('events.emptySubtitle')}</Text>
           </View>
         ) : (
           events.map((event) => (
@@ -753,12 +766,12 @@ return data;
                   ]}
                 >
                   <Text style={styles.eventTypeBadgeText}>
-                    {eventTypeLabels[event.type]}
+                    {getEventTypeLabel(event.type)}
                   </Text>
                 </View>
                 {isUserRegistered(event) && (
                   <View style={styles.registeredBadge}>
-                    <Text style={styles.registeredBadgeText}>Registered</Text>
+                    <Text style={styles.registeredBadgeText}>{t('events.registered')}</Text>
                   </View>
                 )}
               </View>
@@ -770,7 +783,10 @@ return data;
               <View style={styles.eventDetailRow}>
                 <Calendar size={16} color="#64748b" />
                 <Text style={styles.eventDetailText}>
-                  {formatDate(new Date(event.date))} at {formatTime(new Date(event.date))}
+                  {t('events.dateAtTime', {
+                    date: formatDate(new Date(event.date)),
+                    time: formatTime(new Date(event.date)),
+                  })}
                 </Text>
               </View>
 
@@ -778,7 +794,7 @@ return data;
                 <View style={styles.eventDetailRow}>
                   <Clock size={16} color="#64748b" />
                   <Text style={styles.eventDetailText}>
-                    Ends at {formatTime(new Date(event.endDate))}
+                    {t('events.endsAt', { time: formatTime(new Date(event.endDate)) })}
                   </Text>
                 </View>
               )}
@@ -791,7 +807,7 @@ return data;
               <View style={styles.eventDetailRow}>
                 <Users size={16} color="#64748b" />
                 <Text style={styles.eventDetailText}>
-                  {event.maxAttendees ? `${event.currentAttendees}/${event.maxAttendees} attending` : `${event.currentAttendees} attending`}
+                  {formatAttending(event.currentAttendees, event.maxAttendees)}
                 </Text>
               </View>
             </View>
@@ -806,7 +822,7 @@ return data;
                   ]}
                   onPress={() => {
                     if (!user?.id) {
-                      Alert.alert('Login required', 'Please log in to register for events.');
+                      Alert.alert(t('events.loginRequiredTitle'), t('events.loginRequiredMessage'));
                       return;
                     }
                     registerMutation.mutate({ eventId: event.id });
@@ -820,10 +836,10 @@ return data;
                     ]}
                   >
                     {registeringEventId === event.id
-                      ? 'Please wait...'
+                      ? t('events.pleaseWait')
                       : isUserRegistered(event)
-                      ? 'Unregister'
-                      : 'Register'}
+                      ? t('events.unregister')
+                      : t('events.register')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -833,7 +849,7 @@ return data;
                 style={styles.detailsButton}
                 onPress={() => handleOpenDetails(event)}
               >
-                <Text style={styles.detailsButtonText}>View Details</Text>
+                <Text style={styles.detailsButtonText}>{t('events.viewDetails')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -874,7 +890,7 @@ return data;
                         ]}
                       >
                         <Text style={styles.detailsTypeBadgeText}>
-                          {eventTypeLabels[activeEvent.type]}
+                          {getEventTypeLabel(activeEvent.type)}
                         </Text>
                       </View>
                       <TouchableOpacity
@@ -902,14 +918,14 @@ return data;
                     showsVerticalScrollIndicator={false}
                   >
                     <View style={styles.detailsSection}>
-                      <Text style={styles.detailsSectionTitle}>About this event</Text>
+                      <Text style={styles.detailsSectionTitle}>{t('events.aboutThisEvent')}</Text>
                       <Text style={styles.detailsDescription}>{activeEvent.description}</Text>
                     </View>
 
                     <View style={styles.detailsInfoGrid}>
                       <View style={styles.detailsInfoCard}>
                         <Calendar size={18} color="#1e3a8a" />
-                        <Text style={styles.detailsInfoLabel}>Starts</Text>
+                        <Text style={styles.detailsInfoLabel}>{t('events.starts')}</Text>
                         <Text style={styles.detailsInfoValue}>
                           {formatDate(new Date(activeEvent.date))}
                         </Text>
@@ -920,7 +936,7 @@ return data;
                       {activeEvent.endDate ? (
                         <View style={styles.detailsInfoCard}>
                           <Clock size={18} color="#1e3a8a" />
-                          <Text style={styles.detailsInfoLabel}>Ends</Text>
+                          <Text style={styles.detailsInfoLabel}>{t('events.ends')}</Text>
                           <Text style={styles.detailsInfoValue}>
                             {formatDate(new Date(activeEvent.endDate))}
                           </Text>
@@ -931,24 +947,24 @@ return data;
                       ) : null}
                       <View style={styles.detailsInfoCard}>
                         <MapPin size={18} color="#1e3a8a" />
-                        <Text style={styles.detailsInfoLabel}>Location</Text>
+                        <Text style={styles.detailsInfoLabel}>{t('events.location')}</Text>
                         <Text style={styles.detailsInfoValue}>{activeEvent.location}</Text>
                         {activeEvent.maxAttendees ? (
                           <Text style={styles.detailsInfoSubValue}>
-                            Capacity {activeEvent.maxAttendees}
+                            {t('events.capacity', { count: activeEvent.maxAttendees })}
                           </Text>
                         ) : null}
                       </View>
                       <View style={styles.detailsInfoCard}>
                         <Users size={18} color="#1e3a8a" />
-                        <Text style={styles.detailsInfoLabel}>Attending</Text>
+                        <Text style={styles.detailsInfoLabel}>{t('events.attendingLabel')}</Text>
                         <Text style={styles.detailsInfoValue}>
                           {activeEvent.maxAttendees
                             ? `${activeEvent.currentAttendees}/${activeEvent.maxAttendees}`
                             : `${activeEvent.currentAttendees}`}
                         </Text>
                         <Text style={styles.detailsInfoSubValue}>
-                          {isUserRegistered(activeEvent) ? 'You are registered' : 'Spots available'}
+                          {isUserRegistered(activeEvent) ? t('events.youAreRegistered') : t('events.spotsAvailable')}
                         </Text>
                       </View>
                     </View>
@@ -959,7 +975,7 @@ return data;
                       onPress={() => addEventToCalendar(activeEvent)}
                     >
                       <CalendarPlus size={18} color="#1e3a8a" />
-                      <Text style={styles.calendarSyncButtonText}>Add to Calendar</Text>
+                      <Text style={styles.calendarSyncButtonText}>{t('events.addToCalendar')}</Text>
                     </TouchableOpacity>
 
                     {activeEvent.isRegistrationOpen ? (
@@ -971,7 +987,7 @@ return data;
                         ]}
                         onPress={() => {
                           if (!user?.id) {
-                            Alert.alert('Login required', 'Please log in to register for events.');
+                            Alert.alert(t('events.loginRequiredTitle'), t('events.loginRequiredMessage'));
                             return;
                           }
                           registerMutation.mutate({ eventId: activeEvent.id });
@@ -985,31 +1001,31 @@ return data;
                           ]}
                         >
                           {registeringEventId === activeEvent.id
-                            ? 'Updating...'
+                            ? t('events.updating')
                             : isUserRegistered(activeEvent)
-                            ? 'Cancel registration'
-                            : 'Reserve your spot'}
+                            ? t('events.cancelRegistration')
+                            : t('events.reserveSpot')}
                         </Text>
                       </TouchableOpacity>
                     ) : (
                       <View style={styles.detailsRegistrationClosed}>
-                        <Text style={styles.detailsRegistrationClosedText}>Registration closed</Text>
+                        <Text style={styles.detailsRegistrationClosedText}>{t('events.registrationClosed')}</Text>
                       </View>
                     )}
                   </ScrollView>
                 </View>
               ) : (
                 <View style={styles.detailsEmpty}>
-                  <Text style={styles.detailsEmptyTitle}>Event unavailable</Text>
+                  <Text style={styles.detailsEmptyTitle}>{t('events.unavailableTitle')}</Text>
                   <Text style={styles.detailsEmptySubtitle}>
-                    This event may have been removed or is no longer accessible.
+                    {t('events.unavailableSubtitle')}
                   </Text>
                   <TouchableOpacity
                     testID="dismiss-event-details-button"
                     style={styles.detailsDismissButton}
                     onPress={handleCloseDetails}
                   >
-                    <Text style={styles.detailsDismissButtonText}>Go back</Text>
+                    <Text style={styles.detailsDismissButtonText}>{t('events.goBack')}</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -1027,9 +1043,9 @@ return data;
         <SafeAreaView style={styles.modalContainer} testID="event-modal">
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setShowAddModal(false)} testID="event-cancel-button">
-              <Text style={styles.modalCancelText}>Cancel</Text>
+              <Text style={styles.modalCancelText}>{t('common.cancel')}</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>New Event</Text>
+            <Text style={styles.modalTitle}>{t('events.newEvent')}</Text>
             <TouchableOpacity 
               onPress={() => {
                 console.log('[Events] Create button pressed!');
@@ -1039,7 +1055,7 @@ return data;
               testID="submit-event-button"
             >
               <Text style={[styles.modalSubmitText, createMutation.isPending && styles.modalSubmitTextDisabled]}>
-                {createMutation.isPending ? 'Creating...' : 'Create'}
+                {createMutation.isPending ? t('events.creating') : t('events.create')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1049,17 +1065,17 @@ return data;
               <View style={styles.churchContextBanner}>
                 <Church size={14} color="#1e3a8a" />
                 <Text style={styles.churchContextText}>
-                  Posting to: {effectiveChurchName}
+                  {t('events.postingTo', { church: effectiveChurchName })}
                 </Text>
               </View>
             )}
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Title</Text>
+              <Text style={styles.inputLabel}>{t('events.form.title')}</Text>
               <TextInput
                 testID="event-title-input"
                 style={styles.textInput}
-                placeholder="Event title"
+                placeholder={t('events.form.titlePlaceholder')}
                 value={form.title}
                 onChangeText={(text) => setForm(prev => ({ ...prev, title: text }))}
                 maxLength={120}
@@ -1067,11 +1083,11 @@ return data;
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Description</Text>
+              <Text style={styles.inputLabel}>{t('events.form.description')}</Text>
               <TextInput
                 testID="event-description-input"
                 style={[styles.textInput, styles.textArea]}
-                placeholder="Describe the event"
+                placeholder={t('events.form.descriptionPlaceholder')}
                 value={form.description}
                 onChangeText={(text) => setForm(prev => ({ ...prev, description: text }))}
                 multiline
@@ -1081,7 +1097,7 @@ return data;
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Start Date</Text>
+              <Text style={styles.inputLabel}>{t('events.form.startDate')}</Text>
               <TouchableOpacity
                 testID="event-start-date-picker"
                 style={styles.dateTimeButton}
@@ -1095,7 +1111,7 @@ return data;
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Start Time</Text>
+              <Text style={styles.inputLabel}>{t('events.form.startTime')}</Text>
               <TouchableOpacity
                 testID="event-start-time-picker"
                 style={styles.dateTimeButton}
@@ -1109,7 +1125,7 @@ return data;
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>End Date</Text>
+              <Text style={styles.inputLabel}>{t('events.form.endDate')}</Text>
               <TouchableOpacity
                 testID="event-end-date-picker"
                 style={styles.dateTimeButton}
@@ -1123,7 +1139,7 @@ return data;
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>End Time</Text>
+              <Text style={styles.inputLabel}>{t('events.form.endTime')}</Text>
               <TouchableOpacity
                 testID="event-end-time-picker"
                 style={styles.dateTimeButton}
@@ -1137,11 +1153,11 @@ return data;
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Location</Text>
+              <Text style={styles.inputLabel}>{t('events.location')}</Text>
               <TextInput
                 testID="event-location-input"
                 style={styles.textInput}
-                placeholder="Where is it?"
+                placeholder={t('events.form.locationPlaceholder')}
                 value={form.location}
                 onChangeText={(text) => setForm(prev => ({ ...prev, location: text }))}
                 maxLength={200}
@@ -1149,9 +1165,9 @@ return data;
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Event Type</Text>
+              <Text style={styles.inputLabel}>{t('events.form.eventType')}</Text>
               <View style={styles.typesWrap}>
-                {(Object.keys(eventTypeLabels) as EventType[]).map((key) => (
+                {allowedEventTypes.map((key) => (
                   <TouchableOpacity
                     key={key}
                     testID={`type-${key}`}
@@ -1159,7 +1175,7 @@ return data;
                     onPress={() => setForm(prev => ({ ...prev, type: key }))}
                   >
                     <Text style={[styles.typeChipText, form.type === key && styles.typeChipTextActive]}>
-                      {eventTypeLabels[key]}
+                      {getEventTypeLabel(key)}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -1167,11 +1183,11 @@ return data;
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Max Attendees (optional)</Text>
+              <Text style={styles.inputLabel}>{t('events.form.maxAttendees')}</Text>
               <TextInput
                 testID="event-maxAttendees-input"
                 style={styles.textInput}
-                placeholder="e.g. 100"
+                placeholder={t('events.form.maxAttendeesPlaceholder')}
                 value={form.maxAttendees ?? ''}
                 onChangeText={(text) => setForm(prev => ({ ...prev, maxAttendees: text.replace(/[^0-9]/g, '') }))}
                 keyboardType="numeric"
@@ -1183,10 +1199,10 @@ return data;
                 <View style={{ flex: 1 }}>
                   <View style={styles.shareLabelRow}>
                     <Globe size={16} color="#2563eb" />
-                    <Text style={styles.switchLabel}>Share with all churches</Text>
+                    <Text style={styles.switchLabel}>{t('events.form.shareAllChurches')}</Text>
                   </View>
                   <Text style={styles.switchDescription}>
-                    Visible to members of all church groups
+                    {t('events.form.shareAllChurchesDescription')}
                   </Text>
                 </View>
                 <Switch
@@ -1215,7 +1231,7 @@ return data;
                 <Plus size={20} color="white" />
               )}
               <Text style={styles.createButtonBottomText}>
-                {createMutation.isPending ? 'Creating Event...' : 'Create Event'}
+                {createMutation.isPending ? t('events.creatingEvent') : t('events.createEvent')}
               </Text>
             </TouchableOpacity>
 
@@ -1229,13 +1245,13 @@ return data;
                   <View style={styles.datePickerContainer}>
                     <View style={styles.datePickerHeader}>
                       <TouchableOpacity onPress={closeDatePicker}>
-                        <Text style={styles.datePickerCancel}>Cancel</Text>
+                        <Text style={styles.datePickerCancel}>{t('common.cancel')}</Text>
                       </TouchableOpacity>
                       <Text style={styles.datePickerTitle}>
-                        Select {showDatePicker.mode === 'date' ? 'Date' : 'Time'}
+                        {showDatePicker.mode === 'date' ? t('events.selectDate') : t('events.selectTime')}
                       </Text>
                       <TouchableOpacity onPress={closeDatePicker}>
-                        <Text style={styles.datePickerDone}>Done</Text>
+                        <Text style={styles.datePickerDone}>{t('events.done')}</Text>
                       </TouchableOpacity>
                     </View>
                     <View style={styles.webDatePickerContainer}>
@@ -1281,10 +1297,10 @@ return data;
                         <Text style={styles.datePickerCancel}>Cancel</Text>
                       </TouchableOpacity>
                       <Text style={styles.datePickerTitle}>
-                        Select {showDatePicker.mode === 'date' ? 'Date' : 'Time'}
+                        {showDatePicker.mode === 'date' ? t('events.selectDate') : t('events.selectTime')}
                       </Text>
                       <TouchableOpacity onPress={closeDatePicker}>
-                        <Text style={styles.datePickerDone}>Done</Text>
+                        <Text style={styles.datePickerDone}>{t('events.done')}</Text>
                       </TouchableOpacity>
                     </View>
                     <DateTimePicker
