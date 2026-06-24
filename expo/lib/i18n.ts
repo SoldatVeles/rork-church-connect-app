@@ -11,6 +11,8 @@ import rm from '@/locales/rm';
 import pl from '@/locales/pl';
 import fr from '@/locales/fr';
 import it from '@/locales/it';
+import ru from '@/locales/ru';
+import uk from '@/locales/uk';
 
 export const LANGUAGE_STORAGE_KEY = 'church-app-language';
 
@@ -23,6 +25,8 @@ export const supportedLanguages = [
   { code: 'pl', nativeName: 'Polski' },
   { code: 'fr', nativeName: 'Français' },
   { code: 'it', nativeName: 'Italiano' },
+  { code: 'ru', nativeName: 'Русский' },
+  { code: 'uk', nativeName: 'Українська' },
 ] as const;
 
 export type AppLanguage = typeof supportedLanguages[number]['code'];
@@ -36,6 +40,8 @@ const resources = {
   pl: { translation: pl },
   fr: { translation: fr },
   it: { translation: it },
+  ru: { translation: ru },
+  uk: { translation: uk },
 };
 
 export const isSupportedLanguage = (value: string | null | undefined): value is AppLanguage => {
@@ -54,6 +60,9 @@ export const normalizeLanguageCode = (value: string | null | undefined): AppLang
   if (lowerValue.startsWith('pl')) return 'pl';
   if (lowerValue.startsWith('fr')) return 'fr';
   if (lowerValue.startsWith('it')) return 'it';
+  if (lowerValue.startsWith('ru')) return 'ru';
+  if (lowerValue.startsWith('uk')) return 'uk';
+  if (lowerValue.startsWith('ua')) return 'uk';
 
   return 'en';
 };

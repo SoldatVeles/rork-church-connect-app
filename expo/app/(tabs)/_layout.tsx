@@ -1,10 +1,12 @@
 import { Tabs, Redirect } from 'expo-router';
 import { Home, Calendar, Heart, User, Shield, Sun } from 'lucide-react-native';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/providers/auth-provider';
 import { canAccessAdminPanel } from '@/utils/permissions';
 
 export default function TabLayout() {
+  const { t } = useTranslation();
   const { isAuthenticated, isLoading, user } = useAuth();
 
   if (!isLoading && !isAuthenticated) {
@@ -35,42 +37,42 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: t('tabs.home'),
           tabBarIcon: ({ color, size }) => <Home size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="events"
         options={{
-          title: 'Events',
+          title: t('tabs.events'),
           tabBarIcon: ({ color, size }) => <Calendar size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="prayers"
         options={{
-          title: 'Prayers',
+          title: t('tabs.prayers'),
           tabBarIcon: ({ color, size }) => <Heart size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: t('tabs.profile'),
           tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="sabbath"
         options={{
-          title: 'Sabbath',
+          title: t('tabs.sabbath'),
           tabBarIcon: ({ color, size }) => <Sun size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="admin"
         options={{
-          title: 'Admin',
+          title: t('tabs.admin'),
           tabBarIcon: ({ color, size }) => <Shield size={size} color={color} />,
           href: canAccessAdminPanel(user) ? '/(tabs)/admin' : null,
         }}

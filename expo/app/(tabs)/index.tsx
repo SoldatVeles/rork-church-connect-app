@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Bell, Calendar, Heart, Users, BookOpen, MessageCircle, Sun } from 'lucide-react-native';
@@ -223,7 +224,61 @@ const _bibleVerses = [
   },
 ];
 
+const _bibleVerseKeys = [
+  'proverbs3_5_6',
+  'jeremiah29_11',
+  'psalm23_1_3',
+  'philippians4_13',
+  'joshua1_9_a',
+  'numbers6_24_26',
+  'romans8_28',
+  'philippians4_6',
+  'isaiah40_31',
+  'psalm34_18',
+  'john3_16',
+  'psalm27_1',
+  'firstPeter5_7',
+  'matthew11_28',
+  'romans8_31',
+  'zephaniah3_17',
+  'joshua1_9_b',
+  'john14_27',
+  'exodus14_14',
+  'psalm118_24',
+  'hebrews11_1',
+  'proverbs18_10',
+  'mark11_24',
+  'galatians6_9',
+  'secondTimothy1_7',
+  'psalm145_8',
+  'proverbs16_3',
+  'psalm9_10',
+  'matthew6_33',
+  'psalm145_13',
+  'proverbs16_9',
+  'romans15_13',
+  'matthew6_34',
+  'psalm28_7',
+  'psalm27_14',
+  'secondChronicles30_9',
+  'psalm29_11',
+  'isaiah26_3',
+  'nahum1_7',
+  'psalm46_1',
+  'psalm147_3',
+  'firstJohn4_10',
+  'john16_33',
+  'deuteronomy31_8',
+  'secondCorinthians5_17',
+  'isaiah55_9',
+  'firstThessalonians5_16_18',
+  'psalm145_18',
+  'matthew19_26',
+  'psalm37_4',
+] as const;
+
 export default function HomeScreen() {
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const { currentChurch } = useChurch();
   const currentChurchId = currentChurch?.id ?? null;
@@ -522,56 +577,97 @@ const notificationsCountQuery = useQuery({
 
 const todayVerse = useMemo(() => {
   const dayIndex = new Date().getDate() % _bibleVerses.length;
-  return _bibleVerses[dayIndex];
+
+  return {
+    key: _bibleVerseKeys[dayIndex] ?? _bibleVerseKeys[0],
+    fallback: _bibleVerses[dayIndex] ?? _bibleVerses[0],
+  };
 }, []);
 
-  const quickActions = useMemo(() => [
-    {
-      icon: Calendar,
-      title: 'Upcoming Events',
-      subtitle: `${totalEventsCount} total ${totalEventsCount === 1 ? 'event' : 'events'}`,
-      color: '#3b82f6',
-      onPress: () => router.push('/(tabs)/events'),
-    },
-    {
-      icon: Heart,
-      title: 'Prayer Requests',
-      subtitle: `${activeRequestsCount} active ${activeRequestsCount === 1 ? 'request' : 'requests'}`,
-      color: '#ef4444',
-      onPress: () => router.push('/(tabs)/prayers'),
-    },
-    {
-      icon: BookOpen,
-      title: 'Latest Sermon',
-      subtitle: 'The Power of Faith',
-      color: '#10b981',
-      onPress: () => router.push('/manage-sermons'),
-    },
-    {
-      icon: Users,
-      title: 'Community',
-      subtitle: `${membersCount} ${membersCount === 1 ? 'member' : 'members'}`,
-      color: '#f59e0b',
-      onPress: () => router.push('/community'),
-    },
-    {
-      icon: MessageCircle,
-      title: 'Church Chats',
-      subtitle: unreadChatsCount > 0
-        ? `${unreadChatsCount} new ${unreadChatsCount === 1 ? 'message' : 'messages'}`
-        : 'Connect with your churches',
-      color: '#8b5cf6',
-      badge: unreadChatsCount,
-      onPress: () => router.push('/groups'),
-    },
-    ...(canManageSabbath ? [{
-      icon: Sun,
-      title: 'Plan Sabbath',
-      subtitle: 'Plan & manage services',
-      color: '#0f172a',
-      onPress: () => router.push('/sabbath-planner' as any),
-    }] : []),
-  ], [totalEventsCount, activeRequestsCount, membersCount, canManageSabbath, unreadChatsCount]);
+const greetingKey = useMemo(() => {
+  const hour = new Date().getHours();
+
+  if (hour < 12) return 'home.goodMorning';
+  if (hour < 18) return 'home.goodAfternoon';
+
+  return 'home.goodEvening';
+}, []);
+
+const eventLabel = totalEventsCount === 1 ? t('home.eventSingular') : t('home.eventPlural');
+const requestLabel = activeRequestsCount === 1 ? t('home.requestSingular') : t('home.requestPlural');
+const memberLabel = membersCount === 1 ? t('home.memberSingular') : t('home.memberPlural');
+const messageLabel = unreadChatsCount === 1 ? t('home.messageSingular') : t('home.messagePlural');
+
+const quickActions = useMemo(() => [
+  {
+    icon: Calendar,
+    title: t('home.upcomingEvents'),
+    subtitle: t('home.totalEvents', {
+      count: totalEventsCount,
+      label: eventLabel,
+    }),
+    color: '#3b82f6',
+    onPress: () => router.push('/(tabs)/events'),
+  },
+  {
+    icon: Heart,
+    title: t('home.prayerRequests'),
+    subtitle: t('home.activeRequests', {
+      count: activeRequestsCount,
+      label: requestLabel,
+    }),
+    color: '#ef4444',
+    onPress: () => router.push('/(tabs)/prayers'),
+  },
+  {
+    icon: BookOpen,
+    title: t('home.latestSermon'),
+    subtitle: t('home.latestSermonSubtitle'),
+    color: '#10b981',
+    onPress: () => router.push('/manage-sermons'),
+  },
+  {
+    icon: Users,
+    title: t('home.community'),
+    subtitle: t('home.members', {
+      count: membersCount,
+      label: memberLabel,
+    }),
+    color: '#f59e0b',
+    onPress: () => router.push('/community'),
+  },
+  {
+    icon: MessageCircle,
+    title: t('home.churchChats'),
+    subtitle: unreadChatsCount > 0
+      ? t('home.newMessages', {
+          count: unreadChatsCount,
+          label: messageLabel,
+        })
+      : t('home.connectWithChurches'),
+    color: '#8b5cf6',
+    badge: unreadChatsCount,
+    onPress: () => router.push('/groups'),
+  },
+  ...(canManageSabbath ? [{
+    icon: Sun,
+    title: t('home.planSabbath'),
+    subtitle: t('home.planSabbathSubtitle'),
+    color: '#0f172a',
+    onPress: () => router.push('/sabbath-planner' as any),
+  }] : []),
+], [
+  t,
+  totalEventsCount,
+  activeRequestsCount,
+  membersCount,
+  canManageSabbath,
+  unreadChatsCount,
+  eventLabel,
+  requestLabel,
+  memberLabel,
+  messageLabel,
+]);
 
   const upcomingAnnouncements = useMemo(() => {
     const now = Date.now();
@@ -600,7 +696,7 @@ const todayVerse = useMemo(() => {
   const formatEventWhen = (iso: string): string => {
     try {
       const d = new Date(iso);
-      return d.toLocaleDateString(undefined, {
+      return d.toLocaleDateString(i18n.language, {
         weekday: 'short',
         month: 'short',
         day: 'numeric',
@@ -622,9 +718,15 @@ const todayVerse = useMemo(() => {
       >
         <View style={styles.headerContent}>
           <View>
-            <Text style={styles.greeting}>Good morning,</Text>
+            <Text style={styles.greeting}>{t(greetingKey)}</Text>
             <Text style={styles.userName}>{user?.firstName} {user?.lastName}</Text>
-            <Text style={styles.userRole}>{user?.role?.charAt(0).toUpperCase()}{user?.role?.slice(1)}</Text>
+            <Text style={styles.userRole}>
+              {user?.role
+                ? t(`profile.roles.${user.role}`, {
+                    defaultValue: `${user.role.charAt(0).toUpperCase()}${user.role.slice(1)}`,
+                  })
+                : ''}
+            </Text>
           </View>
           <TouchableOpacity 
             ref={bellButtonRef}
@@ -649,7 +751,7 @@ const todayVerse = useMemo(() => {
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.quickActions}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <Text style={styles.sectionTitle}>{t('home.quickActions')}</Text>
           <View style={styles.actionsGrid}>
             {quickActions.map((action, index) => (
               <TouchableOpacity
@@ -678,17 +780,25 @@ const todayVerse = useMemo(() => {
         <View style={styles.todayVerse}>
           <View style={styles.verseHeader}>
             <BookOpen size={20} color="#1e3a8a" />
-            <Text style={styles.verseTitle}>Verse of the Day</Text>
+            <Text style={styles.verseTitle}>{t('home.verseOfTheDay')}</Text>
           </View>
-          <Text style={styles.verseText}>{todayVerse.text}</Text>
-          <Text style={styles.verseReference}>{todayVerse.reference}</Text>
+          <Text style={styles.verseText}>
+            {t(`bibleVerses.${todayVerse.key}.text`, {
+              defaultValue: todayVerse.fallback.text,
+            })}
+          </Text>
+          <Text style={styles.verseReference}>
+            {t(`bibleVerses.${todayVerse.key}.reference`, {
+              defaultValue: todayVerse.fallback.reference,
+            })}
+          </Text>
         </View>
 
         <View style={styles.announcements}>
-          <Text style={styles.sectionTitle}>Recent Announcements</Text>
+          <Text style={styles.sectionTitle}>{t('home.recentAnnouncements')}</Text>
           {upcomingAnnouncements.length === 0 ? (
             <View style={styles.announcementCard}>
-              <Text style={styles.announcementContent}>No upcoming events.</Text>
+              <Text style={styles.announcementContent}>{t('home.noUpcomingEvents')}</Text>
             </View>
           ) : (
             upcomingAnnouncements.map((event: any) => (
@@ -698,7 +808,7 @@ const todayVerse = useMemo(() => {
                 onPress={() => router.push('/(tabs)/events')}
                 testID={`announcement-${event.id}`}
               >
-                <Text style={styles.announcementTitle}>{event.title ?? 'Event'}</Text>
+                <Text style={styles.announcementTitle}>{event.title ?? t('home.eventFallback')}</Text>
                 {!!event.description && (
                   <Text style={styles.announcementContent} numberOfLines={3}>{event.description}</Text>
                 )}
