@@ -50,6 +50,16 @@ export default {
     notificationComingSoon: 'Налаштування сповіщень будуть доступні в майбутньому оновленні.',
     privacyComingSoon: 'Налаштування конфіденційності та безпеки будуть доступні в майбутньому оновленні.',
     appComingSoon: 'Налаштування додатка будуть доступні в майбутньому оновленні.',
+    notificationsComingSoon: 'Налаштування сповіщень скоро будуть доступні.',
+    appSettingsComingSoon: 'Налаштування застосунку скоро будуть доступні.',
+    permissions: {
+        manage_users: 'Керувати користувачами',
+        manage_events: 'Керувати подіями',
+        manage_prayers: 'Керувати молитвами',
+        manage_sabbaths: 'Керувати суботами',
+        manage_churches: 'Керувати церквами',
+        view_admin_dashboard: 'Переглянути панель адміністратора',
+},
     roles: {
       admin: 'Адміністратор',
       pastor: 'Пастор',

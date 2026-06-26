@@ -50,6 +50,16 @@ export default {
     notificationComingSoon: 'Ustawienia powiadomień będą dostępne w przyszłej aktualizacji.',
     privacyComingSoon: 'Ustawienia prywatności i bezpieczeństwa będą dostępne w przyszłej aktualizacji.',
     appComingSoon: 'Ustawienia aplikacji będą dostępne w przyszłej aktualizacji.',
+    notificationsComingSoon: 'Ustawienia powiadomień będą wkrótce dostępne.',
+    appSettingsComingSoon: 'Ustawienia aplikacji będą wkrótce dostępne.',
+    permissions: {
+        manage_users: 'Zarządzanie użytkownikami',
+        manage_events: 'Zarządzanie wydarzeniami',
+        manage_prayers: 'Zarządzanie modlitwami',
+        manage_sabbaths: 'Zarządzanie sabatami',
+        manage_churches: 'Zarządzanie kościołami',
+        view_admin_dashboard: 'Wyświetl panel administratora',
+},
     roles: {
       admin: 'Admin',
       pastor: 'Pastor',

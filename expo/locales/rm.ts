@@ -50,6 +50,16 @@ export default {
     notificationComingSoon: 'Ils parameters da communicaziuns vegnan ad esser disponibels en ina proxima actualisaziun.',
     privacyComingSoon: 'Ils parameters da privacitad e segirezza vegnan ad esser disponibels en ina proxima actualisaziun.',
     appComingSoon: 'Ils parameters da l’app vegnan ad esser disponibels en ina proxima actualisaziun.',
+    notificationsComingSoon: 'Las preferenzas da notificaziuns vegnan ad esser disponiblas bainbaud.',
+    appSettingsComingSoon: 'Las preferenzas da l’app vegnan ad esser disponiblas bainbaud.',
+    permissions: {
+        manage_users: 'Administrar utilisaders',
+        manage_events: 'Administrar eveniments',
+        manage_prayers: 'Administrar uraziuns',
+        manage_sabbaths: 'Administrar sabbats',
+        manage_churches: 'Administrar baselgias',
+        view_admin_dashboard: 'Vesair il dashboard d’administraziun',
+    },
     roles: {
       admin: 'Admin',
       pastor: 'Pastur',

@@ -1,16 +1,16 @@
 import { StatusBar } from 'expo-status-bar';
-import { 
-  User, 
-  Calendar, 
-  Settings, 
-  LogOut, 
+import {
+  User,
+  Calendar,
+  Settings,
+  LogOut,
   Shield,
   Bell,
   Heart,
   Users,
-  ChevronRight
+  ChevronRight,
 } from 'lucide-react-native';
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -27,6 +27,12 @@ import { trpc } from '@/lib/trpc';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from '@/components/LanguageSelector';
 
+function formatPermissionFallback(permission: string): string {
+  return permission
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 export default function ProfileScreen() {
   const { t, i18n } = useTranslation();
   const { user, logout, isLogoutLoading } = useAuth();
@@ -42,7 +48,6 @@ export default function ProfileScreen() {
   );
 
   const handleLogout = () => {
-    console.log('handleLogout called');
     Alert.alert(
       t('profile.signOutTitle'),
       t('profile.signOutMessage'),
@@ -52,7 +57,6 @@ export default function ProfileScreen() {
           text: t('profile.signOut'),
           style: 'destructive',
           onPress: () => {
-            console.log('User confirmed logout, calling logout function');
             logout();
           },
         },
@@ -60,71 +64,96 @@ export default function ProfileScreen() {
     );
   };
 
-  const profileStats = [
-    {
-      label: t('profile.eventsAttended'),
-      value: isStatsLoading ? '...' : String(userStats?.eventsAttended ?? 0),
-      icon: Calendar,
-      color: '#3b82f6',
-    },
-    {
-      label: t('profile.prayersShared'),
-      value: isStatsLoading ? '...' : String(userStats?.prayersShared ?? 0),
-      icon: Heart,
-      color: '#ef4444',
-    },
-    {
-      label: t('profile.totalUsers'),
-      value: isTotalCountLoading ? '...' : String(totalCount?.totalUsers ?? 0),
-      icon: Users,
-      color: '#10b981',
-    },
-  ];
+  const profileStats = useMemo(
+    () => [
+      {
+        label: t('profile.eventsAttended'),
+        value: isStatsLoading ? '...' : String(userStats?.eventsAttended ?? 0),
+        icon: Calendar,
+        color: '#3b82f6',
+      },
+      {
+        label: t('profile.prayersShared'),
+        value: isStatsLoading ? '...' : String(userStats?.prayersShared ?? 0),
+        icon: Heart,
+        color: '#ef4444',
+      },
+      {
+        label: t('profile.totalUsers'),
+        value: isTotalCountLoading ? '...' : String(totalCount?.totalUsers ?? 0),
+        icon: Users,
+        color: '#10b981',
+      },
+    ],
+    [
+      t,
+      isStatsLoading,
+      userStats?.eventsAttended,
+      userStats?.prayersShared,
+      isTotalCountLoading,
+      totalCount?.totalUsers,
+    ]
+  );
 
-const menuItems = [
-  {
-    title: t('profile.notifications'),
-    subtitle: t('profile.notificationsSubtitle'),
-    icon: Bell,
-    onPress: () =>
-      Alert.alert(
-        t('common.comingSoon'),
-        t('profile.privacyComingSoon')
-      ),
-  },
-  {
-    title: t('profile.privacySecurity'),
-    subtitle: t('profile.privacySecuritySubtitle'),
-    icon: Shield,
-    onPress: () =>
-      Alert.alert(
-        t('common.comingSoon'),
-        t('profile.appComingSoon')
-      ),
-  },
-  {
-    title: t('profile.appSettings'),
-    subtitle: t('profile.appSettingsSubtitle'),
-    icon: Settings,
-    onPress: () =>
-      Alert.alert(
-        t('common.comingSoon'),
-        t('profile.privacySecurityComingSoon')
-      ),
-  },
-    ...(checkIsChurchLeader(user) ? [{
-      title: t('profile.adminDashboard'),
-      subtitle: t('profile.adminDashboardSubtitle'),
-      icon: Shield,
-      onPress: () => router.push('/admin')
-    }] : []),
-  ];
+  const menuItems = useMemo(
+    () => [
+      {
+        title: t('profile.notifications'),
+        subtitle: t('profile.notificationsSubtitle'),
+        icon: Bell,
+        onPress: () =>
+          Alert.alert(
+            t('common.comingSoon'),
+            t('profile.notificationsComingSoon', {
+              defaultValue: 'Notification settings will be available soon.',
+            })
+          ),
+      },
+      {
+        title: t('profile.privacySecurity'),
+        subtitle: t('profile.privacySecuritySubtitle'),
+        icon: Shield,
+        onPress: () =>
+          Alert.alert(
+            t('common.comingSoon'),
+            t('profile.privacySecurityComingSoon', {
+              defaultValue: 'Privacy and security settings will be available soon.',
+            })
+          ),
+      },
+      {
+        title: t('profile.appSettings'),
+        subtitle: t('profile.appSettingsSubtitle'),
+        icon: Settings,
+        onPress: () =>
+          Alert.alert(
+            t('common.comingSoon'),
+            t('profile.appSettingsComingSoon', {
+              defaultValue: 'App settings will be available soon.',
+            })
+          ),
+      },
+      ...(checkIsChurchLeader(user)
+        ? [
+            {
+              title: t('profile.adminDashboard'),
+              subtitle: t('profile.adminDashboardSubtitle'),
+              icon: Shield,
+              onPress: () => router.push('/admin'),
+            },
+          ]
+        : []),
+    ],
+    [t, user]
+  );
 
   const formatDate = (input: Date | string) => {
     const date = input instanceof Date ? input : new Date(input);
+
     if (Number.isNaN(date.getTime())) {
-      return 'Unknown';
+      return t('common.unknown');
     }
+
     return date.toLocaleDateString(i18n.language, {
       year: 'numeric',
       month: 'long',
@@ -134,24 +163,37 @@ const menuItems = [
 
   const getRoleColor = (role: string) => {
     switch (role) {
-      case 'admin': return '#8b5cf6';
-      case 'pastor': return '#3b82f6';
-      case 'member': return '#10b981';
-      default: return '#64748b';
+      case 'admin':
+        return '#8b5cf6';
+      case 'pastor':
+        return '#3b82f6';
+      case 'church_leader':
+        return '#f59e0b';
+      case 'member':
+        return '#10b981';
+      default:
+        return '#64748b';
     }
   };
 
   const getRoleLabel = (role: string) => {
     if (!role) return '';
+
     return t(`profile.roles.${role}`, {
       defaultValue: role.charAt(0).toUpperCase() + role.slice(1),
+    });
+  };
+
+  const getPermissionLabel = (permission: string) => {
+    return t(`profile.permissions.${permission}`, {
+      defaultValue: formatPermissionFallback(permission),
     });
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
-      
+
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <View style={styles.avatarContainer}>
@@ -162,9 +204,11 @@ const menuItems = [
               <Text style={styles.roleBadgeText}>{getRoleLabel(user?.role || '')}</Text>
             </View>
           </View>
-          
+
           <View style={styles.userInfo}>
-            <Text style={styles.userName}>{user?.firstName} {user?.lastName}</Text>
+            <Text style={styles.userName}>
+              {user?.firstName} {user?.lastName}
+            </Text>
             <Text style={styles.userEmail}>{user?.email}</Text>
             {user?.phone && (
               <Text style={styles.userPhone}>{user.phone}</Text>
@@ -198,7 +242,7 @@ const menuItems = [
                 <View key={index} style={styles.permissionItem}>
                   <Shield size={16} color="#64748b" />
                   <Text style={styles.permissionText}>
-                    {permission.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    {getPermissionLabel(permission)}
                   </Text>
                 </View>
               ))}
@@ -215,7 +259,7 @@ const menuItems = [
                 <View style={styles.menuIcon}>
                   <item.icon size={20} color="#64748b" />
                 </View>
-                <View>
+                <View style={styles.menuTextBlock}>
                   <Text style={styles.menuItemTitle}>{item.title}</Text>
                   <Text style={styles.menuItemSubtitle}>{item.subtitle}</Text>
                 </View>
@@ -226,12 +270,12 @@ const menuItems = [
         </View>
 
         <View style={styles.logoutContainer}>
-          <TouchableOpacity 
-            style={[styles.logoutButton, isLogoutLoading && styles.logoutButtonDisabled]} 
+          <TouchableOpacity
+            style={[styles.logoutButton, isLogoutLoading && styles.logoutButtonDisabled]}
             onPress={handleLogout}
             disabled={isLogoutLoading}
           >
-            <LogOut size={20} color={isLogoutLoading ? "#94a3b8" : "#ef4444"} />
+            <LogOut size={20} color={isLogoutLoading ? '#94a3b8' : '#ef4444'} />
             <Text style={[styles.logoutText, isLogoutLoading && styles.logoutTextDisabled]}>
               {isLogoutLoading ? t('profile.signingOut') : t('profile.signOut')}
             </Text>
@@ -353,12 +397,6 @@ const styles = StyleSheet.create({
     color: '#64748b',
     textAlign: 'center',
   },
-  statHint: {
-    fontSize: 10,
-    color: '#94a3b8',
-    textAlign: 'center',
-    marginTop: 4,
-  },
   permissionsContainer: {
     paddingHorizontal: 24,
     marginBottom: 24,
@@ -402,9 +440,13 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   menuItemLeft: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  menuTextBlock: {
+    flex: 1,
   },
   menuIcon: {
     width: 40,
@@ -457,7 +499,4 @@ const styles = StyleSheet.create({
   spacer: {
     height: 40,
   },
-  languageTextBlock: {
-    flexShrink: 1,
-},
 });

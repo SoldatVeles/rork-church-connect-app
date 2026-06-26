@@ -50,6 +50,16 @@ export default {
     notificationComingSoon: 'Les paramètres de notification seront disponibles dans une prochaine mise à jour.',
     privacyComingSoon: 'Les paramètres de confidentialité et de sécurité seront disponibles dans une prochaine mise à jour.',
     appComingSoon: 'Les paramètres de l’application seront disponibles dans une prochaine mise à jour.',
+    notificationsComingSoon: 'Les paramètres de notification seront bientôt disponibles.',
+    appSettingsComingSoon: 'Les paramètres de l’application seront bientôt disponibles.',
+    permissions: {
+        manage_users: 'Gérer les utilisateurs',
+        manage_events: 'Gérer les événements',
+        manage_prayers: 'Gérer les prières',
+        manage_sabbaths: 'Gérer les sabbats',
+        manage_churches: 'Gérer les églises',
+        view_admin_dashboard: 'Voir le tableau de bord admin',
+},
     roles: {
       admin: 'Admin',
       pastor: 'Pasteur',
