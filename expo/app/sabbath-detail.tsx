@@ -33,6 +33,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
 import type {
@@ -91,9 +92,9 @@ function formatAssignableRole(role: string | null | undefined): string {
   }
 }
 
-function formatSabbathDate(dateStr: string): string {
-  const date = new Date(dateStr + 'T00:00:00');
-  return date.toLocaleDateString('en-US', {
+function formatSabbathDate(dateStr: string, locale?: string): string {
+  const date = new Date(`${dateStr}T12:00:00`);
+  return date.toLocaleDateString(locale, {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
@@ -104,7 +105,9 @@ function formatSabbathDate(dateStr: string): string {
 function isUpcoming(dateStr: string): boolean {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  return new Date(dateStr + 'T00:00:00') >= today;
+  const sabbathDate = new Date(`${dateStr}T12:00:00`);
+  sabbathDate.setHours(0, 0, 0, 0);
+  return sabbathDate >= today;
 }
 
 export default function SabbathDetailScreen() {
@@ -112,13 +115,14 @@ export default function SabbathDetailScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { t, i18n } = useTranslation();
   
   const detailQuery = useQuery<SabbathDetailView>({
-    queryKey: ['sabbath-detail', sabbathId, user?.id],
+    queryKey: ['sabbath-detail', sabbathId, user?.id, i18n.language],
     enabled: !!sabbathId && !!user?.id,
     staleTime: 5_000,
     queryFn: async (): Promise<SabbathDetailView> => {
-      if (!sabbathId || !user?.id) throw new Error('Missing sabbathId or user');
+      if (!sabbathId || !user?.id) throw new Error(t('sabbathDetail.errors.missingData'));
 
       const { data: sabbathRow, error: sErr } = await supabase
         .from('sabbaths')
@@ -127,7 +131,7 @@ export default function SabbathDetailScreen() {
         .single();
       if (sErr || !sabbathRow) {
         console.error('[SabbathDetail] sabbath fetch error:', sErr);
-        throw new Error('Sabbath not found');
+        throw new Error(t('sabbathDetail.errors.notFound'));
       }
       const sabbathRec = sabbathRow as Sabbath;
 
@@ -148,7 +152,7 @@ export default function SabbathDetailScreen() {
 
       const groupInfo: SabbathGroupInfo = groupRes.data
         ? { id: (groupRes.data as any).id, name: (groupRes.data as any).name }
-        : { id: sabbathRec.group_id, name: 'Unknown Church' };
+        : { id: sabbathRec.group_id, name: t('sabbath.unknownChurch') };
 
       const assignmentsList = (assignmentsRes.data ?? []) as any[];
       const isAssignedUserVal = assignmentsList.some((a) => a.user_id === user.id);
@@ -170,13 +174,13 @@ const shouldShowAssignmentsVal =
             .select('id, full_name, display_name')
             .in('id', userIds);
           (profs || []).forEach((p: any) => {
-            nameMap.set(p.id, p.display_name || p.full_name || 'Unknown');
+            nameMap.set(p.id, p.display_name || p.full_name || t('common.unknown'));
           });
         }
         assignmentsOut = assignmentsList.map((a) => ({
           ...a,
-          user_name: a.user_id ? nameMap.get(a.user_id) ?? 'Unknown' : undefined,
-          suggested_user_name: a.suggested_user_id ? nameMap.get(a.suggested_user_id) ?? 'Unknown' : undefined,
+          user_name: a.user_id ? nameMap.get(a.user_id) ?? t('common.unknown') : undefined,
+          suggested_user_name: a.suggested_user_id ? nameMap.get(a.suggested_user_id) ?? t('common.unknown') : undefined,
         }));
       }
 
@@ -197,10 +201,10 @@ const shouldShowAssignmentsVal =
             .select('id, full_name, display_name')
             .in('id', ids);
           (profs || []).forEach((p: any) => {
-            nameMap.set(p.id, p.display_name || p.full_name || 'Unknown');
+            nameMap.set(p.id, p.display_name || p.full_name || t('common.unknown'));
           });
         }
-        attendanceOut = attList.map((a) => ({ ...a, user_name: nameMap.get(a.user_id) ?? 'Unknown' }));
+        attendanceOut = attList.map((a) => ({ ...a, user_name: nameMap.get(a.user_id) ?? t('common.unknown') }));
         attendingCountVal = attendanceOut.filter((a) => a.status === 'attending').length;
       }
 
@@ -259,7 +263,7 @@ const fetchGroupedMembers = useCallback(async (primaryGroupId: string): Promise<
 
     if (!memberId || !groupId) return;
 
-    const groupName = (row.group_name ?? row.home_church_name ?? 'Unknown Church') as string;
+    const groupName = (row.group_name ?? row.home_church_name ?? t('sabbath.unknownChurch')) as string;
     const countryName = (row.country_name ?? null) as string | null;
     const isTargetChurch = Boolean(row.is_target_church) || groupId === primaryGroupId;
 
@@ -281,7 +285,7 @@ const fetchGroupedMembers = useCallback(async (primaryGroupId: string): Promise<
     section.memberIds.add(memberId);
     section.members.push({
       id: memberId,
-      name: (row.name ?? row.full_name ?? row.display_name ?? row.email ?? 'Unknown') as string,
+      name: (row.name ?? row.full_name ?? row.display_name ?? row.email ?? t('common.unknown')) as string,
       role: (row.role ?? null) as string | null,
     });
   });
@@ -316,7 +320,7 @@ const fetchGroupedMembers = useCallback(async (primaryGroupId: string): Promise<
 
 const publishMutation = useMutation({
   mutationFn: async ({ sabbathId: sid }: { sabbathId: string }) => {
-    if (!user?.id) throw new Error('Not authenticated');
+    if (!user?.id) throw new Error(t('sabbath.notAuthenticated'));
 
     const { data: sabbathRow, error: sabbathError } = await supabase
       .from('sabbaths')
@@ -325,7 +329,7 @@ const publishMutation = useMutation({
       .single();
 
     if (sabbathError || !sabbathRow) {
-      throw new Error(sabbathError?.message ?? 'Sabbath not found');
+      throw new Error(sabbathError?.message ?? t('sabbathDetail.errors.notFound'));
     }
 
     const currentSabbath = sabbathRow as {
@@ -336,7 +340,7 @@ const publishMutation = useMutation({
     };
 
     if (currentSabbath.status !== 'draft') {
-      throw new Error('Only draft Sabbaths can be published.');
+      throw new Error(t('sabbathDetail.errors.onlyDraftCanPublish'));
     }
 
     const { data: assignments, error: assignmentsError } = await supabase
@@ -352,11 +356,11 @@ const publishMutation = useMutation({
       const assignment = (assignments || []).find((item: any) => item.role === role);
 
       if (!assignment) {
-        throw new Error(`Cannot publish: missing assignment for "${role}". Please recreate the Sabbath.`);
+        throw new Error(t('sabbathDetail.errors.missingAssignment', { role: getRoleLabel(role) }));
       }
 
       if (!(assignment as any).user_id) {
-        throw new Error(`Cannot publish: role "${role}" has no assigned user. Please assign all roles before publishing.`);
+        throw new Error(t('sabbathDetail.errors.unassignedRole', { role: getRoleLabel(role) }));
       }
     }
 
@@ -405,7 +409,7 @@ const publishMutation = useMutation({
       ).filter(Boolean);
 
       const churchName = (group as any)?.name ?? 'your church';
-      const readableDate = formatSabbathDate(currentSabbath.sabbath_date);
+      const readableDate = formatSabbathDate(currentSabbath.sabbath_date, i18n.language);
 
       const notificationRows = recipientIds.map((recipientId) => ({
         type: 'sabbath',
@@ -442,7 +446,7 @@ const cancelMutation = useMutation({
     sabbathId: string;
     cancellationReason: string | null;
   }) => {
-    if (!user?.id) throw new Error('Not authenticated');
+    if (!user?.id) throw new Error(t('sabbath.notAuthenticated'));
 
     const { data: sabbathRow, error: sabbathError } = await supabase
       .from('sabbaths')
@@ -451,7 +455,7 @@ const cancelMutation = useMutation({
       .single();
 
     if (sabbathError || !sabbathRow) {
-      throw new Error(sabbathError?.message ?? 'Sabbath not found');
+      throw new Error(sabbathError?.message ?? t('sabbathDetail.errors.notFound'));
     }
 
     const currentSabbath = sabbathRow as {
@@ -522,7 +526,7 @@ const cancelMutation = useMutation({
       ).filter(Boolean);
 
       const churchName = (group as any)?.name ?? 'your church';
-      const readableDate = formatSabbathDate(currentSabbath.sabbath_date);
+      const readableDate = formatSabbathDate(currentSabbath.sabbath_date, i18n.language);
       const reasonText = cancellationReason?.trim()
         ? ` Reason: ${cancellationReason.trim()}`
         : '';
@@ -559,7 +563,7 @@ const cancelMutation = useMutation({
 
   const revertMutation = useMutation({
     mutationFn: async ({ sabbathId: sid }: { sabbathId: string }) => {
-      if (!user?.id) throw new Error('Not authenticated');
+      if (!user?.id) throw new Error(t('sabbath.notAuthenticated'));
       const { error } = await supabase
         .from('sabbaths')
         .update({ status: 'draft', updated_by: user.id })
@@ -596,7 +600,7 @@ const assignRoleMutation = useMutation({
       .single();
 
     if (sabbathError || !sabbathRow) {
-      throw new Error(sabbathError?.message ?? 'Sabbath not found');
+      throw new Error(sabbathError?.message ?? t('sabbathDetail.errors.notFound'));
     }
 
     const currentSabbath = sabbathRow as {
@@ -635,7 +639,7 @@ const assignRoleMutation = useMutation({
     }
 
     const churchName = (groupRow as any)?.name ?? 'a church';
-    const readableDate = formatSabbathDate(currentSabbath.sabbath_date);
+    const readableDate = formatSabbathDate(currentSabbath.sabbath_date, i18n.language);
     const roleName = ROLE_LABELS[role] ?? role;
 
     const { error: notificationError } = await supabase
@@ -680,7 +684,7 @@ const declineMutation = useMutation({
     assignmentId: string;
     reason: string | null;
   }) => {
-    if (!user?.id) throw new Error('Not authenticated');
+    if (!user?.id) throw new Error(t('sabbath.notAuthenticated'));
 
     const { data, error } = await supabase.rpc(
       'decline_sabbath_assignment_with_notifications',
@@ -705,13 +709,13 @@ const declineMutation = useMutation({
   },
   onError: (error: Error) => {
     console.error('[SabbathDetail] Decline assignment failed:', error);
-    Alert.alert('Error', error.message || 'Failed to decline assignment');
+    Alert.alert(t('sabbath.errorTitle'), error.message || t('sabbathDetail.failedToDeclineAssignment'));
   },
 });
 
   const attendanceMutation = useMutation({
     mutationFn: async ({ sabbathId: sid, status }: { sabbathId: string; status: SabbathAttendanceStatus }) => {
-      if (!user?.id) throw new Error('Not authenticated');
+      if (!user?.id) throw new Error(t('sabbath.notAuthenticated'));
       const { data: existing } = await supabase
         .from('sabbath_attendance')
         .select('id')
@@ -742,7 +746,7 @@ const suggestReplacementMutation = useMutation({
     assignmentId: string;
     suggestedUserId: string;
   }) => {
-    if (!user?.id) throw new Error('Not authenticated');
+    if (!user?.id) throw new Error(t('sabbath.notAuthenticated'));
 
     const { data: assignmentRow, error: assignmentFetchError } = await supabase
       .from('sabbath_assignments')
@@ -751,7 +755,7 @@ const suggestReplacementMutation = useMutation({
       .single();
 
     if (assignmentFetchError || !assignmentRow) {
-      throw new Error(assignmentFetchError?.message ?? 'Assignment not found');
+      throw new Error(assignmentFetchError?.message ?? t('sabbathDetail.errors.assignmentNotFound'));
     }
 
     const assignment = assignmentRow as {
@@ -842,7 +846,7 @@ const suggestReplacementMutation = useMutation({
       (profiles ?? []).forEach((profile: any) => {
         profileMap.set(
           profile.id,
-          profile.display_name || profile.full_name || 'Unknown'
+          profile.display_name || profile.full_name || t('common.unknown')
         );
       });
 
@@ -853,7 +857,7 @@ const suggestReplacementMutation = useMutation({
 
       const suggestedName = profileMap.get(suggestedUserId) || 'another member';
       const churchName = (group as any)?.name ?? 'your church';
-      const readableDate = formatSabbathDate(currentSabbath.sabbath_date);
+      const readableDate = formatSabbathDate(currentSabbath.sabbath_date, i18n.language);
 
       const notificationRows = recipientIds.map((recipientId) => ({
         type: 'sabbath',
@@ -911,7 +915,20 @@ const otherCountrySections = useMemo(
 const assignableCountryName =
   otherCountrySections[0]?.countryName ??
   targetChurchSections[0]?.countryName ??
-  'Same Country';
+  t('sabbathDetail.sameCountry');
+
+const getRoleLabel = useCallback((role: SabbathRole) => {
+  return t(`sabbath.roles.${role}`, { defaultValue: ROLE_LABELS[role] ?? role });
+}, [t]);
+
+const getAssignmentStatusLabel = useCallback((status: SabbathAssignmentStatus) => {
+  return t(`sabbath.assignmentStatus.${status}`, { defaultValue: ASSIGNMENT_STATUS_LABELS[status] ?? status });
+}, [t]);
+
+const getAssignableRoleLabel = useCallback((role: string | null | undefined) => {
+  if (!role) return '';
+  return t(`sabbathDetail.assignableRoles.${role}`, { defaultValue: formatAssignableRole(role) });
+}, [t]);
 
 const toggleAssignableChurch = useCallback((groupId: string) => {
   setExpandedAssignableChurchIds((prev) => {
@@ -965,12 +982,12 @@ const myAssignments = useMemo(
   const handlePublish = useCallback(() => {
     if (!sabbath) return;
     Alert.alert(
-      'Publish Sabbath',
-      'This will make the plan visible to all church members. Continue?',
+      t('sabbathDetail.publishTitle'),
+      t('sabbathDetail.publishMessage'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Publish',
+          text: t('sabbathDetail.publish'),
           onPress: () => {
             publishMutation.mutate(
               { sabbathId: sabbath.id },
@@ -979,7 +996,7 @@ const myAssignments = useMemo(
                   console.log('[SabbathDetail] Published:', sabbath.id);
                   void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                 },
-                onError: (err) => Alert.alert('Error', err.message || 'Failed to publish.'),
+                onError: (err) => Alert.alert(t('sabbath.errorTitle'), err.message || t('sabbathDetail.failedToPublish')),
               }
             );
           },
@@ -1012,12 +1029,12 @@ const myAssignments = useMemo(
   const handleDelete = useCallback(() => {
     if (!sabbath) return;
     Alert.alert(
-      'Delete Sabbath',
-      'This will permanently delete this Sabbath plan and all its assignments and attendance records. This cannot be undone.',
+      t('sabbathDetail.deleteTitle'),
+      t('sabbathDetail.deleteMessage'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('sabbathDetail.delete'),
           style: 'destructive',
           onPress: () => {
             deleteMutation.mutate(
@@ -1030,7 +1047,7 @@ const myAssignments = useMemo(
                 },
                 onError: (err) => {
                   console.error('[SabbathDetail] Delete error:', err);
-                  Alert.alert('Error', err.message || 'Failed to delete Sabbath.');
+                  Alert.alert(t('sabbath.errorTitle'), err.message || t('sabbathDetail.failedToDelete'));
                 },
               }
             );
@@ -1043,12 +1060,12 @@ const myAssignments = useMemo(
   const handleRevertToDraft = useCallback(() => {
     if (!sabbath) return;
     Alert.alert(
-      'Revert to Draft',
-      'This will hide the plan from members. Continue?',
+      t('sabbathDetail.revertTitle'),
+      t('sabbathDetail.revertMessage'),
       [
-        { text: 'No', style: 'cancel' },
+        { text: t('sabbathDetail.no'), style: 'cancel' },
         {
-          text: 'Revert',
+          text: t('sabbathDetail.revert'),
           style: 'destructive',
           onPress: () => {
             revertMutation.mutate(
@@ -1058,7 +1075,7 @@ const myAssignments = useMemo(
                   console.log('[SabbathDetail] Reverted to draft:', sabbath.id);
                   void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                 },
-                onError: (err) => Alert.alert('Error', err.message || 'Failed to revert.'),
+                onError: (err) => Alert.alert(t('sabbath.errorTitle'), err.message || t('sabbathDetail.failedToRevert')),
               }
             );
           },
@@ -1081,7 +1098,7 @@ const myAssignments = useMemo(
           },
           onError: (err) => {
   console.error('[SabbathDetail] Assign role error:', err);
-  Alert.alert('Error', err.message || 'Failed to assign role.');
+  Alert.alert(t('sabbath.errorTitle'), err.message || t('sabbathDetail.failedToAssign'));
 },
         }
       );
@@ -1098,7 +1115,7 @@ const handleAcceptAssignment = useCallback(
           console.log('[SabbathDetail] Accepted assignment:', assignment.id);
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         },
-        onError: (err) => Alert.alert('Error', err.message || 'Failed to accept assignment.'),
+        onError: (err) => Alert.alert(t('sabbath.errorTitle'), err.message || t('sabbathDetail.failedToAcceptAssignment')),
       }
     );
   },
@@ -1117,7 +1134,7 @@ const handleAcceptAssignment = useCallback(
           setDeclineReason('');
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         },
-        onError: (err) => Alert.alert('Error', err.message || 'Failed to decline.'),
+        onError: (err) => Alert.alert(t('sabbath.errorTitle'), err.message || t('sabbathDetail.failedToDecline')),
       }
     );
   }, [decliningAssignment, declineReason, declineMutation]);
@@ -1133,9 +1150,9 @@ const handleAcceptAssignment = useCallback(
             setShowSuggestModal(false);
             setSuggestingAssignment(null);
             void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            Alert.alert('Replacement Suggested', 'The pastor has been notified of your suggestion.');
+            Alert.alert(t('sabbath.suggestReplacement'), t('sabbathDetail.replacementSuggestedAlertMessage'));
           },
-          onError: (err) => Alert.alert('Error', err.message || 'Failed to suggest replacement.'),
+          onError: (err) => Alert.alert(t('sabbath.errorTitle'), err.message || t('sabbath.failedToSuggestReplacement')),
         }
       );
     },
@@ -1152,7 +1169,7 @@ const handleAcceptAssignment = useCallback(
             console.log('[SabbathDetail] Attendance:', status);
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           },
-          onError: (err) => Alert.alert('Error', err.message || 'Failed to update attendance.'),
+          onError: (err) => Alert.alert(t('sabbath.errorTitle'), err.message || t('sabbathDetail.failedToUpdateAttendance')),
         }
       );
     },
@@ -1171,7 +1188,7 @@ const handleAcceptAssignment = useCallback(
           ) : (
             <>
               <ActivityIndicator size="large" color="#1e3a8a" />
-              <Text style={styles.loadingText}>Loading...</Text>
+              <Text style={styles.loadingText}>{t('sabbathDetail.loading')}</Text>
             </>
           )}
         </View>
@@ -1204,7 +1221,7 @@ const handleAcceptAssignment = useCallback(
           <View style={styles.headerCenter}>
             <Sun size={18} color="#fbbf24" />
             <Text style={styles.headerTitle} numberOfLines={1}>
-              {formatSabbathDate(sabbath.sabbath_date)}
+              {formatSabbathDate(sabbath.sabbath_date, i18n.language)}
             </Text>
           </View>
           <View style={styles.backBtn} />
@@ -1214,10 +1231,10 @@ const handleAcceptAssignment = useCallback(
           <View style={[styles.statusPill, { backgroundColor: statusStyle.bg }]}>
             <View style={[styles.statusDot, { backgroundColor: statusStyle.accent }]} />
             <Text style={[styles.statusPillText, { color: statusStyle.text }]}>
-              {STATUS_LABELS[sabbath.status]}
+              {t(`sabbath.status.${sabbath.status}`, { defaultValue: STATUS_LABELS[sabbath.status] })}
             </Text>
           </View>
-          <Text style={styles.churchName}>{detail?.group?.name || 'Loading...'}</Text>
+          <Text style={styles.churchName}>{detail?.group?.name || t('sabbathDetail.loading')}</Text>
         </View>
       </LinearGradient>
 
@@ -1232,7 +1249,7 @@ const handleAcceptAssignment = useCallback(
         {isCancelledForNormalMember && (
           <View style={styles.cancelledBanner}>
             <Ban size={20} color="#991b1b" />
-            <Text style={styles.cancelledBannerText}>This Sabbath has been cancelled.</Text>
+            <Text style={styles.cancelledBannerText}>{t('sabbath.cancelled')}</Text>
             {sabbath.cancellation_reason ? (
               <View style={styles.cancelReasonCard}>
                 <Text style={styles.cancelReasonText}>{sabbath.cancellation_reason}</Text>
@@ -1247,7 +1264,7 @@ const handleAcceptAssignment = useCallback(
               <View style={styles.attendanceSection}>
                 <View style={styles.sectionHeader}>
                   <UserCheck size={18} color="#0f172a" />
-                  <Text style={styles.sectionTitle}>Your Attendance</Text>
+                  <Text style={styles.sectionTitle}>{t('sabbath.sections.yourAttendance')}</Text>
                 </View>
                 <View style={styles.attendanceRow}>
                   <TouchableOpacity
@@ -1265,7 +1282,7 @@ const handleAcceptAssignment = useCallback(
                         myAttendance?.status === 'attending' && styles.attendanceBtnTextActive,
                       ]}
                     >
-                      Attending
+                      {t('sabbath.attendance.attending')}
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -1285,13 +1302,13 @@ const handleAcceptAssignment = useCallback(
                         myAttendance?.status === 'not_attending' && styles.attendanceBtnTextActive,
                       ]}
                     >
-                      Not Attending
+                      {t('sabbath.attendance.notAttending')}
                     </Text>
                   </TouchableOpacity>
                 </View>
                 {shouldShowAttendees && (
                   <Text style={styles.attendanceSummary}>
-                    {attendingCount} {attendingCount === 1 ? 'person' : 'people'} attending
+                    {t('sabbathDetail.attendanceSummary', { count: attendingCount })}
                   </Text>
                 )}
               </View>
@@ -1303,15 +1320,15 @@ const handleAcceptAssignment = useCallback(
       <View key={assignment.id} style={styles.myAssignmentBanner}>
         <View style={styles.bannerHeader}>
           <ClipboardList size={18} color="#1e3a8a" />
-          <Text style={styles.bannerTitle}>You're assigned as</Text>
+          <Text style={styles.bannerTitle}>{t('sabbathDetail.assignedAs')}</Text>
         </View>
 
-        <Text style={styles.bannerRole}>{ROLE_LABELS[assignment.role]}</Text>
+        <Text style={styles.bannerRole}>{getRoleLabel(assignment.role)}</Text>
 
         {assignment.status === 'accepted' && (
           <View style={styles.acceptedBadgeRow}>
             <Check size={14} color="#065f46" />
-            <Text style={styles.acceptedBadgeText}>You accepted this assignment</Text>
+            <Text style={styles.acceptedBadgeText}>{t('sabbathDetail.acceptedAssignment')}</Text>
           </View>
         )}
 
@@ -1340,7 +1357,7 @@ const handleAcceptAssignment = useCallback(
                       assignment.status === 'accepted' && styles.acceptBtnTextAccepted,
                     ]}
                   >
-                    {assignment.status === 'accepted' ? 'Accepted' : 'Accept'}
+                    {assignment.status === 'accepted' ? t('sabbath.assignmentStatus.accepted') : t('sabbath.assignmentActions.accept')}
                   </Text>
                 </>
               )}
@@ -1357,7 +1374,7 @@ const handleAcceptAssignment = useCallback(
             testID={`decline-assignment-button-${assignment.id}`}
           >
             <X size={16} color="#ef4444" />
-            <Text style={styles.declineBtnText}>Decline</Text>
+            <Text style={styles.declineBtnText}>{t('sabbath.assignmentActions.decline')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1370,7 +1387,7 @@ const handleAcceptAssignment = useCallback(
             testID={`suggest-replacement-button-${assignment.id}`}
           >
             <RefreshCw size={16} color="#3730a3" />
-            <Text style={styles.suggestBtnText}>Suggest Replacement</Text>
+            <Text style={styles.suggestBtnText}>{t('sabbath.assignmentActions.suggestReplacement')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1382,7 +1399,7 @@ const handleAcceptAssignment = useCallback(
               <View style={styles.assignmentsSection}>
                 <View style={styles.sectionHeader}>
                   <ClipboardList size={18} color="#0f172a" />
-                  <Text style={styles.sectionTitle}>Assignments</Text>
+                  <Text style={styles.sectionTitle}>{t('sabbathDetail.assignments')}</Text>
                 </View>
                 {ALL_ROLES.map((role) => {
                   const assignment = assignmentMap.get(role);
@@ -1390,11 +1407,11 @@ const handleAcceptAssignment = useCallback(
                   return (
                     <View key={role} style={styles.roleCard}>
                       <View style={styles.roleHeader}>
-                        <Text style={styles.roleLabel}>{ROLE_LABELS[role]}</Text>
+                        <Text style={styles.roleLabel}>{getRoleLabel(role)}</Text>
                         {assignment && aStatusStyle && (
                           <View style={[styles.assignmentStatusBadge, { backgroundColor: aStatusStyle.bg }]}>
                             <Text style={[styles.assignmentStatusText, { color: aStatusStyle.text }]}>
-                              {ASSIGNMENT_STATUS_LABELS[assignment.status]}
+                              {getAssignmentStatusLabel(assignment.status)}
                             </Text>
                           </View>
                         )}
@@ -1409,7 +1426,7 @@ const handleAcceptAssignment = useCallback(
                           <Text style={styles.assignedName}>{assignment.user_name}</Text>
                         </View>
                       ) : (
-                        <Text style={styles.unassignedText}>Unassigned</Text>
+                        <Text style={styles.unassignedText}>{t('sabbath.unassigned')}</Text>
                       )}
                       {canManage && assignment?.status === 'declined' && assignment.decline_reason && (
                         <View style={styles.declineReasonBox}>
@@ -1421,7 +1438,7 @@ const handleAcceptAssignment = useCallback(
                         <View style={styles.suggestedBox}>
                           <UserPlus size={12} color="#3730a3" />
                           <Text style={styles.suggestedText}>
-                            Suggested: {assignment.suggested_user_name}
+                            {t('sabbathDetail.suggestedUser', { name: assignment.suggested_user_name })}
                           </Text>
                         </View>
                       )}
@@ -1435,7 +1452,7 @@ const handleAcceptAssignment = useCallback(
                         >
                           <UserPlus size={14} color="#1e3a8a" />
                           <Text style={styles.assignBtnText}>
-                            {assignment?.user_id ? 'Reassign' : 'Assign'}
+                            {assignment?.user_id ? t('sabbathDetail.reassign') : t('sabbathDetail.assign')}
                           </Text>
                         </TouchableOpacity>
                       )}
@@ -1449,7 +1466,7 @@ const handleAcceptAssignment = useCallback(
               <View style={styles.notesSection}>
                 <View style={styles.sectionHeader}>
                   <MessageSquare size={18} color="#0f172a" />
-                  <Text style={styles.sectionTitle}>Notes</Text>
+                  <Text style={styles.sectionTitle}>{t('sabbathDetail.notes')}</Text>
                 </View>
                 <View style={styles.notesCard}>
                   <Text style={styles.notesText}>{sabbath.notes}</Text>
@@ -1461,7 +1478,7 @@ const handleAcceptAssignment = useCallback(
               <View style={styles.cancelReasonSection}>
                 <View style={styles.sectionHeader}>
                   <Ban size={18} color="#991b1b" />
-                  <Text style={[styles.sectionTitle, { color: '#991b1b' }]}>Cancellation Reason</Text>
+                  <Text style={[styles.sectionTitle, { color: '#991b1b' }]}>{t('sabbathDetail.cancellationReason')}</Text>
                 </View>
                 <View style={styles.cancelReasonCard}>
                   <Text style={styles.cancelReasonText}>{sabbath.cancellation_reason}</Text>
@@ -1474,7 +1491,7 @@ const handleAcceptAssignment = useCallback(
                 <View style={styles.sectionHeader}>
                   <Users size={18} color="#0f172a" />
                   <Text style={styles.sectionTitle}>
-                    Attendance ({attendingCount}/{attendance.length})
+                    {t('sabbathDetail.attendanceListTitle', { attending: attendingCount, total: attendance.length })}
                   </Text>
                 </View>
                 {attendance.map((a) => (
@@ -1484,7 +1501,7 @@ const handleAcceptAssignment = useCallback(
                         {(a.user_name || '?').charAt(0).toUpperCase()}
                       </Text>
                     </View>
-                    <Text style={styles.attendeeName}>{a.user_name || 'Unknown'}</Text>
+                    <Text style={styles.attendeeName}>{a.user_name || t('common.unknown')}</Text>
                     <View
                       style={[
                         styles.attendeeStatus,
@@ -1504,7 +1521,7 @@ const handleAcceptAssignment = useCallback(
 
             {canManage && upcoming && sabbath.status !== 'cancelled' && (
               <View style={styles.manageSection}>
-                <Text style={styles.manageSectionTitle}>Manage</Text>
+                <Text style={styles.manageSectionTitle}>{t('sabbathDetail.manage')}</Text>
                 <View style={styles.manageActions}>
                   {sabbath.status === 'draft' && (
                     <TouchableOpacity
@@ -1517,7 +1534,7 @@ const handleAcceptAssignment = useCallback(
                       ) : (
                         <>
                           <Eye size={18} color="#fff" />
-                          <Text style={styles.publishBtnText}>Publish to Members</Text>
+                          <Text style={styles.publishBtnText}>{t('sabbathDetail.publishToMembers')}</Text>
                         </>
                       )}
                     </TouchableOpacity>
@@ -1529,7 +1546,7 @@ const handleAcceptAssignment = useCallback(
                       disabled={isStatusUpdating}
                     >
                       <RotateCcw size={16} color="#475569" />
-                      <Text style={styles.revertBtnText}>Revert to Draft</Text>
+                      <Text style={styles.revertBtnText}>{t('sabbathDetail.revertToDraft')}</Text>
                     </TouchableOpacity>
                   )}
                   <TouchableOpacity
@@ -1538,7 +1555,7 @@ const handleAcceptAssignment = useCallback(
                     disabled={isStatusUpdating}
                   >
                     <Ban size={16} color="#ef4444" />
-                    <Text style={styles.cancelSabbathBtnText}>Cancel Sabbath</Text>
+                    <Text style={styles.cancelSabbathBtnText}>{t('sabbathDetail.cancelSabbath')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1557,7 +1574,7 @@ const handleAcceptAssignment = useCallback(
                   ) : (
                     <>
                       <Trash2 size={16} color="#fff" />
-                      <Text style={styles.deleteBtnText}>Delete Sabbath Permanently</Text>
+                      <Text style={styles.deleteBtnText}>{t('sabbathDetail.deletePermanently')}</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -1574,18 +1591,18 @@ const handleAcceptAssignment = useCallback(
           <View style={[styles.modalContainer, { paddingBottom: insets.bottom + 20 }]}>
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>
-              Assign {assigningRole ? ROLE_LABELS[assigningRole] : ''}
+              {t('sabbathDetail.assignRoleTitle', { role: assigningRole ? getRoleLabel(assigningRole) : '' })}
             </Text>
 <ScrollView style={styles.membersList} showsVerticalScrollIndicator={false}>
   {groupedMembersQuery.isLoading ? (
     <View style={styles.emptyMembers}>
       <ActivityIndicator size="large" color="#1e3a8a" />
-      <Text style={styles.emptyMembersText}>Loading members...</Text>
+      <Text style={styles.emptyMembersText}>{t('sabbathDetail.loadingMembers')}</Text>
     </View>
   ) : groupedMembers.length === 0 ? (
     <View style={styles.emptyMembers}>
       <Users size={32} color="#cbd5e1" />
-      <Text style={styles.emptyMembersText}>No assignable members found</Text>
+      <Text style={styles.emptyMembersText}>{t('sabbathDetail.noAssignableMembers')}</Text>
     </View>
   ) : (
     <>
@@ -1597,7 +1614,7 @@ const handleAcceptAssignment = useCallback(
               {section.groupName}
             </Text>
             <View style={styles.yourChurchBadge}>
-              <Text style={styles.yourChurchBadgeText}>Selected Church</Text>
+              <Text style={styles.yourChurchBadgeText}>{t('sabbathDetail.selectedChurch')}</Text>
             </View>
           </View>
 
@@ -1616,8 +1633,8 @@ const handleAcceptAssignment = useCallback(
 
               <View style={styles.memberTextBlock}>
                 <Text style={styles.memberName}>{m.name}</Text>
-                {!!formatAssignableRole(m.role) && (
-                  <Text style={styles.memberRole}>{formatAssignableRole(m.role)}</Text>
+                {!!getAssignableRoleLabel(m.role) && (
+                  <Text style={styles.memberRole}>{getAssignableRoleLabel(m.role)}</Text>
                 )}
               </View>
 
@@ -1643,7 +1660,7 @@ const handleAcceptAssignment = useCallback(
                   <View style={styles.groupHeaderMain}>
                     <Text style={styles.collapsibleGroupTitle}>{section.groupName}</Text>
                     <Text style={styles.groupMemberCount}>
-                      {section.members.length} {section.members.length === 1 ? 'person' : 'people'}
+                      {t('sabbathDetail.memberCount', { count: section.members.length })}
                     </Text>
                   </View>
 
@@ -1670,8 +1687,8 @@ const handleAcceptAssignment = useCallback(
 
                       <View style={styles.memberTextBlock}>
                         <Text style={styles.memberName}>{m.name}</Text>
-                        {!!formatAssignableRole(m.role) && (
-                          <Text style={styles.memberRole}>{formatAssignableRole(m.role)}</Text>
+                        {!!getAssignableRoleLabel(m.role) && (
+                          <Text style={styles.memberRole}>{getAssignableRoleLabel(m.role)}</Text>
                         )}
                       </View>
 
@@ -1693,7 +1710,7 @@ const handleAcceptAssignment = useCallback(
                 setAssigningRole(null);
               }}
             >
-              <Text style={styles.modalCloseBtnText}>Cancel</Text>
+              <Text style={styles.modalCloseBtnText}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1702,15 +1719,15 @@ const handleAcceptAssignment = useCallback(
       <Modal visible={showDeclineModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={[styles.declineModalContainer, { paddingBottom: insets.bottom + 20 }]}>
-            <Text style={styles.declineModalTitle}>Decline Assignment</Text>
+            <Text style={styles.declineModalTitle}>{t('sabbathDetail.declineAssignmentTitle')}</Text>
             <Text style={styles.declineModalSubtitle}>
-              Let the pastor know why you can't attend. They will be notified and can reassign someone else.
+              {t('sabbathDetail.declineAssignmentSubtitle')}
             </Text>
             <TextInput
               style={styles.declineInput}
               value={declineReason}
               onChangeText={setDeclineReason}
-              placeholder="Reason (optional)..."
+              placeholder={t('sabbathDetail.reasonOptionalPlaceholder')}
               placeholderTextColor="#94a3b8"
               multiline
               numberOfLines={3}
@@ -1725,7 +1742,7 @@ const handleAcceptAssignment = useCallback(
                   setDeclineReason('');
                 }}
               >
-                <Text style={styles.declineModalCancelText}>Back</Text>
+                <Text style={styles.declineModalCancelText}>{t('sabbathDetail.back')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.declineModalConfirm}
@@ -1735,7 +1752,7 @@ const handleAcceptAssignment = useCallback(
                 {declineMutation.isPending ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.declineModalConfirmText}>Decline</Text>
+                  <Text style={styles.declineModalConfirmText}>{t('sabbath.assignmentActions.decline')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1746,15 +1763,15 @@ const handleAcceptAssignment = useCallback(
       <Modal visible={showCancelModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={[styles.declineModalContainer, { paddingBottom: insets.bottom + 20 }]}>
-            <Text style={styles.declineModalTitle}>Cancel Sabbath</Text>
+            <Text style={styles.declineModalTitle}>{t('sabbathDetail.cancelSabbath')}</Text>
             <Text style={styles.declineModalSubtitle}>
-              Provide a reason for cancellation.
+              {t('sabbathDetail.cancelSabbathSubtitle')}
             </Text>
             <TextInput
               style={styles.declineInput}
               value={cancelReason}
               onChangeText={setCancelReason}
-              placeholder="Cancellation reason..."
+              placeholder={t('sabbathDetail.cancellationReasonPlaceholder')}
               placeholderTextColor="#94a3b8"
               multiline
               numberOfLines={3}
@@ -1768,7 +1785,7 @@ const handleAcceptAssignment = useCallback(
                   setCancelReason('');
                 }}
               >
-                <Text style={styles.declineModalCancelText}>Back</Text>
+                <Text style={styles.declineModalCancelText}>{t('sabbathDetail.back')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.declineModalConfirm, { backgroundColor: '#ef4444' }]}
@@ -1778,7 +1795,7 @@ const handleAcceptAssignment = useCallback(
                 {cancelMutation.isPending ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.declineModalConfirmText}>Cancel Sabbath</Text>
+                  <Text style={styles.declineModalConfirmText}>{t('sabbathDetail.cancelSabbath')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1790,9 +1807,9 @@ const handleAcceptAssignment = useCallback(
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContainer, { paddingBottom: insets.bottom + 20 }]}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Suggest Replacement</Text>
+            <Text style={styles.modalTitle}>{t('sabbath.assignmentActions.suggestReplacement')}</Text>
             <Text style={styles.suggestModalSubtitle}>
-              Select a member to suggest as your replacement for {suggestingAssignment ? ROLE_LABELS[suggestingAssignment.role] : ''}.
+              {t('sabbathDetail.suggestReplacementSubtitle', { role: suggestingAssignment ? getRoleLabel(suggestingAssignment.role) : '' })}
             </Text>
             <ScrollView style={styles.membersList} showsVerticalScrollIndicator={false}>
               {suggestGroupedMembers.length === 0 ? (
@@ -1802,7 +1819,7 @@ const handleAcceptAssignment = useCallback(
                   ) : (
                     <>
                       <Users size={32} color="#cbd5e1" />
-                      <Text style={styles.emptyMembersText}>No members found</Text>
+                      <Text style={styles.emptyMembersText}>{t('sabbath.noMembersFound')}</Text>
                     </>
                   )}
                 </View>
@@ -1850,7 +1867,7 @@ const handleAcceptAssignment = useCallback(
                 setSuggestingAssignment(null);
               }}
             >
-              <Text style={styles.modalCloseBtnText}>Cancel</Text>
+              <Text style={styles.modalCloseBtnText}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
         </View>

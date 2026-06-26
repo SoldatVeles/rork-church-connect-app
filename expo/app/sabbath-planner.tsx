@@ -25,12 +25,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/providers/auth-provider';
 import { canManageAnySabbath, canManageSabbathForGroup, buildChurchScope } from '@/utils/church-scope';
 import { isAdmin as checkIsAdmin } from '@/utils/permissions';
 import { supabase } from '@/lib/supabase';
 import type { Sabbath, SabbathStatus } from '@/types/sabbath';
-import { STATUS_LABELS, ALL_ROLES } from '@/types/sabbath';
+import { ALL_ROLES } from '@/types/sabbath';
 import { getNextUnplannedSaturday } from '@/utils/sabbath';
 
 function getNextSaturday(): Date {
@@ -46,17 +47,20 @@ function getNextSaturday(): Date {
 function getUpcomingSaturdays(count: number): Date[] {
   const saturdays: Date[] = [];
   const start = getNextSaturday();
+
   for (let i = 0; i < count; i++) {
     const d = new Date(start);
     d.setDate(start.getDate() + i * 7);
     saturdays.push(d);
   }
+
   return saturdays;
 }
 
-function formatSabbathDate(dateStr: string): string {
-  const date = new Date(dateStr + 'T00:00:00');
-  return date.toLocaleDateString('en-US', {
+function formatSabbathDate(dateStr: string, locale?: string): string {
+  const date = new Date(`${dateStr}T12:00:00`);
+
+  return date.toLocaleDateString(locale, {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
@@ -64,17 +68,25 @@ function formatSabbathDate(dateStr: string): string {
   });
 }
 
+function formatShortMonth(date: Date, locale?: string): string {
+  return date.toLocaleDateString(locale, { month: 'short' });
+}
+
 function formatDateKey(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
+
   return `${year}-${month}-${day}`;
 }
 
 function isUpcoming(dateStr: string): boolean {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const sabbathDate = new Date(dateStr + 'T00:00:00');
+
+  const sabbathDate = new Date(`${dateStr}T12:00:00`);
+  sabbathDate.setHours(0, 0, 0, 0);
+
   return sabbathDate >= today;
 }
 
@@ -87,78 +99,88 @@ const STATUS_COLORS: Record<SabbathStatus, { bg: string; text: string; border: s
 type FilterType = 'all' | 'upcoming' | 'past' | 'draft' | 'published' | 'cancelled';
 
 export default function SabbathPlannerScreen() {
+  const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+
   const userProfileQuery = useQuery({
-  queryKey: ['sabbath-planner-profile', user?.id],
-  enabled: !!user?.id,
-  queryFn: async () => {
-    if (!user?.id) return null;
+    queryKey: ['sabbath-planner-profile', user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      if (!user?.id) return null;
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, role, home_group_id')
-      .eq('id', user.id)
-      .maybeSingle();
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, role, home_group_id')
+        .eq('id', user.id)
+        .maybeSingle();
 
-    if (error) {
-      console.warn('[SabbathPlanner] profile fetch error:', error.message);
-      return null;
-    }
+      if (error) {
+        console.warn('[SabbathPlanner] profile fetch error:', error.message);
+        return null;
+      }
 
-    return data as { id: string; role: string; home_group_id: string | null } | null;
-  },
-});
+      return data as { id: string; role: string; home_group_id: string | null } | null;
+    },
+  });
 
   const pastorGroupsQuery = useQuery({
     queryKey: ['sabbath-pastor-groups', user?.id],
     queryFn: async () => {
       if (!user?.id) return [] as { id: string; group_id: string; user_id: string }[];
+
       const { data, error } = await supabase
         .from('group_pastors')
         .select('id, group_id, user_id')
         .eq('user_id', user.id);
+
       if (error) {
         console.error('[SabbathPlanner] pastor groups error:', error.message);
         return [] as { id: string; group_id: string; user_id: string }[];
       }
+
       const results = (data || []) as { id: string; group_id: string; user_id: string }[];
 
       const profileRole = userProfileQuery.data?.role;
       const homeGroupId = userProfileQuery.data?.home_group_id;
+
       if (profileRole === 'church_leader' && homeGroupId) {
         const already = results.some((r) => r.group_id === homeGroupId);
+
         if (!already) {
           results.push({ id: `home-${homeGroupId}`, group_id: homeGroupId, user_id: user.id });
         }
       }
+
       return results;
     },
     enabled: !!user?.id,
     staleTime: 30_000,
   });
+
   const pastorGroups = useMemo(() => pastorGroupsQuery.data ?? [], [pastorGroupsQuery.data]);
   const pastorGroupIds = useMemo(() => pastorGroups.map((gp) => gp.group_id as string), [pastorGroups]);
-const userHomeGroupId =
-  userProfileQuery.data?.home_group_id ??
-  (user as any)?.homeGroupId ??
-  (user as any)?.home_group_id ??
-  null;
 
-const effectiveUser = useMemo(() => {
-  if (!user) return user;
+  const userHomeGroupId =
+    userProfileQuery.data?.home_group_id ??
+    (user as any)?.homeGroupId ??
+    (user as any)?.home_group_id ??
+    null;
 
-  return {
-    ...user,
-    role: (userProfileQuery.data?.role ?? user.role) as any,
-  };
-}, [user, userProfileQuery.data?.role]);
+  const effectiveUser = useMemo(() => {
+    if (!user) return user;
 
-const churchScope = useMemo(
-  () => buildChurchScope(effectiveUser, userHomeGroupId, pastorGroupIds),
-  [effectiveUser, userHomeGroupId, pastorGroupIds]
-);
+    return {
+      ...user,
+      role: (userProfileQuery.data?.role ?? user.role) as any,
+    };
+  }, [user, userProfileQuery.data?.role]);
+
+  const churchScope = useMemo(
+    () => buildChurchScope(effectiveUser, userHomeGroupId, pastorGroupIds),
+    [effectiveUser, userHomeGroupId, pastorGroupIds]
+  );
 
   const sabbathsQuery = useQuery({
     queryKey: ['sabbaths-all'],
@@ -167,23 +189,28 @@ const churchScope = useMemo(
         .from('sabbaths')
         .select('*')
         .order('sabbath_date', { ascending: true });
+
       if (error) {
         console.error('[SabbathPlanner] getAll error:', error.message);
         throw new Error(error.message);
       }
+
       return (data || []) as Sabbath[];
     },
     staleTime: 10_000,
   });
+
   const sabbaths = useMemo(() => sabbathsQuery.data ?? [], [sabbathsQuery.data]);
   const isLoading = sabbathsQuery.isLoading;
 
   const createSabbathMutation = useMutation({
     mutationFn: async (input: { groupId: string; sabbathDate: string; notes: string | null }) => {
-      if (!user?.id) throw new Error('Not authenticated');
-      const dateObj = new Date(input.sabbathDate + 'T00:00:00');
+      if (!user?.id) throw new Error(t('sabbathPlanner.errors.notAuthenticated'));
+
+      const dateObj = new Date(`${input.sabbathDate}T12:00:00`);
+
       if (dateObj.getDay() !== 6) {
-        throw new Error('Sabbath date must be a Saturday');
+        throw new Error(t('sabbathPlanner.errors.mustBeSaturday'));
       }
 
       const { data: existing, error: existingError } = await supabase
@@ -202,7 +229,7 @@ const churchScope = useMemo(
 
       if (existing) {
         if ((existing as any).status !== 'cancelled') {
-          throw new Error('A Sabbath already exists for this church on this date');
+          throw new Error(t('sabbathPlanner.errors.alreadyExists'));
         }
 
         const { data: reactivated, error: reactivateError } = await supabase
@@ -221,7 +248,7 @@ const churchScope = useMemo(
 
         if (reactivateError || !reactivated) {
           console.error('[SabbathPlanner] reactivate cancelled sabbath error:', reactivateError);
-          throw new Error(reactivateError?.message ?? 'Failed to reactivate Sabbath');
+          throw new Error(reactivateError?.message ?? t('sabbathPlanner.errors.reactivateFailed'));
         }
 
         sabbath = reactivated as Sabbath;
@@ -241,7 +268,7 @@ const churchScope = useMemo(
 
         if (insertError || !inserted) {
           console.error('[SabbathPlanner] insert error:', insertError);
-          throw new Error(insertError?.message ?? 'Failed to create Sabbath');
+          throw new Error(insertError?.message ?? t('sabbathPlanner.errors.createFailed'));
         }
 
         sabbath = inserted as Sabbath;
@@ -253,9 +280,11 @@ const churchScope = useMemo(
         user_id: null,
         status: 'pending',
       }));
+
       const { error: assignError } = await supabase
         .from('sabbath_assignments')
         .insert(assignmentRows);
+
       if (assignError) {
         console.warn('[SabbathPlanner] assignment rows error:', assignError.message);
       }
@@ -267,6 +296,7 @@ const churchScope = useMemo(
       void queryClient.invalidateQueries({ queryKey: ['sabbaths-all'] });
     },
   });
+
   const isCreatingSabbath = createSabbathMutation.isPending;
 
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -276,21 +306,24 @@ const churchScope = useMemo(
   const [refreshing, setRefreshing] = useState(false);
 
   const canManage =
-   canManageAnySabbath(churchScope) ||
+    canManageAnySabbath(churchScope) ||
     userProfileQuery.data?.role === 'church_leader' ||
-   userProfileQuery.data?.role === 'admin';
+    userProfileQuery.data?.role === 'admin';
 
   const groupsQuery = useQuery({
     queryKey: ['user-groups-for-sabbath', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
+
       const { data, error } = await supabase
         .from('groups')
         .select('id, name');
+
       if (error) {
         console.error('[SabbathPlanner] Error fetching groups:', error.message);
         return [];
       }
+
       return (data || []) as { id: string; name: string }[];
     },
     enabled: !!user?.id,
@@ -298,11 +331,13 @@ const churchScope = useMemo(
 
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
-const availableGroups = useMemo(() => {
-  const groups = groupsQuery.data || [];
-  if (checkIsAdmin(effectiveUser)) return groups;
-  return groups.filter((g) => canManageSabbathForGroup(churchScope, g.id));
-}, [groupsQuery.data, churchScope, effectiveUser]);
+  const availableGroups = useMemo(() => {
+    const groups = groupsQuery.data || [];
+
+    if (checkIsAdmin(effectiveUser)) return groups;
+
+    return groups.filter((g) => canManageSabbathForGroup(churchScope, g.id));
+  }, [groupsQuery.data, churchScope, effectiveUser]);
 
   const groupNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -335,8 +370,8 @@ const availableGroups = useMemo(() => {
 
     return filtered.sort(
       (a, b) =>
-        new Date(a.sabbath_date + 'T00:00:00').getTime() -
-        new Date(b.sabbath_date + 'T00:00:00').getTime()
+        new Date(`${a.sabbath_date}T12:00:00`).getTime() -
+        new Date(`${b.sabbath_date}T12:00:00`).getTime()
     );
   }, [sabbaths, activeFilter]);
 
@@ -348,12 +383,18 @@ const availableGroups = useMemo(() => {
 
   const handleCreate = useCallback(async () => {
     if (!selectedDate) {
-      Alert.alert('Select a Date', 'Please select a Saturday for the Sabbath service.');
+      Alert.alert(
+        t('sabbathPlanner.alerts.selectDateTitle'),
+        t('sabbathPlanner.alerts.selectDateMessage')
+      );
       return;
     }
 
     if (!effectiveGroupId) {
-      Alert.alert('No Group', 'You must be a pastor of a church group to create a Sabbath plan.');
+      Alert.alert(
+        t('sabbathPlanner.alerts.noGroupTitle'),
+        t('sabbathPlanner.alerts.noGroupMessage')
+      );
       return;
     }
 
@@ -363,17 +404,20 @@ const availableGroups = useMemo(() => {
         sabbathDate: selectedDate,
         notes: notes.trim() || null,
       });
+
       console.log('[SabbathPlanner] Created sabbath:', result.id);
+
       setShowCreateModal(false);
       setSelectedDate(null);
       setNotes('');
       setSelectedGroupId(null);
+
       router.push({ pathname: '/sabbath-detail' as any, params: { sabbathId: result.id } });
     } catch (err: any) {
       console.error('[SabbathPlanner] Create error:', err);
-      Alert.alert('Error', err.message || 'Failed to create Sabbath plan.');
+      Alert.alert(t('sabbathPlanner.alerts.errorTitle'), err.message || t('sabbathPlanner.errors.createFailed'));
     }
-  }, [selectedDate, effectiveGroupId, notes, createSabbathMutation]);
+  }, [selectedDate, effectiveGroupId, notes, createSabbathMutation, t]);
 
   const upcomingSaturdays = useMemo(() => getUpcomingSaturdays(12), []);
   const dateScrollRef = useRef<ScrollView>(null);
@@ -381,10 +425,12 @@ const availableGroups = useMemo(() => {
   useEffect(() => {
     if (showCreateModal && selectedDate && dateScrollRef.current) {
       const idx = upcomingSaturdays.findIndex((s) => formatDateKey(s) === selectedDate);
+
       if (idx > 0) {
         const chipWidth = 62;
         const chipGap = 8;
         const offset = Math.max(0, idx * (chipWidth + chipGap) - 30);
+
         setTimeout(() => {
           dateScrollRef.current?.scrollTo({ x: offset, animated: true });
         }, 150);
@@ -407,6 +453,7 @@ const availableGroups = useMemo(() => {
       const suggested = getNextUnplannedSaturday(groupSabbathDates);
       const key = formatDateKey(suggested);
       const isInUpcoming = upcomingSaturdays.some((s) => formatDateKey(s) === key);
+
       if (isInUpcoming && !existingDates.has(key)) {
         setSelectedDate(key);
       } else {
@@ -417,19 +464,20 @@ const availableGroups = useMemo(() => {
   }, [showCreateModal, effectiveGroupId, groupSabbathDates, existingDates, upcomingSaturdays]);
 
   const filters: { key: FilterType; label: string }[] = [
-    { key: 'upcoming', label: 'Upcoming' },
-    { key: 'all', label: 'All' },
-    { key: 'past', label: 'Past' },
-    ...(canManage ? [{ key: 'draft' as FilterType, label: 'Drafts' }] : []),
-    { key: 'published', label: 'Published' },
-    { key: 'cancelled', label: 'Cancelled' },
+    { key: 'upcoming', label: t('sabbathPlanner.filters.upcoming') },
+    { key: 'all', label: t('sabbathPlanner.filters.all') },
+    { key: 'past', label: t('sabbathPlanner.filters.past') },
+    ...(canManage ? [{ key: 'draft' as FilterType, label: t('sabbathPlanner.filters.drafts') }] : []),
+    { key: 'published', label: t('sabbathPlanner.filters.published') },
+    { key: 'cancelled', label: t('sabbathPlanner.filters.cancelled') },
   ];
 
   const renderSabbathCard = useCallback(
     (sabbath: Sabbath) => {
       const statusStyle = STATUS_COLORS[sabbath.status];
       const upcoming = isUpcoming(sabbath.sabbath_date);
-      const groupName = groupNameMap.get(sabbath.group_id) || 'Unknown Church';
+      const groupName = groupNameMap.get(sabbath.group_id) || t('sabbath.unknownChurch');
+      const date = new Date(`${sabbath.sabbath_date}T12:00:00`);
 
       return (
         <TouchableOpacity
@@ -444,42 +492,48 @@ const availableGroups = useMemo(() => {
           <View style={styles.cardDateStrip}>
             <View style={[styles.dateCircle, upcoming ? styles.dateCircleUpcoming : styles.dateCirclePast]}>
               <Text style={[styles.dateCircleDay, upcoming && styles.dateCircleDayUpcoming]}>
-                {new Date(sabbath.sabbath_date + 'T00:00:00').getDate()}
+                {date.getDate()}
               </Text>
               <Text style={[styles.dateCircleMonth, upcoming && styles.dateCircleMonthUpcoming]}>
-                {new Date(sabbath.sabbath_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' })}
+                {formatShortMonth(date, i18n.language)}
               </Text>
             </View>
           </View>
+
           <View style={styles.cardContent}>
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle} numberOfLines={1}>
-                Sabbath Service
+                {t('sabbathPlanner.serviceTitle')}
               </Text>
+
               <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg, borderColor: statusStyle.border }]}>
                 <Text style={[styles.statusText, { color: statusStyle.text }]}>
-                  {STATUS_LABELS[sabbath.status]}
+                  {t(`sabbath.status.${sabbath.status}`)}
                 </Text>
               </View>
             </View>
-            <Text style={styles.cardDate}>{formatSabbathDate(sabbath.sabbath_date)}</Text>
+
+            <Text style={styles.cardDate}>{formatSabbathDate(sabbath.sabbath_date, i18n.language)}</Text>
+
             <View style={styles.cardMeta}>
               <View style={styles.cardMetaItem}>
                 <Users size={13} color="#64748b" />
                 <Text style={styles.cardMetaText}>{groupName}</Text>
               </View>
             </View>
+
             {sabbath.notes ? (
               <Text style={styles.cardNotes} numberOfLines={1}>
                 {sabbath.notes}
               </Text>
             ) : null}
           </View>
+
           <ChevronRight size={20} color="#cbd5e1" />
         </TouchableOpacity>
       );
     },
-    [groupNameMap]
+    [groupNameMap, i18n.language, t]
   );
 
   return (
@@ -491,12 +545,18 @@ const availableGroups = useMemo(() => {
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} testID="back-button">
             <ArrowLeft size={24} color="#fff" />
           </TouchableOpacity>
+
           <View style={styles.headerCenter}>
             <Sun size={20} color="#fbbf24" />
-            <Text style={styles.headerTitle}>Sabbath Planner</Text>
+            <Text style={styles.headerTitle}>{t('sabbathPlanner.title')}</Text>
           </View>
+
           {canManage ? (
-            <TouchableOpacity onPress={() => setShowCreateModal(true)} style={styles.addBtn} testID="create-sabbath-button">
+            <TouchableOpacity
+              onPress={() => setShowCreateModal(true)}
+              style={styles.addBtn}
+              testID="create-sabbath-button"
+            >
               <Plus size={22} color="#fff" />
             </TouchableOpacity>
           ) : (
@@ -533,21 +593,22 @@ const availableGroups = useMemo(() => {
         {isLoading ? (
           <View style={styles.emptyState}>
             <ActivityIndicator size="large" color="#1e3a8a" />
-            <Text style={styles.emptyText}>Loading Sabbath plans...</Text>
+            <Text style={styles.emptyText}>{t('sabbathPlanner.loadingPlans')}</Text>
           </View>
         ) : filteredSabbaths.length === 0 ? (
           <View style={styles.emptyState}>
             <Calendar size={56} color="#cbd5e1" />
-            <Text style={styles.emptyTitle}>No Sabbath Plans</Text>
+            <Text style={styles.emptyTitle}>{t('sabbathPlanner.noPlansTitle')}</Text>
             <Text style={styles.emptyText}>
               {canManage
-                ? 'Tap + to create your first Sabbath plan.'
-                : 'No published Sabbath plans yet.'}
+                ? t('sabbathPlanner.noPlansManager')
+                : t('sabbathPlanner.noPlansMember')}
             </Text>
           </View>
         ) : (
           filteredSabbaths.map(renderSabbathCard)
         )}
+
         <View style={{ height: insets.bottom + 24 }} />
       </ScrollView>
 
@@ -555,11 +616,12 @@ const availableGroups = useMemo(() => {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContainer, { paddingBottom: insets.bottom + 20 }]}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>New Sabbath Plan</Text>
+
+            <Text style={styles.modalTitle}>{t('sabbathPlanner.newPlan')}</Text>
 
             {availableGroups.length > 1 && (
               <View style={styles.formSection}>
-                <Text style={styles.formLabel}>Church / Group</Text>
+                <Text style={styles.formLabel}>{t('sabbathPlanner.churchGroup')}</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.groupSelector}>
                   {availableGroups.map((g) => (
                     <TouchableOpacity
@@ -589,12 +651,13 @@ const availableGroups = useMemo(() => {
 
             <View style={styles.formSection}>
               <View style={styles.dateLabelRow}>
-                <Text style={styles.formLabel}>Select Saturday</Text>
+                <Text style={styles.formLabel}>{t('sabbathPlanner.selectSaturday')}</Text>
                 <View style={styles.scrollHint}>
-                  <Text style={styles.scrollHintText}>Swipe for more</Text>
+                  <Text style={styles.scrollHintText}>{t('sabbathPlanner.swipeForMore')}</Text>
                   <ChevronsRight size={14} color="#94a3b8" />
                 </View>
               </View>
+
               <View style={styles.dateSelectorWrapper}>
                 <ScrollView
                   ref={dateScrollRef}
@@ -607,6 +670,7 @@ const availableGroups = useMemo(() => {
                     const key = formatDateKey(sat);
                     const alreadyExists = existingDates.has(key);
                     const selected = selectedDate === key;
+
                     return (
                       <TouchableOpacity
                         key={key}
@@ -628,8 +692,9 @@ const availableGroups = useMemo(() => {
                             alreadyExists && styles.dateChipTextDisabled,
                           ]}
                         >
-                          Sat
+                          {t('sabbathPlanner.weekdays.sat')}
                         </Text>
+
                         <Text
                           style={[
                             styles.dateChipDay,
@@ -639,6 +704,7 @@ const availableGroups = useMemo(() => {
                         >
                           {sat.getDate()}
                         </Text>
+
                         <Text
                           style={[
                             styles.dateChipMonth,
@@ -646,13 +712,15 @@ const availableGroups = useMemo(() => {
                             alreadyExists && styles.dateChipTextDisabled,
                           ]}
                         >
-                          {sat.toLocaleDateString('en-US', { month: 'short' })}
+                          {formatShortMonth(sat, i18n.language)}
                         </Text>
+
                         {alreadyExists && (
                           <View style={styles.dateChipExistingBadge}>
-                            <Text style={styles.dateChipExisting}>Planned</Text>
+                            <Text style={styles.dateChipExisting}>{t('sabbathPlanner.planned')}</Text>
                           </View>
                         )}
+
                         {selected && !alreadyExists && (
                           <View style={styles.selectedDot} />
                         )}
@@ -665,12 +733,12 @@ const availableGroups = useMemo(() => {
             </View>
 
             <View style={styles.formSection}>
-              <Text style={styles.formLabel}>Notes (optional)</Text>
+              <Text style={styles.formLabel}>{t('sabbathPlanner.notesOptional')}</Text>
               <TextInput
                 style={styles.notesInput}
                 value={notes}
                 onChangeText={setNotes}
-                placeholder="Planning notes, theme, special events..."
+                placeholder={t('sabbathPlanner.notesPlaceholder')}
                 placeholderTextColor="#94a3b8"
                 multiline
                 numberOfLines={3}
@@ -687,8 +755,9 @@ const availableGroups = useMemo(() => {
                   setNotes('');
                 }}
               >
-                <Text style={styles.cancelBtnText}>Cancel</Text>
+                <Text style={styles.cancelBtnText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
+
               <TouchableOpacity
                 style={[styles.createBtn, (!selectedDate || isCreatingSabbath) && styles.createBtnDisabled]}
                 onPress={handleCreate}
@@ -697,7 +766,7 @@ const availableGroups = useMemo(() => {
                 {isCreatingSabbath ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.createBtnText}>Save as Draft</Text>
+                  <Text style={styles.createBtnText}>{t('sabbathPlanner.saveAsDraft')}</Text>
                 )}
               </TouchableOpacity>
             </View>
