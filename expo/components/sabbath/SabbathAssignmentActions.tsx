@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { UserCheck, UserX, RefreshCw } from 'lucide-react-native';
 import type { SabbathAssignment } from '@/types/sabbath';
 import { getSabbathRoleLabel } from '@/utils/sabbath';
@@ -22,6 +23,8 @@ export function SabbathAssignmentActions({
   onSuggestReplacement,
   isMutating,
 }: SabbathAssignmentActionsProps) {
+  const { t } = useTranslation();
+
   if (!canRespond) return null;
 
   const canAct =
@@ -29,11 +32,15 @@ export function SabbathAssignmentActions({
     myAssignment.status === 'accepted' ||
     myAssignment.status === 'declined';
 
+  const roleLabel = t(`sabbath.roles.${myAssignment.role}`, {
+    defaultValue: getSabbathRoleLabel(myAssignment.role),
+  });
+
   return (
     <View style={styles.card}>
-      <Text style={styles.sectionHeading}>Your Assignment</Text>
+      <Text style={styles.sectionHeading}>{t('sabbath.sections.yourAssignment')}</Text>
       <Text style={styles.roleText}>
-        {getSabbathRoleLabel(myAssignment.role)}
+        {roleLabel}
       </Text>
       <AssignmentStatusBadge status={myAssignment.status} />
 
@@ -46,7 +53,7 @@ export function SabbathAssignmentActions({
             disabled={isMutating}
           >
             <UserCheck size={16} color="#ffffff" />
-            <Text style={styles.acceptButtonText}>Accept</Text>
+            <Text style={styles.acceptButtonText}>{t('sabbath.assignmentActions.accept')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             testID="decline-assignment"
@@ -55,7 +62,7 @@ export function SabbathAssignmentActions({
             disabled={isMutating}
           >
             <UserX size={16} color="#991b1b" />
-            <Text style={styles.declineButtonText}>Decline</Text>
+            <Text style={styles.declineButtonText}>{t('sabbath.assignmentActions.decline')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -68,7 +75,7 @@ export function SabbathAssignmentActions({
           disabled={isMutating}
         >
           <RefreshCw size={16} color="#1e3a8a" />
-          <Text style={styles.suggestButtonText}>Suggest Replacement</Text>
+          <Text style={styles.suggestButtonText}>{t('sabbath.assignmentActions.suggestReplacement')}</Text>
         </TouchableOpacity>
       )}
     </View>

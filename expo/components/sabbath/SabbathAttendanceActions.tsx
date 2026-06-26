@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { CheckCircle, XCircle } from 'lucide-react-native';
 
 interface SabbathAttendanceActionsProps {
@@ -9,10 +10,17 @@ interface SabbathAttendanceActionsProps {
   isMutating: boolean;
 }
 
-export function SabbathAttendanceActions({ sabbathId, currentStatus, onAttend, isMutating }: SabbathAttendanceActionsProps) {
+export function SabbathAttendanceActions({
+  sabbathId,
+  currentStatus,
+  onAttend,
+  isMutating,
+}: SabbathAttendanceActionsProps) {
+  const { t } = useTranslation();
+
   return (
     <View style={styles.card}>
-      <Text style={styles.sectionHeading}>Your Attendance</Text>
+      <Text style={styles.sectionHeading}>{t('sabbath.sections.yourAttendance')}</Text>
       <View style={styles.attendanceRow}>
         <TouchableOpacity
           testID="attend-button"
@@ -33,7 +41,7 @@ export function SabbathAttendanceActions({ sabbathId, currentStatus, onAttend, i
               currentStatus === 'attending' && styles.attendanceButtonTextActive,
             ]}
           >
-            Attending
+            {t('sabbath.attendance.attending')}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -55,7 +63,7 @@ export function SabbathAttendanceActions({ sabbathId, currentStatus, onAttend, i
               currentStatus === 'not_attending' && styles.notAttendingButtonTextActive,
             ]}
           >
-            Not Attending
+            {t('sabbath.attendance.notAttending')}
           </Text>
         </TouchableOpacity>
       </View>

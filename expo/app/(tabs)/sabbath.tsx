@@ -1,4 +1,5 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '@/lib/supabase';
 import { StatusBar } from 'expo-status-bar';
 import {
@@ -70,21 +71,27 @@ function LoadingState({ message }: { message: string }) {
 }
 
 function ErrorState({ message }: { message: string }) {
+  const { t } = useTranslation();
+
   return (
     <View style={styles.centerState}>
       <AlertTriangle size={32} color="#ef4444" />
-      <Text style={styles.centerStateTitle}>Something went wrong</Text>
+      <Text style={styles.centerStateTitle}>{t('sabbath.somethingWentWrong')}</Text>
       <Text style={styles.centerStateText}>{message}</Text>
     </View>
   );
 }
 
 function CancelledBanner({ reason }: { reason?: string | null }) {
+  const { t } = useTranslation();
+
   return (
     <View style={styles.cancelledBanner}>
       <XCircle size={18} color="#991b1b" />
       <Text style={styles.cancelledText}>
-        This Sabbath has been cancelled{reason ? `: ${reason}` : '.'}
+        {reason
+          ? t('sabbath.cancelledWithReason', { reason })
+          : t('sabbath.cancelled')}
       </Text>
     </View>
   );
@@ -109,15 +116,18 @@ function TabSwitcher({
   onOpenCountryPicker,
   canPickCountry,
 }: TabSwitcherProps) {
+  const { t } = useTranslation();
+
   const countryLabel = selectedCountry
     ? `${selectedCountry.flag_emoji ? selectedCountry.flag_emoji + ' ' : ''}${selectedCountry.name}`
-    : 'Country';
+    : t('sabbath.tabs.country');
+
   return (
     <View style={styles.header}>
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
           <Sun size={22} color="#1e3a8a" />
-          <Text style={styles.headerTitle}>Sabbath</Text>
+          <Text style={styles.headerTitle}>{t('sabbath.title')}</Text>
         </View>
         {canManage && (
           <TouchableOpacity
@@ -127,7 +137,7 @@ function TabSwitcher({
             testID="plan-sabbath-button"
           >
             <Plus size={16} color="#ffffff" />
-            <Text style={styles.planButtonText}>Plan Sabbath</Text>
+            <Text style={styles.planButtonText}>{t('sabbath.planSabbath')}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -140,7 +150,7 @@ function TabSwitcher({
         >
           <Church size={16} color={activeTab === 'myChurch' ? '#ffffff' : '#64748b'} />
           <Text style={[styles.segmentLabel, activeTab === 'myChurch' && styles.segmentLabelActive]}>
-            My Church
+            {t('sabbath.tabs.myChurch')}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -155,12 +165,17 @@ function TabSwitcher({
           }}
         >
           {selectedCountry?.flag_emoji ? (
-            <Text style={[styles.flagInTab, activeTab === 'country' && { color: '#ffffff' }]}>{selectedCountry.flag_emoji}</Text>
+            <Text style={[styles.flagInTab, activeTab === 'country' && { color: '#ffffff' }]}>
+              {selectedCountry.flag_emoji}
+            </Text>
           ) : (
             <Globe size={16} color={activeTab === 'country' ? '#ffffff' : '#64748b'} />
           )}
-          <Text style={[styles.segmentLabel, activeTab === 'country' && styles.segmentLabelActive]} numberOfLines={1}>
-            Country
+          <Text
+            style={[styles.segmentLabel, activeTab === 'country' && styles.segmentLabelActive]}
+            numberOfLines={1}
+          >
+            {activeTab === 'country' ? countryLabel : t('sabbath.tabs.country')}
           </Text>
           {activeTab === 'country' && canPickCountry && (
             <ChevronDown size={14} color="#ffffff" />
@@ -202,8 +217,10 @@ function MyChurchSection({
   onViewDetail,
   isMutating,
 }: MyChurchSectionProps) {
+  const { t, i18n } = useTranslation();
+
   if (isLoading) {
-    return <LoadingState message="Loading your Sabbath..." />;
+    return <LoadingState message={t('sabbath.loadingMyChurch')} />;
   }
 
   if (error) {
@@ -214,8 +231,8 @@ function MyChurchSection({
     return (
       <EmptyState
         icon={<Calendar size={40} color="#cbd5e1" />}
-        title="No upcoming Sabbath"
-        message="There are no upcoming Sabbaths planned for your home church yet."
+        title={t('sabbath.noUpcomingSabbathTitle')}
+        message={t('sabbath.noUpcomingSabbathMessage')}
       />
     );
   }
@@ -232,7 +249,7 @@ function MyChurchSection({
           status={sabbath.status}
           onViewDetail={() => onViewDetail(sabbath.id)}
         />
-        <Text style={styles.sabbathDate}>{formatSabbathDate(sabbath.sabbath_date)}</Text>
+        <Text style={styles.sabbathDate}>{formatSabbathDate(sabbath.sabbath_date, i18n.language)}</Text>
         {sabbath.notes ? <Text style={styles.notesText}>{sabbath.notes}</Text> : null}
         {cancelled && <CancelledBanner reason={sabbath.cancellation_reason} />}
       </View>
@@ -241,21 +258,21 @@ function MyChurchSection({
         <SabbathRoleList assignments={detailData.assignments} />
       )}
 
-{published && myAssignments.length > 0 && detailData?.canRespondAssignment && (
-  <>
-    {myAssignments.map((assignment) => (
-      <SabbathAssignmentActions
-        key={assignment.id}
-        myAssignment={assignment}
-        canRespond={detailData.canRespondAssignment}
-        onAccept={onAccept}
-        onDecline={onDecline}
-        onSuggestReplacement={onSuggestReplacement}
-        isMutating={isMutating}
-      />
-    ))}
-  </>
-)}
+      {published && myAssignments.length > 0 && detailData?.canRespondAssignment && (
+        <>
+          {myAssignments.map((assignment) => (
+            <SabbathAssignmentActions
+              key={assignment.id}
+              myAssignment={assignment}
+              canRespond={detailData.canRespondAssignment}
+              onAccept={onAccept}
+              onDecline={onDecline}
+              onSuggestReplacement={onSuggestReplacement}
+              isMutating={isMutating}
+            />
+          ))}
+        </>
+      )}
 
       {published && detailData?.canRespondAttendance && (
         <SabbathAttendanceActions
@@ -283,9 +300,19 @@ interface CountrySectionProps {
   isMutating: boolean;
 }
 
-function CountrySection({ dateGroups, isLoading, error, countryName, onAttend, onViewDetail, isMutating }: CountrySectionProps) {
+function CountrySection({
+  dateGroups,
+  isLoading,
+  error,
+  countryName,
+  onAttend,
+  onViewDetail,
+  isMutating,
+}: CountrySectionProps) {
+  const { t } = useTranslation();
+
   if (isLoading) {
-    return <LoadingState message={`Loading Sabbaths across ${countryName}...`} />;
+    return <LoadingState message={t('sabbath.loadingCountry', { country: countryName })} />;
   }
 
   if (error) {
@@ -296,20 +323,20 @@ function CountrySection({ dateGroups, isLoading, error, countryName, onAttend, o
     return (
       <EmptyState
         icon={<MapPin size={40} color="#cbd5e1" />}
-        title="No upcoming Sabbaths"
-        message={`There are no published Sabbaths scheduled in ${countryName} yet.`}
+        title={t('sabbath.noUpcomingCountryTitle')}
+        message={t('sabbath.noUpcomingCountryMessage', { country: countryName })}
       />
     );
   }
 
-return (
-  <View>
-    <View style={styles.countryHeaderCard}>
-      <Text style={styles.countryHeaderLabel}>Showing Sabbaths for</Text>
-      <Text style={styles.countryHeaderName}>{countryName}</Text>
-    </View>
+  return (
+    <View>
+      <View style={styles.countryHeaderCard}>
+        <Text style={styles.countryHeaderLabel}>{t('sabbath.showingSabbathsFor')}</Text>
+        <Text style={styles.countryHeaderName}>{countryName}</Text>
+      </View>
 
-    {dateGroups.map((group) => (
+      {dateGroups.map((group) => (
         <SabbathDateGroup
           key={group.date}
           group={group}
@@ -323,8 +350,10 @@ return (
 }
 
 export default function SabbathScreen() {
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const router = useRouter();
+
   const userProfileQuery = useQuery({
     queryKey: ['sabbath-profile-for-permissions', user?.id],
     enabled: !!user?.id,
@@ -398,86 +427,87 @@ export default function SabbathScreen() {
   const canManage = canManageAnySabbath(churchScope);
 
   const accessibleCountriesQuery = useQuery({
-  queryKey: ['my-accessible-countries', user?.id],
-  enabled: !!user?.id,
-  queryFn: async () => {
-    if (!user?.id) return { primaryCountryId: null, countries: [] };
+    queryKey: ['my-accessible-countries', user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      if (!user?.id) return { primaryCountryId: null, countries: [] };
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('home_group_id')
-      .eq('id', user.id)
-      .single();
-
-    const homeGroupId = (profile as any)?.home_group_id ?? null;
-    const accessibleIds = new Set<string>();
-    let primaryCountryId: string | null = null;
-
-    if (homeGroupId) {
-      const { data: group } = await supabase
-        .from('groups')
-        .select('country_id')
-        .eq('id', homeGroupId)
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('home_group_id')
+        .eq('id', user.id)
         .single();
 
-      const countryId = (group as any)?.country_id ?? null;
-      if (countryId) {
-        accessibleIds.add(countryId);
-        primaryCountryId = countryId;
+      const homeGroupId = (profile as any)?.home_group_id ?? null;
+      const accessibleIds = new Set<string>();
+      let primaryCountryId: string | null = null;
+
+      if (homeGroupId) {
+        const { data: group } = await supabase
+          .from('groups')
+          .select('country_id')
+          .eq('id', homeGroupId)
+          .single();
+
+        const countryId = (group as any)?.country_id ?? null;
+
+        if (countryId) {
+          accessibleIds.add(countryId);
+          primaryCountryId = countryId;
+        }
       }
-    }
 
-    const { data: extras } = await supabase
-      .from('user_countries')
-      .select('country_id')
-      .eq('user_id', user.id);
+      const { data: extras } = await supabase
+        .from('user_countries')
+        .select('country_id')
+        .eq('user_id', user.id);
 
-    (extras ?? []).forEach((row: any) => {
-      if (row.country_id) accessibleIds.add(row.country_id);
-    });
+      (extras ?? []).forEach((row: any) => {
+        if (row.country_id) accessibleIds.add(row.country_id);
+      });
 
-    const ids = Array.from(accessibleIds);
+      const ids = Array.from(accessibleIds);
 
-    if (ids.length === 0) {
+      if (ids.length === 0) {
+        const { data } = await supabase
+          .from('countries')
+          .select('id, code, name, flag_emoji, is_active')
+          .order('name');
+
+        return {
+          primaryCountryId: null,
+          countries: data ?? [],
+        };
+      }
+
       const { data } = await supabase
         .from('countries')
         .select('id, code, name, flag_emoji, is_active')
+        .in('id', ids)
         .order('name');
 
       return {
-        primaryCountryId: null,
+        primaryCountryId,
         countries: data ?? [],
       };
-    }
+    },
+  });
 
-    const { data } = await supabase
-      .from('countries')
-      .select('id, code, name, flag_emoji, is_active')
-      .in('id', ids)
-      .order('name');
+  useEffect(() => {
+    if (!accessibleCountriesQuery.data) return;
 
-    return {
-      primaryCountryId,
-      countries: data ?? [],
-    };
-  },
-});
+    const countries = accessibleCountriesQuery.data.countries;
+    const selectedStillExists = countries.some((country) => country.id === selectedCountryId);
 
-useEffect(() => {
-  if (!accessibleCountriesQuery.data) return;
+    if (selectedCountryId && selectedStillExists) return;
 
-  const countries = accessibleCountriesQuery.data.countries;
-  const selectedStillExists = countries.some((country) => country.id === selectedCountryId);
+    const primary =
+      accessibleCountriesQuery.data.primaryCountryId ??
+      countries[0]?.id ??
+      null;
 
-  if (selectedCountryId && selectedStillExists) return;
-
-  const primary =
-    accessibleCountriesQuery.data.primaryCountryId ??
-    countries[0]?.id ??
-    null;
-
-  setSelectedCountryId(primary);
-}, [accessibleCountriesQuery.data, selectedCountryId]);
+    setSelectedCountryId(primary);
+  }, [accessibleCountriesQuery.data, selectedCountryId]);
 
   const selectedCountry = useMemo(() => {
     const list = accessibleCountriesQuery.data?.countries ?? [];
@@ -485,286 +515,287 @@ useEffect(() => {
   }, [accessibleCountriesQuery.data, selectedCountryId]);
 
   useFocusEffect(
-  useCallback(() => {
-    void accessibleCountriesQuery.refetch();
-  }, [accessibleCountriesQuery])
-);
+    useCallback(() => {
+      void accessibleCountriesQuery.refetch();
+    }, [accessibleCountriesQuery])
+  );
 
-const getTodayDateString = () => {
-  const now = new Date();
-  return now.toISOString().slice(0, 10);
-};
+  const getTodayDateString = () => {
+    const now = new Date();
+    return now.toISOString().slice(0, 10);
+  };
 
-const myChurchQuery = useQuery({
-  queryKey: ['sabbath-my-church-upcoming', user?.id, activeTab],
-  enabled: activeTab === 'myChurch' && !!user?.id,
-  queryFn: async () => {
-    if (!user?.id) return null;
+  const myChurchQuery = useQuery({
+    queryKey: ['sabbath-my-church-upcoming', user?.id, activeTab, i18n.language],
+    enabled: activeTab === 'myChurch' && !!user?.id,
+    queryFn: async () => {
+      if (!user?.id) return null;
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('home_group_id, role')
-      .eq('id', user.id)
-      .single();
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('home_group_id, role')
+        .eq('id', user.id)
+        .single();
 
-    let homeGroupId = (profile as any)?.home_group_id ?? null;
+      let homeGroupId = (profile as any)?.home_group_id ?? null;
 
-    if (!homeGroupId) {
-      const { data: memberships } = await supabase
-        .from('group_members')
-        .select('group_id')
-        .eq('user_id', user.id)
-        .limit(1);
+      if (!homeGroupId) {
+        const { data: memberships } = await supabase
+          .from('group_members')
+          .select('group_id')
+          .eq('user_id', user.id)
+          .limit(1);
 
-      homeGroupId = memberships?.[0]?.group_id ?? null;
-    }
+        homeGroupId = memberships?.[0]?.group_id ?? null;
+      }
 
-    if (!homeGroupId) return null;
+      if (!homeGroupId) return null;
 
-    const statuses = user?.role === 'admin'
-      ? ['draft', 'published', 'cancelled']
-      : ['published', 'cancelled'];
+      const statuses = user?.role === 'admin'
+        ? ['draft', 'published', 'cancelled']
+        : ['published', 'cancelled'];
 
-    const { data: sabbath, error } = await supabase
-      .from('sabbaths')
-      .select('*')
-      .eq('group_id', homeGroupId)
-      .gte('sabbath_date', getTodayDateString())
-      .in('status', statuses)
-      .order('sabbath_date', { ascending: true })
-      .limit(1)
-      .maybeSingle();
+      const { data: sabbath, error } = await supabase
+        .from('sabbaths')
+        .select('*')
+        .eq('group_id', homeGroupId)
+        .gte('sabbath_date', getTodayDateString())
+        .in('status', statuses)
+        .order('sabbath_date', { ascending: true })
+        .limit(1)
+        .maybeSingle();
 
-    if (error) throw new Error(error.message);
-    if (!sabbath) return null;
+      if (error) throw new Error(error.message);
+      if (!sabbath) return null;
 
-    const { data: group } = await supabase
-      .from('groups')
-      .select('id, name')
-      .eq('id', homeGroupId)
-      .single();
+      const { data: group } = await supabase
+        .from('groups')
+        .select('id, name')
+        .eq('id', homeGroupId)
+        .single();
 
-    return {
-      sabbath: sabbath as Sabbath,
-      group: group
-        ? { id: group.id, name: group.name }
-        : { id: homeGroupId, name: 'Unknown Church' },
-    };
-  },
-});
-
-const countryQuery = useQuery({
-  queryKey: ['sabbath-country-upcoming', selectedCountryId, activeTab],
-  enabled: activeTab === 'country' && !!selectedCountryId,
-  queryFn: async () => {
-    if (!selectedCountryId) return [];
-
-    const { data: sabbaths, error } = await supabase
-      .from('sabbaths')
-      .select('*')
-      .eq('country_id', selectedCountryId)
-      .gte('sabbath_date', getTodayDateString())
-      .in('status', ['published', 'cancelled'])
-      .order('sabbath_date', { ascending: true })
-      .limit(200);
-
-    if (error) throw new Error(error.message);
-    if (!sabbaths || sabbaths.length === 0) return [];
-
-    const groupIds = [...new Set(sabbaths.map((s: any) => s.group_id))];
-
-    const { data: groups } = await supabase
-      .from('groups')
-      .select('id, name')
-      .in('id', groupIds);
-
-    const groupMap = new Map<string, SabbathGroupInfo>();
-    (groups ?? []).forEach((g: any) => {
-      groupMap.set(g.id, { id: g.id, name: g.name });
-    });
-
-    const dateGroups = new Map<string, any[]>();
-
-    sabbaths.forEach((sabbath: any) => {
-      const item = {
+      return {
         sabbath: sabbath as Sabbath,
-        group: groupMap.get(sabbath.group_id) ?? {
-          id: sabbath.group_id,
-          name: 'Unknown Church',
-        },
+        group: group
+          ? { id: group.id, name: group.name }
+          : { id: homeGroupId, name: t('sabbath.unknownChurch') },
       };
+    },
+  });
 
-      const existing = dateGroups.get(sabbath.sabbath_date) ?? [];
-      existing.push(item);
-      dateGroups.set(sabbath.sabbath_date, existing);
-    });
+  const countryQuery = useQuery({
+    queryKey: ['sabbath-country-upcoming', selectedCountryId, activeTab, i18n.language],
+    enabled: activeTab === 'country' && !!selectedCountryId,
+    queryFn: async () => {
+      if (!selectedCountryId) return [];
 
-    return Array.from(dateGroups.entries()).map(([date, sabbathItems]) => ({
-      date,
-      label: formatSabbathDate(date),
-      sabbaths: sabbathItems,
-    })) as SabbathDateGroupType[];
-  },
-});
+      const { data: sabbaths, error } = await supabase
+        .from('sabbaths')
+        .select('*')
+        .eq('country_id', selectedCountryId)
+        .gte('sabbath_date', getTodayDateString())
+        .in('status', ['published', 'cancelled'])
+        .order('sabbath_date', { ascending: true })
+        .limit(200);
 
-const sabbathDetailQuery = useQuery({
-  queryKey: ['sabbath-detail', myChurchQuery.data?.sabbath?.id, user?.id],
-  enabled: activeTab === 'myChurch' && !!myChurchQuery.data?.sabbath?.id && !!user?.id,
-  queryFn: async () => {
-    const sabbath = myChurchQuery.data?.sabbath;
-    const group = myChurchQuery.data?.group;
+      if (error) throw new Error(error.message);
+      if (!sabbaths || sabbaths.length === 0) return [];
 
-    if (!sabbath || !group || !user?.id) {
-      throw new Error('Sabbath not found');
-    }
+      const groupIds = [...new Set(sabbaths.map((s: any) => s.group_id))];
 
-    const { data: assignmentsRaw } = await supabase
-      .from('sabbath_assignments')
-      .select('*')
-      .eq('sabbath_id', sabbath.id);
+      const { data: groups } = await supabase
+        .from('groups')
+        .select('id, name')
+        .in('id', groupIds);
 
-    const assignmentsList = (assignmentsRaw ?? []) as any[];
+      const groupMap = new Map<string, SabbathGroupInfo>();
 
-    const userIds = [
-      ...new Set(
-        assignmentsList
-          .flatMap((a) => [a.user_id, a.suggested_user_id])
-          .filter(Boolean)
-      ),
-    ];
-
-    const profileMap = new Map<string, string>();
-
-    if (userIds.length > 0) {
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, full_name, display_name')
-        .in('id', userIds);
-
-      (profiles ?? []).forEach((p: any) => {
-        profileMap.set(p.id, p.display_name || p.full_name || 'Unknown');
+      (groups ?? []).forEach((g: any) => {
+        groupMap.set(g.id, { id: g.id, name: g.name });
       });
-    }
 
-    const assignments = assignmentsList.map((a: any) => ({
-      ...a,
-      user_name: a.user_id ? profileMap.get(a.user_id) ?? 'Unknown' : undefined,
-      suggested_user_name: a.suggested_user_id
-        ? profileMap.get(a.suggested_user_id) ?? 'Unknown'
-        : undefined,
-    }));
+      const dateGroups = new Map<string, any[]>();
 
-    const { data: attendanceRaw } = await supabase
-      .from('sabbath_attendance')
-      .select('*')
-      .eq('sabbath_id', sabbath.id);
+      sabbaths.forEach((sabbath: any) => {
+        const item = {
+          sabbath: sabbath as Sabbath,
+          group: groupMap.get(sabbath.group_id) ?? {
+            id: sabbath.group_id,
+            name: t('sabbath.unknownChurch'),
+          },
+        };
 
-    const attendanceRows = (attendanceRaw ?? []) as any[];
-    const attendeeIds = [...new Set(attendanceRows.map((a) => a.user_id).filter(Boolean))];
-
-    const attendeeMap = new Map<string, string>();
-
-    if (attendeeIds.length > 0) {
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, full_name, display_name')
-        .in('id', attendeeIds);
-
-      (profiles ?? []).forEach((p: any) => {
-        attendeeMap.set(p.id, p.display_name || p.full_name || 'Unknown');
+        const existing = dateGroups.get(sabbath.sabbath_date) ?? [];
+        existing.push(item);
+        dateGroups.set(sabbath.sabbath_date, existing);
       });
-    }
 
-    const attendance = attendanceRows.map((a: any) => ({
-      ...a,
-      user_name: attendeeMap.get(a.user_id) ?? 'Unknown',
-    }));
+      return Array.from(dateGroups.entries()).map(([date, sabbathItems]) => ({
+        date,
+        label: formatSabbathDate(date, i18n.language),
+        sabbaths: sabbathItems,
+      })) as SabbathDateGroupType[];
+    },
+  });
 
-    const myAttendance = attendance.find((a: any) => a.user_id === user.id);
-    const myAssignment = assignments.find((a: any) => a.user_id === user.id);
+  const sabbathDetailQuery = useQuery({
+    queryKey: ['sabbath-detail', myChurchQuery.data?.sabbath?.id, user?.id, i18n.language],
+    enabled: activeTab === 'myChurch' && !!myChurchQuery.data?.sabbath?.id && !!user?.id,
+    queryFn: async () => {
+      const sabbath = myChurchQuery.data?.sabbath;
+      const group = myChurchQuery.data?.group;
 
-    const isHomeChurch = true;
-    const canManageDetail = user?.role === 'admin' || canManage;
-    const shouldShowAssignments =
-      sabbath.status === 'published' ||
-      (canManageDetail && (sabbath.status === 'draft' || sabbath.status === 'cancelled'));
+      if (!sabbath || !group || !user?.id) {
+        throw new Error('Sabbath not found');
+      }
 
-    const shouldShowAttendees = sabbath.status === 'published';
+      const { data: assignmentsRaw } = await supabase
+        .from('sabbath_assignments')
+        .select('*')
+        .eq('sabbath_id', sabbath.id);
 
-    return {
-      sabbath,
-      group,
-      assignments: shouldShowAssignments ? assignments : [],
-      attendance: shouldShowAttendees ? attendance : [],
-      myAttendanceStatus: myAttendance?.status ?? null,
-      attendingCount: attendance.filter((a: any) => a.status === 'attending').length,
-      isHomeChurch,
-      isAssignedUser: !!myAssignment,
-      canManage: canManageDetail,
-      canRespondAttendance: sabbath.status === 'published',
-      canRespondAssignment: sabbath.status === 'published' && !!myAssignment,
-      shouldShowAttendees,
-      shouldShowAssignments,
-    } as SabbathDetailView;
-  },
-});
+      const assignmentsList = (assignmentsRaw ?? []) as any[];
 
-const respondAttendanceMutation = useMutation({
-  mutationFn: async (input: { sabbathId: string; status: 'attending' | 'not_attending' }) => {
-    if (!user?.id) {
-      throw new Error('You must be logged in to respond.');
-    }
+      const userIds = [
+        ...new Set(
+          assignmentsList
+            .flatMap((a) => [a.user_id, a.suggested_user_id])
+            .filter(Boolean)
+        ),
+      ];
 
-    const { data: existing, error: existingError } = await supabase
-      .from('sabbath_attendance')
-      .select('id')
-      .eq('sabbath_id', input.sabbathId)
-      .eq('user_id', user.id)
-      .maybeSingle();
+      const profileMap = new Map<string, string>();
 
-    if (existingError) {
-      throw new Error(existingError.message);
-    }
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, display_name')
+          .in('id', userIds);
 
-    if (existing?.id) {
+        (profiles ?? []).forEach((p: any) => {
+          profileMap.set(p.id, p.display_name || p.full_name || t('common.unknown'));
+        });
+      }
+
+      const assignments = assignmentsList.map((a: any) => ({
+        ...a,
+        user_name: a.user_id ? profileMap.get(a.user_id) ?? t('common.unknown') : undefined,
+        suggested_user_name: a.suggested_user_id
+          ? profileMap.get(a.suggested_user_id) ?? t('common.unknown')
+          : undefined,
+      }));
+
+      const { data: attendanceRaw } = await supabase
+        .from('sabbath_attendance')
+        .select('*')
+        .eq('sabbath_id', sabbath.id);
+
+      const attendanceRows = (attendanceRaw ?? []) as any[];
+      const attendeeIds = [...new Set(attendanceRows.map((a) => a.user_id).filter(Boolean))];
+
+      const attendeeMap = new Map<string, string>();
+
+      if (attendeeIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, display_name')
+          .in('id', attendeeIds);
+
+        (profiles ?? []).forEach((p: any) => {
+          attendeeMap.set(p.id, p.display_name || p.full_name || t('common.unknown'));
+        });
+      }
+
+      const attendance = attendanceRows.map((a: any) => ({
+        ...a,
+        user_name: attendeeMap.get(a.user_id) ?? t('common.unknown'),
+      }));
+
+      const myAttendance = attendance.find((a: any) => a.user_id === user.id);
+      const myAssignment = assignments.find((a: any) => a.user_id === user.id);
+
+      const isHomeChurch = true;
+      const canManageDetail = user?.role === 'admin' || canManage;
+      const shouldShowAssignments =
+        sabbath.status === 'published' ||
+        (canManageDetail && (sabbath.status === 'draft' || sabbath.status === 'cancelled'));
+
+      const shouldShowAttendees = sabbath.status === 'published';
+
+      return {
+        sabbath,
+        group,
+        assignments: shouldShowAssignments ? assignments : [],
+        attendance: shouldShowAttendees ? attendance : [],
+        myAttendanceStatus: myAttendance?.status ?? null,
+        attendingCount: attendance.filter((a: any) => a.status === 'attending').length,
+        isHomeChurch,
+        isAssignedUser: !!myAssignment,
+        canManage: canManageDetail,
+        canRespondAttendance: sabbath.status === 'published',
+        canRespondAssignment: sabbath.status === 'published' && !!myAssignment,
+        shouldShowAttendees,
+        shouldShowAssignments,
+      } as SabbathDetailView;
+    },
+  });
+
+  const respondAttendanceMutation = useMutation({
+    mutationFn: async (input: { sabbathId: string; status: 'attending' | 'not_attending' }) => {
+      if (!user?.id) {
+        throw new Error(t('sabbath.mustBeLoggedInRespond'));
+      }
+
+      const { data: existing, error: existingError } = await supabase
+        .from('sabbath_attendance')
+        .select('id')
+        .eq('sabbath_id', input.sabbathId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (existingError) {
+        throw new Error(existingError.message);
+      }
+
+      if (existing?.id) {
+        const { data, error } = await supabase
+          .from('sabbath_attendance')
+          .update({ status: input.status })
+          .eq('id', existing.id)
+          .select()
+          .single();
+
+        if (error) throw new Error(error.message);
+        return data;
+      }
+
       const { data, error } = await supabase
         .from('sabbath_attendance')
-        .update({ status: input.status })
-        .eq('id', existing.id)
+        .insert({
+          sabbath_id: input.sabbathId,
+          user_id: user.id,
+          status: input.status,
+        })
         .select()
         .single();
 
       if (error) throw new Error(error.message);
       return data;
-    }
+    },
+    onSuccess: (_data, variables) => {
+      void myChurchQuery.refetch();
+      void sabbathDetailQuery.refetch();
+      void countryQuery.refetch();
 
-    const { data, error } = await supabase
-      .from('sabbath_attendance')
-      .insert({
-        sabbath_id: input.sabbathId,
-        user_id: user.id,
-        status: input.status,
-      })
-      .select()
-      .single();
-
-    if (error) throw new Error(error.message);
-    return data;
-  },
-  onSuccess: (_data, variables) => {
-    void myChurchQuery.refetch();
-    void sabbathDetailQuery.refetch();
-    void countryQuery.refetch();
-
-    if (variables.status === 'attending') {
-      Alert.alert('Confirmed', "You're now marked as attending this Sabbath.");
-    }
-  },
-  onError: (err: Error) => {
-    console.error('[Sabbath] Attendance error:', err);
-    Alert.alert('Error', err.message || 'Failed to respond');
-  },
-});
+      if (variables.status === 'attending') {
+        Alert.alert(t('sabbath.confirmedTitle'), t('sabbath.attendingConfirmed'));
+      }
+    },
+    onError: (err: Error) => {
+      console.error('[Sabbath] Attendance error:', err);
+      Alert.alert(t('sabbath.errorTitle'), err.message || t('sabbath.failedToRespond'));
+    },
+  });
 
   const acceptMutation = trpc.sabbaths.acceptAssignment.useMutation({
     onSuccess: () => {
@@ -772,7 +803,7 @@ const respondAttendanceMutation = useMutation({
       void sabbathDetailQuery.refetch();
     },
     onError: (err) => {
-      Alert.alert('Error', err.message ?? 'Failed to accept');
+      Alert.alert(t('sabbath.errorTitle'), err.message ?? t('sabbath.failedToAccept'));
     },
   });
 
@@ -785,7 +816,7 @@ const respondAttendanceMutation = useMutation({
       reason: string | null;
     }) => {
       if (!user?.id) {
-        throw new Error('Not authenticated');
+        throw new Error(t('sabbath.notAuthenticated'));
       }
 
       const { data, error } = await supabase.rpc(
@@ -813,7 +844,7 @@ const respondAttendanceMutation = useMutation({
     },
     onError: (err: Error) => {
       console.error('[Sabbath] Decline assignment failed:', err);
-      Alert.alert('Error', err.message ?? 'Failed to decline');
+      Alert.alert(t('sabbath.errorTitle'), err.message ?? t('sabbath.failedToDecline'));
     },
   });
 
@@ -824,7 +855,11 @@ const respondAttendanceMutation = useMutation({
     { primaryGroupId: myChurchQuery.data?.sabbath?.group_id ?? '' },
     { enabled: !!myChurchQuery.data?.sabbath?.group_id && showSuggestModal }
   );
-  const suggestGroupedMembers = useMemo(() => suggestGroupedMembersQuery.data ?? [], [suggestGroupedMembersQuery.data]);
+
+  const suggestGroupedMembers = useMemo(
+    () => suggestGroupedMembersQuery.data ?? [],
+    [suggestGroupedMembersQuery.data]
+  );
 
   const suggestReplacementMutation = trpc.sabbaths.suggestReplacement.useMutation({
     onSuccess: () => {
@@ -832,10 +867,10 @@ const respondAttendanceMutation = useMutation({
       setShowSuggestModal(false);
       setSuggestingAssignmentId(null);
       void sabbathDetailQuery.refetch();
-      Alert.alert('Sent', 'Your replacement suggestion has been submitted to the church leaders.');
+      Alert.alert(t('sabbath.sentTitle'), t('sabbath.replacementSuggestedMessage'));
     },
     onError: (err) => {
-      Alert.alert('Error', err.message ?? 'Failed to suggest replacement');
+      Alert.alert(t('sabbath.errorTitle'), err.message ?? t('sabbath.failedToSuggestReplacement'));
     },
   });
 
@@ -864,15 +899,15 @@ const respondAttendanceMutation = useMutation({
   }, [acceptMutation]);
 
   const handleDecline = useCallback((assignmentId: string) => {
-    Alert.alert('Decline Assignment', 'Are you sure you want to decline this assignment?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('sabbath.declineAssignmentTitle'), t('sabbath.declineAssignmentMessage'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Decline',
+        text: t('sabbath.decline'),
         style: 'destructive',
         onPress: () => declineMutation.mutate({ assignmentId, reason: null }),
       },
     ]);
-  }, [declineMutation]);
+  }, [declineMutation, t]);
 
   const handleSuggestReplacement = useCallback((assignmentId: string) => {
     setSuggestingAssignmentId(assignmentId);
@@ -881,6 +916,7 @@ const respondAttendanceMutation = useMutation({
 
   const handleConfirmSuggestReplacement = useCallback((suggestedUserId: string) => {
     if (!suggestingAssignmentId) return;
+
     suggestReplacementMutation.mutate({
       assignmentId: suggestingAssignmentId,
       suggestedUserId,
@@ -895,10 +931,10 @@ const respondAttendanceMutation = useMutation({
     router.push('/sabbath-planner' as any);
   }, [router]);
 
-const myAssignments = useMemo(() => {
-  if (!sabbathDetailQuery.data || !user?.id) return [];
-  return sabbathDetailQuery.data.assignments.filter(a => a.user_id === user.id);
-}, [sabbathDetailQuery.data, user?.id]);
+  const myAssignments = useMemo(() => {
+    if (!sabbathDetailQuery.data || !user?.id) return [];
+    return sabbathDetailQuery.data.assignments.filter(a => a.user_id === user.id);
+  }, [sabbathDetailQuery.data, user?.id]);
 
   const currentAttendanceStatus = useMemo(() => {
     if (!sabbathDetailQuery.data || !user?.id) return null;
@@ -911,7 +947,13 @@ const myAssignments = useMemo(() => {
     return sabbathDetailQuery.data.attendance.filter(a => a.status === 'attending').length;
   }, [sabbathDetailQuery.data]);
 
-  const isMutating = respondAttendanceMutation.isPending || acceptMutation.isPending || declineMutation.isPending || suggestReplacementMutation.isPending;
+  const isMutating =
+    respondAttendanceMutation.isPending ||
+    acceptMutation.isPending ||
+    declineMutation.isPending ||
+    suggestReplacementMutation.isPending;
+
+  const countryName = selectedCountry?.name ?? t('sabbath.countryFallback');
 
   return (
     <SafeAreaView style={styles.container}>
@@ -959,7 +1001,7 @@ const myAssignments = useMemo(() => {
             dateGroups={countryQuery.data ?? []}
             isLoading={countryQuery.isLoading || (!selectedCountryId && accessibleCountriesQuery.isLoading)}
             error={countryQuery.error}
-            countryName={selectedCountry?.name ?? 'your country'}
+            countryName={countryName}
             onAttend={handleAttendance}
             onViewDetail={handleViewDetail}
             isMutating={isMutating}
@@ -975,15 +1017,16 @@ const myAssignments = useMemo(() => {
             <View style={styles.suggestModalHandle} />
             <View style={styles.suggestModalHeader}>
               <Globe size={20} color="#1e3a8a" />
-              <Text style={styles.suggestModalTitle}>Select Country</Text>
+              <Text style={styles.suggestModalTitle}>{t('sabbath.selectCountry')}</Text>
             </View>
             <Text style={styles.suggestModalSubtitle}>
-              Choose which country&apos;s Sabbaths you want to see.
+              {t('sabbath.countryPickerSubtitle')}
             </Text>
             <ScrollView style={styles.suggestMembersList} showsVerticalScrollIndicator={false}>
               {(accessibleCountriesQuery.data?.countries ?? []).map((c) => {
                 const isSelected = c.id === selectedCountryId;
                 const isPrimary = c.id === accessibleCountriesQuery.data?.primaryCountryId;
+
                 return (
                   <TouchableOpacity
                     key={c.id}
@@ -997,7 +1040,7 @@ const myAssignments = useMemo(() => {
                     <View style={{ flex: 1 }}>
                       <Text style={styles.suggestMemberName}>{c.name}</Text>
                       {isPrimary && (
-                        <Text style={styles.countryPrimaryHint}>Your church&apos;s country</Text>
+                        <Text style={styles.countryPrimaryHint}>{t('sabbath.churchCountry')}</Text>
                       )}
                     </View>
                     {isSelected && <View style={styles.countryCheckDot} />}
@@ -1009,7 +1052,7 @@ const myAssignments = useMemo(() => {
               style={styles.suggestCancelBtn}
               onPress={() => setShowCountryPicker(false)}
             >
-              <Text style={styles.suggestCancelBtnText}>Close</Text>
+              <Text style={styles.suggestCancelBtnText}>{t('sabbath.close')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1021,10 +1064,10 @@ const myAssignments = useMemo(() => {
             <View style={styles.suggestModalHandle} />
             <View style={styles.suggestModalHeader}>
               <RefreshCw size={20} color="#1e3a8a" />
-              <Text style={styles.suggestModalTitle}>Suggest Replacement</Text>
+              <Text style={styles.suggestModalTitle}>{t('sabbath.suggestReplacement')}</Text>
             </View>
             <Text style={styles.suggestModalSubtitle}>
-              Select a member to suggest as your replacement. A church leader will review and approve.
+              {t('sabbath.suggestReplacementSubtitle')}
             </Text>
             <ScrollView style={styles.suggestMembersList} showsVerticalScrollIndicator={false}>
               {suggestGroupedMembers.length === 0 ? (
@@ -1034,7 +1077,7 @@ const myAssignments = useMemo(() => {
                   ) : (
                     <>
                       <Users size={32} color="#cbd5e1" />
-                      <Text style={styles.suggestEmptyText}>No members found</Text>
+                      <Text style={styles.suggestEmptyText}>{t('sabbath.noMembersFound')}</Text>
                     </>
                   )}
                 </View>
@@ -1082,7 +1125,7 @@ const myAssignments = useMemo(() => {
                 setSuggestingAssignmentId(null);
               }}
             >
-              <Text style={styles.suggestCancelBtnText}>Cancel</Text>
+              <Text style={styles.suggestCancelBtnText}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1370,26 +1413,24 @@ const styles = StyleSheet.create({
     color: '#64748b',
   },
   countryHeaderCard: {
-  backgroundColor: '#ffffff',
-  borderRadius: 14,
-  padding: 14,
-  marginBottom: 14,
-  borderWidth: 1,
-  borderColor: '#e2e8f0',
-},
-
-countryHeaderLabel: {
-  fontSize: 12,
-  fontWeight: '600' as const,
-  color: '#64748b',
-  textTransform: 'uppercase' as const,
-  letterSpacing: 0.5,
-  marginBottom: 4,
-},
-
-countryHeaderName: {
-  fontSize: 17,
-  fontWeight: '700' as const,
-  color: '#1e3a8a',
-},
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  countryHeaderLabel: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: '#64748b',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  countryHeaderName: {
+    fontSize: 17,
+    fontWeight: '700' as const,
+    color: '#1e3a8a',
+  },
 });

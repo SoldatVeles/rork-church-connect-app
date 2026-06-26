@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import type { SabbathStatus, SabbathAssignmentStatus } from '@/types/sabbath';
 import { getSabbathStatusLabel, getAssignmentStatusLabel } from '@/utils/sabbath';
 
@@ -22,7 +23,12 @@ interface SabbathStatusBadgeProps {
 }
 
 export function SabbathStatusBadge({ status }: SabbathStatusBadgeProps) {
-  const label = getSabbathStatusLabel(status);
+  const { t } = useTranslation();
+
+  const label = t(`sabbath.status.${status}`, {
+    defaultValue: getSabbathStatusLabel(status),
+  });
+
   const colors = STATUS_COLORS[status] ?? STATUS_COLORS.draft;
 
   return (
@@ -37,7 +43,12 @@ interface AssignmentStatusBadgeProps {
 }
 
 export function AssignmentStatusBadge({ status }: AssignmentStatusBadgeProps) {
-  const label = getAssignmentStatusLabel(status);
+  const { t } = useTranslation();
+
+  const label = t(`sabbath.assignmentStatus.${status}`, {
+    defaultValue: getAssignmentStatusLabel(status),
+  });
+
   const colors = ASSIGNMENT_STATUS_COLORS[status] ?? { bg: '#f1f5f9', text: '#475569' };
 
   return (

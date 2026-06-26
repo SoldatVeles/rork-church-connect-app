@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Alert } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Calendar, Church, ChevronRight, UserPlus, CheckCircle, XCircle } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import type { SabbathDateGroup as SabbathDateGroupType, SabbathWithGroup } from '@/types/sabbath';
@@ -46,6 +47,7 @@ interface CountrySabbathCardProps {
 }
 
 function CountrySabbathCard({ item, onAttend, onViewDetail, isMutating }: CountrySabbathCardProps) {
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const { sabbath, group } = item;
   const [optimisticAttending, setOptimisticAttending] = useState(false);
@@ -54,7 +56,7 @@ function CountrySabbathCard({ item, onAttend, onViewDetail, isMutating }: Countr
   const published = isPublishedSabbath(sabbath.status);
 
   const detailQuery = useQuery({
-    queryKey: ['country-sabbath-card-detail', sabbath.id, user?.id],
+    queryKey: ['country-sabbath-card-detail', sabbath.id, user?.id, i18n.language],
     enabled: published && !!user?.id,
     queryFn: async () => {
       const { data: attendance } = await supabase
@@ -87,15 +89,15 @@ function CountrySabbathCard({ item, onAttend, onViewDetail, isMutating }: Countr
           .in('id', userIds);
 
         (profiles ?? []).forEach((p: any) => {
-          profileMap.set(p.id, p.display_name || p.full_name || 'Unknown');
+          profileMap.set(p.id, p.display_name || p.full_name || t('common.unknown'));
         });
       }
 
       const assignments = assignmentsList.map((a: any) => ({
         ...a,
-        user_name: a.user_id ? profileMap.get(a.user_id) ?? 'Unknown' : undefined,
+        user_name: a.user_id ? profileMap.get(a.user_id) ?? t('common.unknown') : undefined,
         suggested_user_name: a.suggested_user_id
-          ? profileMap.get(a.suggested_user_id) ?? 'Unknown'
+          ? profileMap.get(a.suggested_user_id) ?? t('common.unknown')
           : undefined,
       }));
 
@@ -111,16 +113,27 @@ function CountrySabbathCard({ item, onAttend, onViewDetail, isMutating }: Countr
     return optimisticAttending || detailQuery.data?.myAttendanceStatus === 'attending';
   }, [optimisticAttending, detailQuery.data?.myAttendanceStatus]);
 
+  useEffect(() => {
+    if (!detailQuery.data || isMutating) return;
+
+    if (detailQuery.data.myAttendanceStatus === 'attending') {
+      setOptimisticAttending(true);
+      return;
+    }
+
+    setOptimisticAttending(false);
+  }, [detailQuery.data, isMutating]);
+
   const handleAttendPress = () => {
     if (isAttending) return;
 
     Alert.alert(
-      'Attend Sabbath',
-      `Would you like to attend this Sabbath at ${group.name}?`,
+      t('sabbath.attendance.attendSabbathTitle'),
+      t('sabbath.attendance.attendSabbathMessage', { church: group.name }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Attend',
+          text: t('sabbath.attendance.attend'),
           onPress: () => {
             setOptimisticAttending(true);
             onAttend(sabbath.id, true);
@@ -152,7 +165,7 @@ function CountrySabbathCard({ item, onAttend, onViewDetail, isMutating }: Countr
       {cancelled && (
         <View style={styles.cancelledBanner}>
           <XCircle size={18} color="#991b1b" />
-          <Text style={styles.cancelledText}>This Sabbath has been cancelled.</Text>
+          <Text style={styles.cancelledText}>{t('sabbath.cancelled')}</Text>
         </View>
       )}
 
@@ -167,7 +180,7 @@ function CountrySabbathCard({ item, onAttend, onViewDetail, isMutating }: Countr
             style={styles.swissAttendingBadge}
           >
             <CheckCircle size={16} color="#15803d" />
-            <Text style={styles.swissAttendingText}>You're attending</Text>
+            <Text style={styles.swissAttendingText}>{t('sabbath.attendance.youAreAttending')}</Text>
           </View>
         ) : (
           <TouchableOpacity
@@ -177,7 +190,7 @@ function CountrySabbathCard({ item, onAttend, onViewDetail, isMutating }: Countr
             disabled={isMutating}
           >
             <UserPlus size={16} color="#1e3a8a" />
-            <Text style={styles.swissAttendButtonText}>Attend this Sabbath</Text>
+            <Text style={styles.swissAttendButtonText}>{t('sabbath.attendance.attendThisSabbath')}</Text>
           </TouchableOpacity>
         )
       )}
@@ -283,4 +296,4 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
     color: '#15803d',
   },
-})      ;   
+});

@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import type { SabbathAssignment, SabbathRole } from '@/types/sabbath';
 import { ALL_ROLES } from '@/types/sabbath';
 import { getSabbathRoleLabel } from '@/utils/sabbath';
@@ -11,9 +12,12 @@ interface RoleRowProps {
 }
 
 function RoleRow({ role, assignment }: RoleRowProps) {
-  const roleLabel = getSabbathRoleLabel(role);
-  const assigneeName = assignment?.user_name ?? 'Unassigned';
+  const { t } = useTranslation();
+  const roleLabel = t(`sabbath.roles.${role}`, {
+    defaultValue: getSabbathRoleLabel(role),
+  });
   const hasAssignee = !!assignment?.user_id;
+  const assigneeName = assignment?.user_name ?? t('sabbath.unassigned');
 
   return (
     <View style={styles.row}>
@@ -36,16 +40,25 @@ interface SabbathRoleListProps {
 }
 
 export function SabbathRoleList({ assignments, compact }: SabbathRoleListProps) {
+  const { t } = useTranslation();
+
   if (compact) {
     return (
       <View style={styles.compactContainer}>
         {ALL_ROLES.map((role) => {
           const assignment = assignments.find(a => a.role === role);
+          const roleLabel = t(`sabbath.roles.${role}`, {
+            defaultValue: getSabbathRoleLabel(role),
+          });
+
           return (
             <View key={role} style={styles.compactRow}>
-              <Text style={styles.compactRoleLabel}>{getSabbathRoleLabel(role)}</Text>
-              <Text style={styles.compactAssignee}>
-                {assignment?.user_name ?? 'Unassigned'}
+              <Text style={styles.compactRoleLabel}>{roleLabel}</Text>
+              <Text style={[
+                styles.compactAssignee,
+                !assignment?.user_id && styles.unassigned,
+              ]}>
+                {assignment?.user_name ?? t('sabbath.unassigned')}
               </Text>
             </View>
           );
@@ -56,7 +69,7 @@ export function SabbathRoleList({ assignments, compact }: SabbathRoleListProps) 
 
   return (
     <View style={styles.container}>
-      <Text style={styles.sectionHeading}>Program</Text>
+      <Text style={styles.sectionHeading}>{t('sabbath.sections.program')}</Text>
       {ALL_ROLES.map((role) => {
         const assignment = assignments.find(a => a.role === role);
         return <RoleRow key={role} role={role} assignment={assignment} />;
@@ -122,6 +135,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#f1f5f9',
+    gap: 12,
   },
   compactRoleLabel: {
     fontSize: 12,
@@ -129,10 +143,13 @@ const styles = StyleSheet.create({
     color: '#64748b',
     textTransform: 'uppercase' as const,
     letterSpacing: 0.3,
+    flex: 1,
   },
   compactAssignee: {
     fontSize: 14,
     fontWeight: '500' as const,
     color: '#1e293b',
+    flex: 1,
+    textAlign: 'right' as const,
   },
 });
