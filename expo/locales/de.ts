@@ -176,6 +176,8 @@ registerScreen: {
     recentAnnouncements: 'Aktuelle Ankündigungen',
     noUpcomingEvents: 'Keine kommenden Events.',
     eventFallback: 'Event',
+    waitingAssignmentTitle: 'Warten auf Gemeindezuweisung',
+    waitingAssignmentMessage: 'Ein Administrator oder Gemeindeleiter muss dich zuerst einer Gemeinde zuweisen, bevor du Veranstaltungen, Gebetsanliegen, Gemeindemitglieder, Chats oder Benachrichtigungen sehen kannst.',
     },
     events: {
     title: 'Gemeinde-Events',
@@ -415,6 +417,8 @@ sabbath: {
     replacement_suggested: 'Ersatz vorgeschlagen',
     reassigned: 'Neu zugewiesen',
   },
+  waitingAssignmentTitle: 'Warten auf Gemeindezuweisung',
+  waitingAssignmentMessage: 'Dein Konto ist aktiv, aber ein Administrator muss dich noch einer Gemeinde und einem Land zuweisen, bevor Sabbatprogramme sichtbar sind.',
 },
 sabbathPlanner: {
   title: 'Sabbat-Planer',

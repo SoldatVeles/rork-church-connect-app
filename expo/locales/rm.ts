@@ -176,6 +176,8 @@ registerScreen: {
     recentAnnouncements: 'Annunzias actualas',
     noUpcomingEvents: 'Naginas occurrenzas proximas.',
     eventFallback: 'Occurrenza',
+    waitingAssignmentTitle: 'Spetgar l’assegnaziun a la baselgia',
+    waitingAssignmentMessage: 'In administratur u manader da baselgia sto l’emprim t’assegnar ad ina baselgia avant che ti possias vesair occurrenzas, giavischs d’oraziun, commembers, chats u notificaziuns.',
     },
   events: {
     title: 'Occurrenzas da baselgia',
@@ -415,6 +417,8 @@ sabbath: {
     replacement_suggested: 'Substitut proponì',
     reassigned: 'Attribuì danovamain',
   },
+  waitingAssignmentTitle: 'Spetgar l’assegnaziun a la baselgia',
+  waitingAssignmentMessage: 'Tes conto è activ, ma in administratur sto anc t’assegnar ad ina baselgia ed ad in pajais avant ch’ils programs dal sabat sajan visibels.',
 },
 sabbathPlanner: {
   title: 'Planisader da sabbat',

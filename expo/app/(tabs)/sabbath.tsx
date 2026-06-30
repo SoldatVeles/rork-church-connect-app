@@ -596,6 +596,22 @@ const accessibleCountriesQuery = useQuery({
   return !!selectedCountryId && list.some((country) => country.id === selectedCountryId);
 }, [accessibleCountriesQuery.data, selectedCountryId]);
 
+const isWaitingForChurchAssignment = useMemo(() => {
+  if (!user?.id) return false;
+  if (!accessibleCountriesQuery.isFetched) return false;
+  if (canManage) return false;
+
+  const accessibleCountries = accessibleCountriesQuery.data?.countries ?? [];
+
+  return !userHomeGroupId && accessibleCountries.length === 0;
+}, [
+  user?.id,
+  accessibleCountriesQuery.isFetched,
+  accessibleCountriesQuery.data?.countries,
+  canManage,
+  userHomeGroupId,
+]);
+
   useFocusEffect(
     useCallback(() => {
       void accessibleCountriesQuery.refetch();
@@ -1062,33 +1078,48 @@ const countryQuery = useQuery({
           <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor="#1e3a8a" />
         }
       >
-        {activeTab === 'myChurch' ? (
-          <MyChurchSection
-            sabbathData={myChurchQuery.data ?? null}
-            detailData={sabbathDetailQuery.data ?? null}
-            isLoading={myChurchQuery.isLoading || (!!myChurchQuery.data?.sabbath?.id && sabbathDetailQuery.isLoading)}
-            error={myChurchQuery.error ?? sabbathDetailQuery.error}
-            currentAttendanceStatus={currentAttendanceStatus}
-            myAssignments={myAssignments}
-            attendingCount={attendingCount}
-            onAttend={handleAttendance}
-            onAccept={handleAccept}
-            onDecline={handleDecline}
-            onSuggestReplacement={handleSuggestReplacement}
-            onViewDetail={handleViewDetail}
-            isMutating={isMutating}
-          />
-        ) : (
-          <CountrySection
-            dateGroups={countryQuery.data ?? []}
-            isLoading={countryQuery.isLoading || (!selectedCountryId && accessibleCountriesQuery.isLoading)}
-            error={countryQuery.error}
-            countryName={countryName}
-            onAttend={handleAttendance}
-            onViewDetail={handleViewDetail}
-            isMutating={isMutating}
-          />
-        )}
+{isWaitingForChurchAssignment ? (
+  <EmptyState
+    icon={
+      activeTab === 'myChurch'
+        ? <Church size={40} color="#cbd5e1" />
+        : <Globe size={40} color="#cbd5e1" />
+    }
+    title={t('sabbath.waitingAssignmentTitle', {
+      defaultValue: 'Waiting for church assignment',
+    })}
+    message={t('sabbath.waitingAssignmentMessage', {
+      defaultValue:
+        'Your account is active, but an administrator still needs to assign you to a church and country before Sabbath programs are visible.',
+    })}
+  />
+) : activeTab === 'myChurch' ? (
+  <MyChurchSection
+    sabbathData={myChurchQuery.data ?? null}
+    detailData={sabbathDetailQuery.data ?? null}
+    isLoading={myChurchQuery.isLoading || (!!myChurchQuery.data?.sabbath?.id && sabbathDetailQuery.isLoading)}
+    error={myChurchQuery.error ?? sabbathDetailQuery.error}
+    currentAttendanceStatus={currentAttendanceStatus}
+    myAssignments={myAssignments}
+    attendingCount={attendingCount}
+    onAttend={handleAttendance}
+    onAccept={handleAccept}
+    onDecline={handleDecline}
+    onSuggestReplacement={handleSuggestReplacement}
+    onViewDetail={handleViewDetail}
+    isMutating={isMutating}
+  />
+) : (
+  <CountrySection
+    dateGroups={countryQuery.data ?? []}
+    isLoading={countryQuery.isLoading || (!selectedCountryId && accessibleCountriesQuery.isLoading)}
+    error={countryQuery.error}
+    countryName={countryName}
+    onAttend={handleAttendance}
+    onViewDetail={handleViewDetail}
+    isMutating={isMutating}
+  />
+)}
 
         <View style={styles.bottomSpacer} />
       </ScrollView>

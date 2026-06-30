@@ -176,6 +176,8 @@ registerScreen: {
     recentAnnouncements: 'Anuncios recientes',
     noUpcomingEvents: 'No hay próximos eventos.',
     eventFallback: 'Evento',
+    waitingAssignmentTitle: 'Esperando asignación de iglesia',
+    waitingAssignmentMessage: 'Un administrador o líder de iglesia debe asignarte primero a una iglesia antes de que puedas ver eventos, pedidos de oración, miembros de la comunidad, chats o notificaciones.',
   },
     events: {
     title: 'Eventos de la iglesia',
@@ -415,6 +417,8 @@ sabbath: {
     replacement_suggested: 'Reemplazo sugerido',
     reassigned: 'Reasignado',
   },
+  waitingAssignmentTitle: 'Esperando asignación de iglesia',
+  waitingAssignmentMessage: 'Tu cuenta está activa, pero un administrador todavía debe asignarte a una iglesia y a un país antes de que los programas de sábado sean visibles.',
 },
 sabbathPlanner: {
   title: 'Planificador de sábado',

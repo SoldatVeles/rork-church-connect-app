@@ -176,6 +176,8 @@ registerScreen: {
     recentAnnouncements: 'Annonces récentes',
     noUpcomingEvents: 'Aucun événement à venir.',
     eventFallback: 'Événement',
+    waitingAssignmentTitle: 'En attente d’attribution d’église',
+    waitingAssignmentMessage: 'Un administrateur ou un responsable d’église doit d’abord vous attribuer une église avant que vous puissiez voir les événements, les sujets de prière, les membres, les discussions ou les notifications.',
     },
   events: {
     title: 'Événements de l’église',
@@ -415,6 +417,8 @@ sabbath: {
     replacement_suggested: 'Remplaçant suggéré',
     reassigned: 'Réassigné',
   },
+  waitingAssignmentTitle: 'En attente d’attribution d’église',
+  waitingAssignmentMessage: 'Votre compte est actif, mais un administrateur doit encore vous attribuer une église et un pays avant que les programmes du sabbat soient visibles.',
 },
 sabbathPlanner: {
   title: 'Planificateur du sabbat',

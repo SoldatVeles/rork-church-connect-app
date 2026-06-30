@@ -176,6 +176,8 @@ registerScreen: {
     recentAnnouncements: 'Ostatnie ogłoszenia',
     noUpcomingEvents: 'Brak nadchodzących wydarzeń.',
     eventFallback: 'Wydarzenie',
+    waitingAssignmentTitle: 'Oczekiwanie na przypisanie do zboru',
+    waitingAssignmentMessage: 'Administrator lub lider zboru musi najpierw przypisać Cię do zboru, zanim zobaczysz wydarzenia, prośby modlitewne, członków społeczności, czaty lub powiadomienia.',
     },
   events: {
     title: 'Wydarzenia kościoła',
@@ -415,6 +417,8 @@ sabbath: {
     replacement_suggested: 'Zaproponowano zastępstwo',
     reassigned: 'Przypisano ponownie',
   },
+  waitingAssignmentTitle: 'Oczekiwanie na przypisanie do zboru',
+  waitingAssignmentMessage: 'Twoje konto jest aktywne, ale administrator musi jeszcze przypisać Cię do zboru i kraju, zanim programy sobotnie będą widoczne.',
 },
 sabbathPlanner: {
   title: 'Planer sabatu',

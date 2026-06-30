@@ -176,6 +176,8 @@ registerScreen: {
     recentAnnouncements: 'Recent Announcements',
     noUpcomingEvents: 'No upcoming events.',
     eventFallback: 'Event',
+    waitingAssignmentTitle: 'Waiting for church assignment',
+    waitingAssignmentMessage: 'An administrator or church leader needs to assign you to a church before you can see events, prayer requests, community members, chats, or notifications.',
   },
     events: {
     title: 'Church Events',
@@ -415,6 +417,8 @@ sabbath: {
     replacement_suggested: 'Replacement Suggested',
     reassigned: 'Reassigned',
   },
+  waitingAssignmentTitle: 'Waiting for church assignment',
+  waitingAssignmentMessage: 'Your account is active, but an administrator still needs to assign you to a church and country before Sabbath programs are visible.',
 },
 sabbathPlanner: {
   title: 'Sabbath Planner',
