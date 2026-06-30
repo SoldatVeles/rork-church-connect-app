@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -41,6 +42,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   anchorPosition,
   onNotificationsChanged,
 }) => {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -164,7 +166,7 @@ const refreshNotificationCounts = () => {
       return {
         id: notification.id,
         type: notification.type ?? 'announcement',
-        title: notification.title ?? 'Notification',
+        title: notification.title ?? t('notifications.fallbackTitle'),
         message: notification.body || notification.message || '',
         isRead: Boolean(state?.is_read),
         createdAt: new Date(notification.created_at),
@@ -182,7 +184,7 @@ const refreshNotificationCounts = () => {
   const markReadMutation = useMutation({
     mutationFn: async (notificationId: string) => {
       if (!user?.id) {
-        throw new Error('You must be logged in.');
+        throw new Error(t('notifications.mustBeLoggedIn'));
       }
 
       const { error } = await supabase
@@ -209,7 +211,7 @@ const refreshNotificationCounts = () => {
   const deleteOneMutation = useMutation({
     mutationFn: async (notificationId: string) => {
       if (!user?.id) {
-        throw new Error('You must be logged in.');
+        throw new Error(t('notifications.mustBeLoggedIn'));
       }
 
       const { error } = await supabase
@@ -236,7 +238,7 @@ const refreshNotificationCounts = () => {
   const clearAllMutation = useMutation({
     mutationFn: async () => {
       if (!user?.id) {
-        throw new Error('You must be logged in.');
+        throw new Error(t('notifications.mustBeLoggedIn'));
       }
 
       if (notifications.length === 0) return;
@@ -343,15 +345,26 @@ const refreshNotificationCounts = () => {
     const days = Math.floor(hours / 24);
 
     if (days > 0) {
-      return `${days} day${days > 1 ? 's' : ''} ago`;
+      return days === 1
+        ? t('notifications.time.dayAgo')
+        : t('notifications.time.daysAgo', { count: days });
     }
 
     if (hours > 0) {
-      return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+      return hours === 1
+        ? t('notifications.time.hourAgo')
+        : t('notifications.time.hoursAgo', { count: hours });
     }
 
     const minutes = Math.floor(diff / (1000 * 60));
-    return minutes > 0 ? `${minutes} min${minutes > 1 ? 's' : ''} ago` : 'Just now';
+
+    if (minutes > 0) {
+      return minutes === 1
+        ? t('notifications.time.minuteAgo')
+        : t('notifications.time.minutesAgo', { count: minutes });
+    }
+
+    return t('notifications.time.justNow');
   };
 
   const renderNotificationItem = (notification: NotificationItem, isWeb: boolean) => (
@@ -421,7 +434,7 @@ const refreshNotificationCounts = () => {
           ]}
         >
           <View style={styles.dropdownHeader}>
-            <Text style={styles.dropdownTitle}>Notifications</Text>
+            <Text style={styles.dropdownTitle}>{t('notifications.title')}</Text>
 
             {notifications.length > 0 && (
               <TouchableOpacity
@@ -442,7 +455,7 @@ const refreshNotificationCounts = () => {
           ) : notifications.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Bell size={32} color="#d1d5db" />
-              <Text style={styles.emptyText}>No notifications</Text>
+              <Text style={styles.emptyText}>{t('notifications.empty')}</Text>
             </View>
           ) : (
             <ScrollView style={styles.notificationsList} showsVerticalScrollIndicator={false}>
@@ -456,7 +469,7 @@ const refreshNotificationCounts = () => {
                   onPress={handleViewAll}
                   testID="view-all-notifications"
                 >
-                  <Text style={styles.viewAllText}>View all notifications</Text>
+                  <Text style={styles.viewAllText}>{t('notifications.viewAll')}</Text>
                 </TouchableOpacity>
               )}
             </ScrollView>
@@ -482,7 +495,7 @@ const refreshNotificationCounts = () => {
 
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Notifications</Text>
+            <Text style={styles.modalTitle}>{t('notifications.title')}</Text>
 
             <View style={styles.modalHeaderActions}>
               {notifications.length > 0 && (
@@ -508,7 +521,7 @@ const refreshNotificationCounts = () => {
           ) : notifications.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Bell size={48} color="#d1d5db" />
-              <Text style={styles.emptyText}>No notifications</Text>
+              <Text style={styles.emptyText}>{t('notifications.empty')}</Text>
             </View>
           ) : (
             <ScrollView style={styles.modalNotificationsList} showsVerticalScrollIndicator={false}>

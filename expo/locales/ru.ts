@@ -6,6 +6,23 @@ export default {
     comingSoon: 'Скоро',
     unknown: 'Неизвестно',
   },
+  notifications: {
+  title: 'Уведомления',
+  empty: 'Нет уведомлений',
+  viewAll: 'Показать все уведомления',
+  failedToLoad: 'Не удалось загрузить уведомления',
+  fallbackTitle: 'Уведомление',
+  mustBeLoggedIn: 'Вы должны войти в систему.',
+  time: {
+    justNow: 'Только что',
+    minuteAgo: '1 мин назад',
+    minutesAgo: '{{count}} мин назад',
+    hourAgo: '1 час назад',
+    hoursAgo: '{{count}} ч назад',
+    dayAgo: '1 день назад',
+    daysAgo: '{{count}} дн назад',
+  },
+},
   auth: {
     welcomeBack: 'С возвращением',
     signInContinue: 'Войдите, чтобы продолжить',

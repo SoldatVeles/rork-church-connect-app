@@ -6,6 +6,23 @@ export default {
     comingSoon: 'Wkrótce',
     unknown: 'Nieznane',
   },
+  notifications: {
+  title: 'Powiadomienia',
+  empty: 'Brak powiadomień',
+  viewAll: 'Zobacz wszystkie powiadomienia',
+  failedToLoad: 'Nie udało się załadować powiadomień',
+  fallbackTitle: 'Powiadomienie',
+  mustBeLoggedIn: 'Musisz być zalogowany.',
+  time: {
+    justNow: 'Przed chwilą',
+    minuteAgo: '1 min temu',
+    minutesAgo: '{{count}} min temu',
+    hourAgo: '1 godzinę temu',
+    hoursAgo: '{{count}} godzin temu',
+    dayAgo: '1 dzień temu',
+    daysAgo: '{{count}} dni temu',
+  },
+},
   auth: {
     welcomeBack: 'Witamy ponownie',
     signInContinue: 'Zaloguj się, aby kontynuować',

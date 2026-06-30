@@ -6,6 +6,23 @@ export default {
     comingSoon: 'Em breve',
     unknown: 'Desconhecido',
   },
+  notifications: {
+  title: 'Notificações',
+  empty: 'Sem notificações',
+  viewAll: 'Ver todas as notificações',
+  failedToLoad: 'Não foi possível carregar as notificações',
+  fallbackTitle: 'Notificação',
+  mustBeLoggedIn: 'Tem de iniciar sessão.',
+  time: {
+    justNow: 'Agora mesmo',
+    minuteAgo: 'Há 1 min',
+    minutesAgo: 'Há {{count}} min',
+    hourAgo: 'Há 1 hora',
+    hoursAgo: 'Há {{count}} horas',
+    dayAgo: 'Há 1 dia',
+    daysAgo: 'Há {{count}} dias',
+  },
+},
   auth: {
     welcomeBack: 'Bem-vindo de volta',
     signInContinue: 'Inicie sessão para continuar',

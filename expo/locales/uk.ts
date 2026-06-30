@@ -6,6 +6,23 @@ export default {
     comingSoon: 'Незабаром',
     unknown: 'Невідомо',
   },
+  notifications: {
+  title: 'Сповіщення',
+  empty: 'Немає сповіщень',
+  viewAll: 'Показати всі сповіщення',
+  failedToLoad: 'Не вдалося завантажити сповіщення',
+  fallbackTitle: 'Сповіщення',
+  mustBeLoggedIn: 'Ви повинні увійти в систему.',
+  time: {
+    justNow: 'Щойно',
+    minuteAgo: '1 хв тому',
+    minutesAgo: '{{count}} хв тому',
+    hourAgo: '1 год тому',
+    hoursAgo: '{{count}} год тому',
+    dayAgo: '1 день тому',
+    daysAgo: '{{count}} дн тому',
+  },
+},
   auth: {
     welcomeBack: 'З поверненням',
     signInContinue: 'Увійдіть, щоб продовжити',

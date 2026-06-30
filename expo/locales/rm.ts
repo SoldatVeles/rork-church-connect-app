@@ -6,6 +6,23 @@ export default {
     comingSoon: 'Prest disponibel',
     unknown: 'Nunenconuschent',
   },
+  notifications: {
+  title: 'Notificaziuns',
+  empty: 'Naginas notificaziuns',
+  viewAll: 'Mussar tut las notificaziuns',
+  failedToLoad: 'Betg reussì da chargiar las notificaziuns',
+  fallbackTitle: 'Notificaziun',
+  mustBeLoggedIn: 'Ti stos esser annunzià.',
+  time: {
+    justNow: 'Gist ussa',
+    minuteAgo: 'Avant 1 min',
+    minutesAgo: 'Avant {{count}} min',
+    hourAgo: 'Avant 1 ura',
+    hoursAgo: 'Avant {{count}} uras',
+    dayAgo: 'Avant 1 di',
+    daysAgo: 'Avant {{count}} dis',
+  },
+},
   auth: {
     welcomeBack: 'Bainvegni enavos',
     signInContinue: 'T’annunzia per cuntinuar',

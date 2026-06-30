@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   SafeAreaView,
@@ -30,6 +31,7 @@ type NotificationScope = {
 };
 
 export default function NotificationsScreen() {
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -157,7 +159,7 @@ export default function NotificationsScreen() {
           return {
             id: notification.id,
             type: notification.type ?? 'announcement',
-            title: notification.title ?? 'Notification',
+            title: notification.title ?? t('notifications.fallbackTitle'),
             body: notification.body ?? null,
             created_at: notification.created_at,
             isRead: Boolean(state?.is_read),
@@ -178,7 +180,7 @@ export default function NotificationsScreen() {
   const markRead = useMutation({
     mutationFn: async (id: string) => {
       if (!user?.id) {
-        throw new Error('You must be logged in.');
+        throw new Error(t('notifications.mustBeLoggedIn'));
       }
 
       const { error } = await supabase
@@ -203,7 +205,7 @@ export default function NotificationsScreen() {
   const clearAll = useMutation({
     mutationFn: async () => {
       if (!user?.id) {
-        throw new Error('You must be logged in.');
+        throw new Error(t('notifications.mustBeLoggedIn'));
       }
 
       if (notifications.length === 0) return;
@@ -229,7 +231,7 @@ export default function NotificationsScreen() {
   const deleteOne = useMutation({
     mutationFn: async (id: string) => {
       if (!user?.id) {
-        throw new Error('You must be logged in.');
+        throw new Error(t('notifications.mustBeLoggedIn'));
       }
 
       const { error } = await supabase
@@ -258,15 +260,15 @@ export default function NotificationsScreen() {
       return '';
     }
 
-    return date.toLocaleString();
+    return date.toLocaleString(i18n.language);
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <Stack.Screen options={{ title: 'Notifications' }} />
+      <Stack.Screen options={{ title: t('notifications.title') }} />
 
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Notifications</Text>
+        <Text style={styles.title}>{t('notifications.title')}</Text>
 
         {notifications.length > 0 && (
           <TouchableOpacity
@@ -283,7 +285,7 @@ export default function NotificationsScreen() {
 
       {query.isError ? (
         <View style={styles.center}>
-          <Text style={styles.errorText}>Failed to load notifications</Text>
+          <Text style={styles.errorText}>{t('notifications.failedToLoad')}</Text>
         </View>
       ) : query.isLoading || notificationScopeQuery.isLoading ? (
         <View style={styles.center}>
@@ -292,7 +294,7 @@ export default function NotificationsScreen() {
       ) : notifications.length === 0 ? (
         <View style={styles.center}>
           <Bell size={48} color="#d1d5db" />
-          <Text style={styles.emptyText}>No notifications</Text>
+          <Text style={styles.emptyText}>{t('notifications.empty')}</Text>
         </View>
       ) : (
         <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
