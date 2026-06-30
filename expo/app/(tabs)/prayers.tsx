@@ -351,12 +351,15 @@ export default function PrayersScreen() {
         return;
       }
 
-      const prayerTitle = (prayerRow as any).title ?? 'A prayer request';
+      const prayerTitle =
+        (prayerRow as any).title ?? t('notificationContent.prayers.fallbackPrayerTitle');
 
       const notificationRows = recipientIds.map((recipientId) => ({
         type: 'prayer',
-        title: 'Prayer Answered',
-        body: `A prayer request you prayed for was marked as answered: ${prayerTitle}`,
+        title: t('notificationContent.prayers.prayerAnsweredTitle'),
+        body: t('notificationContent.prayers.prayerAnsweredBody', {
+          title: prayerTitle,
+        }),
         user_id: recipientId,
         prayer_id: prayerId,
       }));
@@ -369,7 +372,7 @@ export default function PrayersScreen() {
         console.warn('[Prayers] Failed to create answered prayer notifications:', notificationError.message);
       }
     },
-    []
+    [t]
   );
 
   const createPrayerMutation = useMutation({
@@ -422,12 +425,14 @@ export default function PrayersScreen() {
         const createdPrayerId = (data as any).id as string;
 
         const notificationTitle = prayerData.isUrgent
-          ? 'Urgent Prayer Request'
-          : 'New Prayer Request';
+          ? t('notificationContent.prayers.urgentPrayerRequestTitle')
+          : t('notificationContent.prayers.newPrayerRequestTitle');
 
         const notificationBody = prayerData.isAnonymous
-          ? 'A new anonymous prayer request has been shared.'
-          : `${prayerData.requestedByName} shared a new prayer request.`;
+          ? t('notificationContent.prayers.anonymousPrayerBody')
+          : t('notificationContent.prayers.namedPrayerBody', {
+              name: prayerData.requestedByName,
+            });
 
         if (prayerData.isSharedAllChurches) {
           const { error: notificationError } = await supabase

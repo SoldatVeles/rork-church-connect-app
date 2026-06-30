@@ -337,8 +337,15 @@ try {
   const createdEventId = (data as any).id as string;
   const eventGroupId = ((data as any).group_id ?? userHomeGroupId) as string | null;
 
-  const notificationTitle = 'New Event';
-  const notificationBody = `${eventData.title} has been added${effectiveChurchName ? ` at ${effectiveChurchName}` : ''}.`;
+  const notificationTitle = t('notificationContent.events.newEventTitle');
+  const notificationBody = effectiveChurchName
+    ? t('notificationContent.events.newEventBodyWithChurch', {
+        title: eventData.title,
+        church: effectiveChurchName,
+      })
+    : t('notificationContent.events.newEventBody', {
+        title: eventData.title,
+      });
 
   if (eventData.isSharedAllChurches) {
     const { error: notificationError } = await supabase
