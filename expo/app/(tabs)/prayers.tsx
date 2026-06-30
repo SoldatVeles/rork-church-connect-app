@@ -23,6 +23,9 @@ import type { PrayerRequest, PrayerStatus, PrayerUpdate } from '@/types/prayer';
 import { supabase } from '@/lib/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
+const PRAYER_UPDATES_NOT_CONFIGURED = 'PRAYER_UPDATES_NOT_CONFIGURED';
+const PRAYER_TRACKING_NOT_CONFIGURED = 'PRAYER_TRACKING_NOT_CONFIGURED';
+
 export default function PrayersScreen() {
   const { t, i18n } = useTranslation();
 
@@ -386,7 +389,7 @@ export default function PrayersScreen() {
       isSharedAllChurches: boolean;
     }) => {
       if (!userIsAdmin && !userHomeGroupId) {
-        throw new Error('You must be assigned to a home church before posting a prayer.');
+        throw new Error(t('prayers.errors.homeChurchRequiredPost'));
       }
 
       const groupForInsert = userIsAdmin ? effectiveChurchId : userHomeGroupId;
@@ -571,7 +574,7 @@ export default function PrayersScreen() {
 
       if (error) {
         if (error.message.includes('relation') && error.message.includes('does not exist')) {
-          throw new Error('Prayer updates table not configured. Please run the database setup SQL.');
+          throw new Error(PRAYER_UPDATES_NOT_CONFIGURED);
         }
 
         throw new Error(error.message);
@@ -613,7 +616,10 @@ export default function PrayersScreen() {
     },
     onError: (error: Error) => {
       console.error('[Prayers] Error creating update:', error);
-      Alert.alert(t('prayers.errorTitle'), error.message || t('prayers.updateFailed'));
+      const message = error.message === PRAYER_UPDATES_NOT_CONFIGURED
+        ? t('prayers.errors.prayerUpdatesNotConfigured')
+        : error.message || t('prayers.updateFailed');
+      Alert.alert(t('prayers.errorTitle'), message);
     },
   });
 
@@ -768,7 +774,7 @@ export default function PrayersScreen() {
 
         if (error) {
           if (error.message.includes('relation') && error.message.includes('does not exist')) {
-            throw new Error('Prayer tracking table not configured. Please run the database setup SQL.');
+            throw new Error(PRAYER_TRACKING_NOT_CONFIGURED);
           }
 
           throw new Error(error.message);
@@ -825,7 +831,7 @@ export default function PrayersScreen() {
       if (ctx?.prevPrayers) queryClient.setQueryData(['prayers', effectiveChurchId], ctx.prevPrayers);
       if (ctx?.prevLinks) queryClient.setQueryData(['prayer_prayers'], ctx.prevLinks);
 
-      if (err.message.includes('Prayer tracking table not configured')) {
+      if (err.message === PRAYER_TRACKING_NOT_CONFIGURED) {
         Alert.alert(
           t('prayers.databaseSetupTitle'),
           t('prayers.databaseSetupMessage'),

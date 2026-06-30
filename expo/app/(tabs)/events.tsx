@@ -197,7 +197,7 @@ const filterOptions = useMemo<{ key: EventType | 'all'; label: string; accent: s
 
       if (error) {
         console.error('[Events] Failed to fetch events:', error);
-        throw new Error(error.message ?? 'Failed to load events');
+        throw new Error(error.message ?? t('events.errors.failedToLoad'));
       }
 
       // Client-side safety filter: enforce visibility even if RLS/column issues exist.
@@ -282,7 +282,7 @@ const filterOptions = useMemo<{ key: EventType | 'all'; label: string; accent: s
       // Always attach the creator's home group. Never use the church-picker as a fallback,
       // otherwise events get assigned to the wrong church.
       if (!userIsAdmin && !userHomeGroupId) {
-        throw new Error('You must be assigned to a home church before creating an event.');
+        throw new Error(t('events.errors.homeChurchRequired'));
       }
 
       const insertData: Record<string, unknown> = {
@@ -308,7 +308,7 @@ const filterOptions = useMemo<{ key: EventType | 'all'; label: string; accent: s
       console.log('[Events] created_by value:', eventData.createdBy);
 
       if (!checkSession?.session) {
-        throw new Error('Your session has expired. Please log out and log in again.');
+        throw new Error(t('events.errors.sessionExpired'));
       }
 
       const { data, error, status } = await supabase
@@ -323,12 +323,12 @@ const filterOptions = useMemo<{ key: EventType | 'all'; label: string; accent: s
 
       if (error) {
         console.error('[Events] Insert failed:', JSON.stringify(error));
-        throw new Error(error.message ?? 'Failed to create event');
+        throw new Error(error.message ?? t('events.errors.createFailed'));
       }
 
       if (!data) {
         console.error('[Events] Insert returned no data - likely RLS policy blocking insert');
-        throw new Error('Event was not created. You may not have permission to create events.');
+        throw new Error(t('events.errors.noPermissionCreate'));
       }
 
 console.log('[Events] Insert succeeded, created event:', data.id);
@@ -422,11 +422,11 @@ return data;
         isSharedAllChurches: false,
       });
       setShowAddModal(false);
-      Alert.alert('Success', 'Event has been created successfully!');
+      Alert.alert(t('events.successTitle'), t('events.createSuccess'));
     },
     onError: (error) => {
       console.error('[Events] Mutation error:', error);
-      Alert.alert('Error', (error as Error).message ?? 'Failed to create event. Please try again.');
+      Alert.alert(t('events.errorTitle'), (error as Error).message ?? t('events.errors.createFailedTryAgain'));
     },
   });
 
@@ -507,7 +507,7 @@ const registerMutation = useMutation({
     setRegisteringEventId(eventId);
 
     if (!user?.id) {
-      throw new Error('You must be logged in.');
+      throw new Error(t('events.errors.mustBeLoggedIn'));
     }
 
     const { data, error } = await supabase.rpc('toggle_event_registration', {
@@ -516,7 +516,7 @@ const registerMutation = useMutation({
 
 if (error) {
   console.error('[Events] Registration RPC failed:', error);
-  throw new Error(error.message ?? 'Failed to update registration');
+  throw new Error(error.message ?? t('events.errors.registrationUpdateFailed'));
 }
 
 console.log('[Events] Registration RPC success:', data);
@@ -530,7 +530,7 @@ return data;
   },
   onError: (error) => {
     setRegisteringEventId(null);
-    Alert.alert('Error', (error as Error).message ?? 'Could not update registration.');
+    Alert.alert(t('events.errorTitle'), (error as Error).message ?? t('events.errors.couldNotUpdateRegistration'));
   },
 });
 
@@ -572,31 +572,31 @@ return data;
     
     if (!user) {
       console.log('[Events] No user found');
-      Alert.alert('Error', 'You must be logged in to create an event');
+      Alert.alert(t('events.errorTitle'), t('events.errors.mustBeLoggedInCreate'));
       return;
     }
 
     if (!user.id) {
       console.log('[Events] User has no ID');
-      Alert.alert('Error', 'Invalid user session. Please log out and log in again.');
+      Alert.alert(t('events.errorTitle'), t('events.errors.invalidSession'));
       return;
     }
 
     if (!form.title.trim()) {
       console.log('[Events] Title validation failed');
-      Alert.alert('Error', 'Please enter an event title');
+      Alert.alert(t('events.errorTitle'), t('events.errors.enterTitle'));
       return;
     }
     
     if (!form.description.trim()) {
       console.log('[Events] Description validation failed');
-      Alert.alert('Error', 'Please enter an event description');
+      Alert.alert(t('events.errorTitle'), t('events.errors.enterDescription'));
       return;
     }
     
     if (!form.location.trim()) {
       console.log('[Events] Location validation failed');
-      Alert.alert('Error', 'Please enter an event location');
+      Alert.alert(t('events.errorTitle'), t('events.errors.enterLocation'));
       return;
     }
     
@@ -628,7 +628,7 @@ return data;
     // Validate dates
     if (endDateTime <= startDateTime) {
       console.log('[Events] Date validation failed');
-      Alert.alert('Error', 'End date and time must be after start date and time');
+      Alert.alert(t('events.errorTitle'), t('events.errors.endAfterStart'));
       return;
     }
 
@@ -654,7 +654,7 @@ return data;
       console.log('[Events] createMutation.mutate called successfully');
     } catch (error) {
       console.error('[Events] Error calling createMutation.mutate:', error);
-      Alert.alert('Error', 'Failed to start event creation');
+      Alert.alert(t('events.errorTitle'), t('events.errors.startCreationFailed'));
     }
   };
 
