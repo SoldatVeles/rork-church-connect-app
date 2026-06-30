@@ -355,14 +355,15 @@ export default function PrayersScreen() {
       }
 
       const prayerTitle =
-        (prayerRow as any).title ?? t('notificationContent.prayers.fallbackPrayerTitle');
+        (prayerRow as any).title ?? 'A prayer request';
 
       const notificationRows = recipientIds.map((recipientId) => ({
         type: 'prayer',
-        title: t('notificationContent.prayers.prayerAnsweredTitle'),
-        body: t('notificationContent.prayers.prayerAnsweredBody', {
-          title: prayerTitle,
-        }),
+        title: 'Prayer Answered',
+        body: `A prayer request you prayed for was marked as answered: ${prayerTitle}`,
+        title_key: 'notificationContent.prayers.prayerAnsweredTitle',
+        body_key: 'notificationContent.prayers.prayerAnsweredBody',
+        body_params: { title: prayerTitle },
         user_id: recipientId,
         prayer_id: prayerId,
       }));
@@ -428,14 +429,21 @@ export default function PrayersScreen() {
         const createdPrayerId = (data as any).id as string;
 
         const notificationTitle = prayerData.isUrgent
-          ? t('notificationContent.prayers.urgentPrayerRequestTitle')
-          : t('notificationContent.prayers.newPrayerRequestTitle');
+          ? 'Urgent Prayer Request'
+          : 'New Prayer Request';
+        const notificationTitleKey = prayerData.isUrgent
+          ? 'notificationContent.prayers.urgentPrayerRequestTitle'
+          : 'notificationContent.prayers.newPrayerRequestTitle';
 
         const notificationBody = prayerData.isAnonymous
-          ? t('notificationContent.prayers.anonymousPrayerBody')
-          : t('notificationContent.prayers.namedPrayerBody', {
-              name: prayerData.requestedByName,
-            });
+          ? 'A new anonymous prayer request has been shared.'
+          : `${prayerData.requestedByName} shared a new prayer request.`;
+        const notificationBodyKey = prayerData.isAnonymous
+          ? 'notificationContent.prayers.anonymousPrayerBody'
+          : 'notificationContent.prayers.namedPrayerBody';
+        const notificationBodyParams = prayerData.isAnonymous
+          ? {}
+          : { name: prayerData.requestedByName };
 
         if (prayerData.isSharedAllChurches) {
           const { error: notificationError } = await supabase
@@ -444,6 +452,9 @@ export default function PrayersScreen() {
               type: 'prayer',
               title: notificationTitle,
               body: notificationBody,
+              title_key: notificationTitleKey,
+              body_key: notificationBodyKey,
+              body_params: notificationBodyParams,
               user_id: null,
               prayer_id: createdPrayerId,
             });
@@ -473,6 +484,9 @@ export default function PrayersScreen() {
               type: 'prayer',
               title: notificationTitle,
               body: notificationBody,
+              title_key: notificationTitleKey,
+              body_key: notificationBodyKey,
+              body_params: notificationBodyParams,
               user_id: recipientId,
               prayer_id: createdPrayerId,
             }));

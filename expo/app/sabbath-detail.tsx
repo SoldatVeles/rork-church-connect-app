@@ -510,16 +510,19 @@ const publishMutation = useMutation({
       ).filter(Boolean);
 
       const churchName =
-        (group as any)?.name ?? t('notificationContent.sabbath.fallbackChurch');
-      const readableDate = formatSabbathDate(currentSabbath.sabbath_date, i18n.language);
+        (group as any)?.name ?? 'your church';
+      const readableDate = formatSabbathDate(currentSabbath.sabbath_date, 'en');
 
       const notificationRows = recipientIds.map((recipientId) => ({
         type: 'sabbath',
-        title: t('notificationContent.sabbath.newPublishedTitle'),
-        body: t('notificationContent.sabbath.publishedBody', {
+        title: 'New Sabbath Published',
+        body: `A Sabbath service for ${churchName} on ${readableDate} has been published.`,
+        title_key: 'notificationContent.sabbath.newPublishedTitle',
+        body_key: 'notificationContent.sabbath.publishedBody',
+        body_params: {
           church: churchName,
-          date: readableDate,
-        }),
+          sabbathDate: currentSabbath.sabbath_date,
+        },
         user_id: recipientId,
         sabbath_id: sid,
       }));
@@ -631,23 +634,26 @@ const cancelMutation = useMutation({
       ).filter(Boolean);
 
       const churchName =
-        (group as any)?.name ?? t('notificationContent.sabbath.fallbackChurch');
-      const readableDate = formatSabbathDate(currentSabbath.sabbath_date, i18n.language);
+        (group as any)?.name ?? 'your church';
+      const readableDate = formatSabbathDate(currentSabbath.sabbath_date, 'en');
       const reason = cancellationReason?.trim() ?? '';
+      const cancellationBodyKey = reason
+        ? 'notificationContent.sabbath.cancelledBodyWithReason'
+        : 'notificationContent.sabbath.cancelledBody';
 
       const notificationRows = recipientIds.map((recipientId) => ({
         type: 'sabbath',
-        title: t('notificationContent.sabbath.cancelledTitle'),
+        title: 'Sabbath Cancelled',
         body: reason
-          ? t('notificationContent.sabbath.cancelledBodyWithReason', {
-              church: churchName,
-              date: readableDate,
-              reason,
-            })
-          : t('notificationContent.sabbath.cancelledBody', {
-              church: churchName,
-              date: readableDate,
-            }),
+          ? `The Sabbath service for ${churchName} on ${readableDate} has been cancelled. Reason: ${reason}`
+          : `The Sabbath service for ${churchName} on ${readableDate} has been cancelled.`,
+        title_key: 'notificationContent.sabbath.cancelledTitle',
+        body_key: cancellationBodyKey,
+        body_params: {
+          church: churchName,
+          sabbathDate: currentSabbath.sabbath_date,
+          reason,
+        },
         user_id: recipientId,
         sabbath_id: sid,
       }));
@@ -751,22 +757,23 @@ const assignRoleMutation = useMutation({
       return;
     }
 
-    const churchName = (groupRow as any)?.name ?? t('notificationContent.sabbath.fallbackAnyChurch');
-    const readableDate = formatSabbathDate(currentSabbath.sabbath_date, i18n.language);
-    const roleName = t(`sabbath.roles.${role}`, {
-      defaultValue: ROLE_LABELS[role] ?? role,
-    });
+    const churchName = (groupRow as any)?.name ?? 'a church';
+    const readableDate = formatSabbathDate(currentSabbath.sabbath_date, 'en');
+    const roleName = ROLE_LABELS[role] ?? role;
 
     const { error: notificationError } = await supabase
       .from('notifications')
       .insert({
         type: 'sabbath',
-        title: t('notificationContent.sabbath.assignmentTitle'),
-        body: t('notificationContent.sabbath.assignmentBody', {
-          role: roleName,
+        title: 'New Sabbath Assignment',
+        body: `You have been assigned as ${roleName} for ${churchName} on ${readableDate}.`,
+        title_key: 'notificationContent.sabbath.assignmentTitle',
+        body_key: 'notificationContent.sabbath.assignmentBody',
+        body_params: {
+          sabbathRole: role,
           church: churchName,
-          date: readableDate,
-        }),
+          sabbathDate: currentSabbath.sabbath_date,
+        },
         user_id: userId,
         sabbath_id: sid,
       });
@@ -1030,28 +1037,29 @@ const suggestReplacementMutation = useMutation({
       const requesterName =
         profileMap.get(user.id) ||
         `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() ||
-        t('notificationContent.sabbath.fallbackMember');
+        'A member';
 
       const suggestedName =
         profileMap.get(suggestedUserId) ||
-        t('notificationContent.sabbath.fallbackSuggestedMember');
+        'another member';
       const churchName =
-        (group as any)?.name ?? t('notificationContent.sabbath.fallbackChurch');
-      const readableDate = formatSabbathDate(currentSabbath.sabbath_date, i18n.language);
-      const roleName = t(`sabbath.roles.${assignment.role}`, {
-        defaultValue: ROLE_LABELS[assignment.role] ?? assignment.role,
-      });
+        (group as any)?.name ?? 'your church';
+      const readableDate = formatSabbathDate(currentSabbath.sabbath_date, 'en');
+      const roleName = ROLE_LABELS[assignment.role] ?? assignment.role;
 
       const notificationRows = recipientIds.map((recipientId) => ({
         type: 'sabbath',
-        title: t('notificationContent.sabbath.replacementSuggestedTitle'),
-        body: t('notificationContent.sabbath.replacementSuggestedBody', {
+        title: 'Replacement Suggested',
+        body: `${requesterName} suggested ${suggestedName} as replacement for the ${roleName} assignment at ${churchName} on ${readableDate}.`,
+        title_key: 'notificationContent.sabbath.replacementSuggestedTitle',
+        body_key: 'notificationContent.sabbath.replacementSuggestedBody',
+        body_params: {
           requester: requesterName,
           suggested: suggestedName,
-          role: roleName,
+          sabbathRole: assignment.role,
           church: churchName,
-          date: readableDate,
-        }),
+          sabbathDate: currentSabbath.sabbath_date,
+        },
         user_id: recipientId,
         sabbath_id: assignment.sabbath_id,
       }));

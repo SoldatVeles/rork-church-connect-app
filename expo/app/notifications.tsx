@@ -20,8 +20,38 @@ interface AppNotification {
   type: string;
   title: string;
   body: string | null;
+  titleKey: string | null;
+  bodyKey: string | null;
+  bodyParams: Record<string, unknown>;
   created_at: string;
   isRead: boolean;
+}
+
+function normalizeNotificationParams(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function formatSabbathNotificationDate(value: unknown, locale: string): string | undefined {
+  if (typeof value !== 'string' || !value.trim()) {
+    return undefined;
+  }
+
+  const date = new Date(`${value}T12:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleDateString(locale, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 type NotificationScope = {
@@ -161,6 +191,9 @@ export default function NotificationsScreen() {
             type: notification.type ?? 'announcement',
             title: notification.title ?? t('notifications.fallbackTitle'),
             body: notification.body ?? null,
+            titleKey: notification.title_key ?? null,
+            bodyKey: notification.body_key ?? null,
+            bodyParams: normalizeNotificationParams(notification.body_params),
             created_at: notification.created_at,
             isRead: Boolean(state?.is_read),
           };
@@ -263,6 +296,45 @@ export default function NotificationsScreen() {
     return date.toLocaleString(i18n.language);
   };
 
+  const getNotificationParams = (notification: AppNotification) => {
+    const params = { ...notification.bodyParams };
+    const formattedSabbathDate = formatSabbathNotificationDate(params.sabbathDate, i18n.language);
+
+    if (formattedSabbathDate && !params.date) {
+      params.date = formattedSabbathDate;
+    }
+
+    if (typeof params.sabbathRole === 'string' && !params.role) {
+      params.role = t(`sabbath.roles.${params.sabbathRole}`, {
+        defaultValue: params.sabbathRole,
+      });
+    }
+
+    return params;
+  };
+
+  const getNotificationTitle = (notification: AppNotification) => {
+    if (!notification.titleKey) {
+      return notification.title || t('notifications.fallbackTitle');
+    }
+
+    return t(notification.titleKey, {
+      ...getNotificationParams(notification),
+      defaultValue: notification.title || t('notifications.fallbackTitle'),
+    });
+  };
+
+  const getNotificationBody = (notification: AppNotification) => {
+    if (!notification.bodyKey) {
+      return notification.body;
+    }
+
+    return t(notification.bodyKey, {
+      ...getNotificationParams(notification),
+      defaultValue: notification.body ?? '',
+    });
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <Stack.Screen options={{ title: t('notifications.title') }} />
@@ -319,11 +391,11 @@ export default function NotificationsScreen() {
                     !notification.isRead && styles.unreadTitle,
                   ]}
                 >
-                  {notification.title}
+                  {getNotificationTitle(notification)}
                 </Text>
 
-                {notification.body ? (
-                  <Text style={styles.itemBody}>{notification.body}</Text>
+                {getNotificationBody(notification) ? (
+                  <Text style={styles.itemBody}>{getNotificationBody(notification)}</Text>
                 ) : null}
 
                 <Text style={styles.itemTime}>{formatTime(notification.created_at)}</Text>

@@ -29,6 +29,9 @@ type NotificationItem = {
   type: string;
   title: string;
   message: string;
+  titleKey: string | null;
+  bodyKey: string | null;
+  bodyParams: Record<string, unknown>;
   isRead: boolean;
   createdAt: Date;
   eventId: string | null;
@@ -36,13 +39,40 @@ type NotificationItem = {
   sabbathId: string | null;
 };
 
+function normalizeNotificationParams(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function formatSabbathNotificationDate(value: unknown, locale: string): string | undefined {
+  if (typeof value !== 'string' || !value.trim()) {
+    return undefined;
+  }
+
+  const date = new Date(`${value}T12:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleDateString(locale, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
 const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   visible,
   onClose,
   anchorPosition,
   onNotificationsChanged,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -168,6 +198,9 @@ const refreshNotificationCounts = () => {
         type: notification.type ?? 'announcement',
         title: notification.title ?? t('notifications.fallbackTitle'),
         message: notification.body || notification.message || '',
+        titleKey: notification.title_key ?? null,
+        bodyKey: notification.body_key ?? null,
+        bodyParams: normalizeNotificationParams(notification.body_params),
         isRead: Boolean(state?.is_read),
         createdAt: new Date(notification.created_at),
         eventId: notification.event_id ?? null,
@@ -367,6 +400,45 @@ const refreshNotificationCounts = () => {
     return t('notifications.time.justNow');
   };
 
+  const getNotificationParams = (notification: NotificationItem) => {
+    const params = { ...notification.bodyParams };
+    const formattedSabbathDate = formatSabbathNotificationDate(params.sabbathDate, i18n.language);
+
+    if (formattedSabbathDate && !params.date) {
+      params.date = formattedSabbathDate;
+    }
+
+    if (typeof params.sabbathRole === 'string' && !params.role) {
+      params.role = t(`sabbath.roles.${params.sabbathRole}`, {
+        defaultValue: params.sabbathRole,
+      });
+    }
+
+    return params;
+  };
+
+  const getNotificationTitle = (notification: NotificationItem) => {
+    if (!notification.titleKey) {
+      return notification.title || t('notifications.fallbackTitle');
+    }
+
+    return t(notification.titleKey, {
+      ...getNotificationParams(notification),
+      defaultValue: notification.title || t('notifications.fallbackTitle'),
+    });
+  };
+
+  const getNotificationMessage = (notification: NotificationItem) => {
+    if (!notification.bodyKey) {
+      return notification.message;
+    }
+
+    return t(notification.bodyKey, {
+      ...getNotificationParams(notification),
+      defaultValue: notification.message,
+    });
+  };
+
   const renderNotificationItem = (notification: NotificationItem, isWeb: boolean) => (
     <TouchableOpacity
       key={notification.id}
@@ -387,11 +459,11 @@ const refreshNotificationCounts = () => {
             !notification.isRead && styles.unreadText,
           ]}
         >
-          {notification.title}
+          {getNotificationTitle(notification)}
         </Text>
 
         <Text style={styles.notificationMessage} numberOfLines={isWeb ? 2 : 3}>
-          {notification.message}
+          {getNotificationMessage(notification)}
         </Text>
 
         <Text style={styles.notificationTime}>
