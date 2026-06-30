@@ -18,11 +18,14 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import LanguageSelector from '@/components/LanguageSelector';
 import { supabase } from '@/lib/supabase';
 
 type RegisterStep = 'form' | 'code' | 'done';
 
 export default function RegisterScreen() {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -56,22 +59,22 @@ export default function RegisterScreen() {
     const confirmPassword = formData.confirmPassword;
 
     if (!firstName || !lastName || !email || !password) {
-      Alert.alert('Missing information', 'Please fill in all required fields.');
+      Alert.alert(t('auth.missingInfoTitle'), t('auth.registerScreen.missingRequiredFields'));
       return;
     }
 
     if (!isValidEmail(email)) {
-      Alert.alert('Invalid email', 'Please enter a valid email address.');
+      Alert.alert(t('auth.invalidEmailTitle'), t('auth.invalidEmailMessage'));
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('Passwords do not match', 'Please enter the same password twice.');
+      Alert.alert(t('auth.passwordReset.passwordsDoNotMatchTitle'), t('auth.passwordReset.passwordsDoNotMatchMessage'));
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert('Password too short', 'Password must be at least 6 characters.');
+      Alert.alert(t('auth.passwordReset.passwordTooShortTitle'), t('auth.registerScreen.passwordTooShortMessage'));
       return;
     }
 
@@ -94,7 +97,7 @@ export default function RegisterScreen() {
       });
 
       if (error) {
-        Alert.alert('Error', error.message);
+        Alert.alert(t('auth.passwordReset.errorTitle'), error.message);
         return;
       }
 
@@ -107,10 +110,10 @@ export default function RegisterScreen() {
       }));
       setCode('');
       setStep('code');
-      Alert.alert('Code sent', 'Please check your email for the 6-digit confirmation code.');
+      Alert.alert(t('auth.passwordReset.codeSentTitle'), t('auth.registerScreen.confirmationCodeSentMessage'));
     } catch (error) {
       console.log('[Register] Sign up error:', error);
-      Alert.alert('Error', 'Could not create your account. Please try again.');
+      Alert.alert(t('auth.passwordReset.errorTitle'), t('auth.registerScreen.createAccountError'));
     } finally {
       setIsLoading(false);
     }
@@ -121,12 +124,12 @@ export default function RegisterScreen() {
     const cleanedCode = code.trim();
 
     if (!email || !cleanedCode) {
-      Alert.alert('Missing information', 'Please enter the confirmation code.');
+      Alert.alert(t('auth.passwordReset.missingInfoTitle'), t('auth.registerScreen.missingConfirmationCode'));
       return;
     }
 
     if (cleanedCode.length !== 6) {
-      Alert.alert('Invalid code', 'Please enter the 6-digit code from your email.');
+      Alert.alert(t('auth.passwordReset.invalidCodeTitle'), t('auth.passwordReset.invalidCodeMessage'));
       return;
     }
 
@@ -140,7 +143,7 @@ export default function RegisterScreen() {
       });
 
       if (error) {
-        Alert.alert('Invalid code', error.message);
+        Alert.alert(t('auth.passwordReset.invalidCodeTitle'), error.message);
         return;
       }
 
@@ -148,7 +151,7 @@ export default function RegisterScreen() {
       setStep('done');
     } catch (error) {
       console.log('[Register] Verify code error:', error);
-      Alert.alert('Error', 'Could not verify the code. Please try again.');
+      Alert.alert(t('auth.passwordReset.errorTitle'), t('auth.passwordReset.verifyCodeError'));
     } finally {
       setIsLoading(false);
     }
@@ -158,7 +161,7 @@ export default function RegisterScreen() {
     const email = cleanEmail();
 
     if (!email || !isValidEmail(email)) {
-      Alert.alert('Invalid email', 'Please go back and enter a valid email address.');
+      Alert.alert(t('auth.invalidEmailTitle'), t('auth.registerScreen.goBackValidEmail'));
       return;
     }
 
@@ -171,14 +174,14 @@ export default function RegisterScreen() {
       });
 
       if (error) {
-        Alert.alert('Error', error.message);
+        Alert.alert(t('auth.passwordReset.errorTitle'), error.message);
         return;
       }
 
-      Alert.alert('Code sent', 'Please check your email for the newest confirmation code.');
+      Alert.alert(t('auth.passwordReset.codeSentTitle'), t('auth.registerScreen.newestCodeSentMessage'));
     } catch (error) {
       console.log('[Register] Resend code error:', error);
-      Alert.alert('Error', 'Could not resend the code. Please try again.');
+      Alert.alert(t('auth.passwordReset.errorTitle'), t('auth.registerScreen.resendCodeError'));
     } finally {
       setIsLoading(false);
     }
@@ -191,7 +194,7 @@ export default function RegisterScreen() {
           <User size={20} color="#64748b" style={styles.inputIcon} />
           <TextInput
             style={styles.input}
-            placeholder="First Name"
+            placeholder={t('auth.registerScreen.firstName')}
             placeholderTextColor="#64748b"
             value={formData.firstName}
             onChangeText={(value) => updateFormData('firstName', value)}
@@ -203,7 +206,7 @@ export default function RegisterScreen() {
           <User size={20} color="#64748b" style={styles.inputIcon} />
           <TextInput
             style={styles.input}
-            placeholder="Last Name"
+            placeholder={t('auth.registerScreen.lastName')}
             placeholderTextColor="#64748b"
             value={formData.lastName}
             onChangeText={(value) => updateFormData('lastName', value)}
@@ -216,7 +219,7 @@ export default function RegisterScreen() {
         <Mail size={20} color="#64748b" style={styles.inputIcon} />
         <TextInput
           style={styles.input}
-          placeholder="Email address"
+          placeholder={t('auth.emailAddress')}
           placeholderTextColor="#64748b"
           value={formData.email}
           onChangeText={(value) => updateFormData('email', value)}
@@ -230,7 +233,7 @@ export default function RegisterScreen() {
         <Phone size={20} color="#64748b" style={styles.inputIcon} />
         <TextInput
           style={styles.input}
-          placeholder="Phone number (optional)"
+          placeholder={t('auth.registerScreen.phoneOptional')}
           placeholderTextColor="#64748b"
           value={formData.phone}
           onChangeText={(value) => updateFormData('phone', value)}
@@ -243,7 +246,7 @@ export default function RegisterScreen() {
         <Lock size={20} color="#64748b" style={styles.inputIcon} />
         <TextInput
           style={styles.input}
-          placeholder="Password"
+          placeholder={t('auth.password')}
           placeholderTextColor="#64748b"
           value={formData.password}
           onChangeText={(value) => updateFormData('password', value)}
@@ -259,7 +262,7 @@ export default function RegisterScreen() {
         <Lock size={20} color="#64748b" style={styles.inputIcon} />
         <TextInput
           style={styles.input}
-          placeholder="Confirm Password"
+          placeholder={t('auth.registerScreen.confirmPassword')}
           placeholderTextColor="#64748b"
           value={formData.confirmPassword}
           onChangeText={(value) => updateFormData('confirmPassword', value)}
@@ -286,7 +289,7 @@ export default function RegisterScreen() {
         {isLoading ? (
           <ActivityIndicator color="white" />
         ) : (
-          <Text style={styles.primaryButtonText}>Create Account</Text>
+          <Text style={styles.primaryButtonText}>{t('auth.registerScreen.createAccount')}</Text>
         )}
       </TouchableOpacity>
 
@@ -295,7 +298,8 @@ export default function RegisterScreen() {
         onPress={() => router.replace('/(auth)/login')}
       >
         <Text style={styles.loginText}>
-          Already have an account? <Text style={styles.loginTextBold}>Sign In</Text>
+          {t('auth.registerScreen.alreadyHaveAccount')}{' '}
+          <Text style={styles.loginTextBold}>{t('auth.signIn')}</Text>
         </Text>
       </TouchableOpacity>
     </>
@@ -304,7 +308,7 @@ export default function RegisterScreen() {
   const renderCodeStep = () => (
     <>
       <Text style={styles.infoText}>
-        We sent a 6-digit confirmation code to{'\n'}
+        {t('auth.registerScreen.confirmationCodeSentTo')}{'\n'}
         <Text style={styles.infoEmail}>{formData.email}</Text>
       </Text>
 
@@ -312,7 +316,7 @@ export default function RegisterScreen() {
         <CheckCircle size={20} color="#64748b" style={styles.inputIcon} />
         <TextInput
           style={styles.input}
-          placeholder="6-digit code"
+          placeholder={t('auth.passwordReset.codePlaceholder')}
           placeholderTextColor="#64748b"
           value={code}
           onChangeText={(value) => setCode(value.replace(/\D/g, '').slice(0, 6))}
@@ -330,7 +334,7 @@ export default function RegisterScreen() {
         {isLoading ? (
           <ActivityIndicator color="white" />
         ) : (
-          <Text style={styles.primaryButtonText}>Verify Code</Text>
+          <Text style={styles.primaryButtonText}>{t('auth.passwordReset.verifyCode')}</Text>
         )}
       </TouchableOpacity>
 
@@ -340,7 +344,8 @@ export default function RegisterScreen() {
         disabled={isLoading}
       >
         <Text style={styles.loginText}>
-          Didn&apos;t receive it? <Text style={styles.loginTextBold}>Send again</Text>
+          {t('auth.passwordReset.didntReceiveIt')}{' '}
+          <Text style={styles.loginTextBold}>{t('auth.passwordReset.sendAgain')}</Text>
         </Text>
       </TouchableOpacity>
 
@@ -349,7 +354,7 @@ export default function RegisterScreen() {
         onPress={() => setStep('form')}
         disabled={isLoading}
       >
-        <Text style={styles.secondaryText}>Back to registration form</Text>
+        <Text style={styles.secondaryText}>{t('auth.registerScreen.backToRegistrationForm')}</Text>
       </TouchableOpacity>
     </>
   );
@@ -360,9 +365,9 @@ export default function RegisterScreen() {
         <CheckCircle size={56} color="#16a34a" />
       </View>
 
-      <Text style={styles.successTitle}>Account confirmed</Text>
+      <Text style={styles.successTitle}>{t('auth.registerScreen.accountConfirmedTitle')}</Text>
       <Text style={styles.successText}>
-        Your account has been confirmed. You can now sign in.
+        {t('auth.registerScreen.accountConfirmedMessage')}
       </Text>
 
       <TouchableOpacity
@@ -374,10 +379,24 @@ export default function RegisterScreen() {
           })
         }
       >
-        <Text style={styles.primaryButtonText}>Go to Sign In</Text>
+        <Text style={styles.primaryButtonText}>{t('auth.registerScreen.goToSignIn')}</Text>
       </TouchableOpacity>
     </View>
   );
+
+  const title =
+    step === 'form'
+      ? t('auth.registerScreen.joinTitle')
+      : step === 'code'
+        ? t('auth.registerScreen.confirmTitle')
+        : t('auth.registerScreen.welcomeTitle');
+
+  const subtitle =
+    step === 'form'
+      ? t('auth.registerScreen.createAccountSubtitle')
+      : step === 'code'
+        ? t('auth.passwordReset.subtitleCode')
+        : t('auth.registerScreen.accountReadySubtitle');
 
   return (
     <KeyboardAvoidingView
@@ -389,27 +408,18 @@ export default function RegisterScreen() {
           <StatusBar style="light" />
           <LinearGradient colors={['#1e3a8a', '#3b82f6']} style={styles.gradient}>
             <View style={styles.header}>
-              <TouchableOpacity
-                style={styles.backButton}
-                onPress={() => router.replace('/(auth)/login')}
-              >
-                <ArrowLeft size={24} color="white" />
-              </TouchableOpacity>
+              <View style={styles.topRow}>
+                <TouchableOpacity
+                  style={styles.backButton}
+                  onPress={() => router.replace('/(auth)/login')}
+                >
+                  <ArrowLeft size={24} color="white" />
+                </TouchableOpacity>
+                <LanguageSelector variant="dark" />
+              </View>
 
-              <Text style={styles.title}>
-                {step === 'form'
-                  ? 'Join Our Community'
-                  : step === 'code'
-                    ? 'Confirm Your Account'
-                    : 'Welcome'}
-              </Text>
-              <Text style={styles.subtitle}>
-                {step === 'form'
-                  ? 'Create your account'
-                  : step === 'code'
-                    ? 'Enter the code from your email'
-                    : 'Your account is ready'}
-              </Text>
+              <Text style={styles.title}>{title}</Text>
+              <Text style={styles.subtitle}>{subtitle}</Text>
             </View>
 
             <ScrollView
@@ -442,8 +452,15 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingTop: 60,
   },
-  backButton: {
+  topRow: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
     marginBottom: 24,
+  },
+  backButton: {
+    paddingVertical: 4,
+    paddingRight: 12,
   },
   title: {
     fontSize: 32,

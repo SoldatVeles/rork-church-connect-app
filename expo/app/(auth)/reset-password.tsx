@@ -17,9 +17,12 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import LanguageSelector from '@/components/LanguageSelector';
 import { supabase } from '@/lib/supabase';
 
 export default function ResetPasswordScreen() {
+  const { t } = useTranslation();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -61,36 +64,36 @@ export default function ResetPasswordScreen() {
           });
 
           if (error) {
-            Alert.alert('Reset link error', error.message);
+            Alert.alert(t('auth.passwordReset.resetLinkErrorTitle'), error.message);
           }
         }
       } catch (error) {
         console.log('[ResetPassword] Session preparation error:', error);
-        Alert.alert('Error', 'Could not prepare password reset session.');
+        Alert.alert(t('auth.passwordReset.errorTitle'), t('auth.passwordReset.prepareSessionError'));
       } finally {
         setIsPreparingSession(false);
       }
     };
 
     void prepareRecoverySession();
-  }, []);
+  }, [t]);
 
   const handleUpdatePassword = async () => {
     const cleanPassword = password.trim();
     const cleanConfirmPassword = confirmPassword.trim();
 
     if (!cleanPassword || !cleanConfirmPassword) {
-      Alert.alert('Missing information', 'Please enter and confirm your new password.');
+      Alert.alert(t('auth.passwordReset.missingInfoTitle'), t('auth.passwordReset.missingPasswordMessage'));
       return;
     }
 
     if (cleanPassword.length < 6) {
-      Alert.alert('Password too short', 'Please use at least 6 characters.');
+      Alert.alert(t('auth.passwordReset.passwordTooShortTitle'), t('auth.passwordReset.passwordTooShortMessage'));
       return;
     }
 
     if (cleanPassword !== cleanConfirmPassword) {
-      Alert.alert('Passwords do not match', 'Please enter the same password twice.');
+      Alert.alert(t('auth.passwordReset.passwordsDoNotMatchTitle'), t('auth.passwordReset.passwordsDoNotMatchMessage'));
       return;
     }
 
@@ -102,14 +105,14 @@ export default function ResetPasswordScreen() {
       });
 
       if (error) {
-        Alert.alert('Error', error.message);
+        Alert.alert(t('auth.passwordReset.errorTitle'), error.message);
         return;
       }
 
       setIsDone(true);
     } catch (error) {
       console.log('[ResetPassword] Update error:', error);
-      Alert.alert('Error', 'Could not update password. Please try again.');
+      Alert.alert(t('auth.passwordReset.errorTitle'), t('auth.passwordReset.updatePasswordError'));
     } finally {
       setIsUpdating(false);
     }
@@ -130,31 +133,34 @@ export default function ResetPasswordScreen() {
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.header}>
-              <Text style={styles.title}>Create New Password</Text>
-              <Text style={styles.subtitle}>Enter your new password below</Text>
+              <View style={styles.languageSelectorContainer}>
+                <LanguageSelector variant="dark" />
+              </View>
+              <Text style={styles.title}>{t('auth.passwordReset.createNewPasswordTitle')}</Text>
+              <Text style={styles.subtitle}>{t('auth.passwordReset.createNewPasswordSubtitle')}</Text>
             </View>
 
             <View style={styles.form}>
               {isPreparingSession ? (
                 <View style={styles.centered}>
                   <ActivityIndicator color="#1e3a8a" />
-                  <Text style={styles.helperText}>Preparing reset link...</Text>
+                  <Text style={styles.helperText}>{t('auth.passwordReset.preparingResetLink')}</Text>
                 </View>
               ) : isDone ? (
                 <View style={styles.successContainer}>
                   <View style={styles.successIconWrapper}>
                     <CheckCircle size={56} color="#16a34a" />
                   </View>
-                  <Text style={styles.successTitle}>Password updated</Text>
+                  <Text style={styles.successTitle}>{t('auth.passwordReset.passwordUpdatedTitle')}</Text>
                   <Text style={styles.successText}>
-                    Your password has been changed successfully.
+                    {t('auth.passwordReset.passwordUpdatedMessageShort')}
                   </Text>
 
                   <TouchableOpacity
                     style={styles.primaryButton}
                     onPress={() => router.replace('/(auth)/login')}
                   >
-                    <Text style={styles.primaryButtonText}>Back to Sign In</Text>
+                    <Text style={styles.primaryButtonText}>{t('auth.passwordReset.backToSignIn')}</Text>
                   </TouchableOpacity>
                 </View>
               ) : (
@@ -163,7 +169,7 @@ export default function ResetPasswordScreen() {
                     <Lock size={20} color="#64748b" style={styles.inputIcon} />
                     <TextInput
                       style={styles.input}
-                      placeholder="New password"
+                      placeholder={t('auth.passwordReset.newPassword')}
                       placeholderTextColor="#64748b"
                       value={password}
                       onChangeText={setPassword}
@@ -186,7 +192,7 @@ export default function ResetPasswordScreen() {
                     <Lock size={20} color="#64748b" style={styles.inputIcon} />
                     <TextInput
                       style={styles.input}
-                      placeholder="Confirm new password"
+                      placeholder={t('auth.passwordReset.confirmNewPassword')}
                       placeholderTextColor="#64748b"
                       value={confirmPassword}
                       onChangeText={setConfirmPassword}
@@ -213,7 +219,7 @@ export default function ResetPasswordScreen() {
                     {isUpdating ? (
                       <ActivityIndicator color="white" />
                     ) : (
-                      <Text style={styles.primaryButtonText}>Update Password</Text>
+                      <Text style={styles.primaryButtonText}>{t('auth.passwordReset.updatePassword')}</Text>
                     )}
                   </TouchableOpacity>
 
@@ -221,7 +227,7 @@ export default function ResetPasswordScreen() {
                     style={styles.loginLink}
                     onPress={() => router.replace('/(auth)/login')}
                   >
-                    <Text style={styles.loginText}>Back to Sign In</Text>
+                    <Text style={styles.loginText}>{t('auth.passwordReset.backToSignIn')}</Text>
                   </TouchableOpacity>
                 </>
               )}
@@ -249,6 +255,10 @@ const styles = StyleSheet.create({
   header: {
     padding: 24,
     paddingTop: 60,
+  },
+  languageSelectorContainer: {
+    alignItems: 'flex-end' as const,
+    marginBottom: 24,
   },
   title: {
     fontSize: 32,

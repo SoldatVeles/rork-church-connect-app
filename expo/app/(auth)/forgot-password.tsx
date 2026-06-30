@@ -16,11 +16,14 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import LanguageSelector from '@/components/LanguageSelector';
 import { supabase } from '@/lib/supabase';
 
 type ResetStep = 'email' | 'code' | 'password' | 'done';
 
 export default function ForgotPasswordScreen() {
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ email?: string }>();
   const [email, setEmail] = useState<string>('');
   const [code, setCode] = useState<string>('');
@@ -48,12 +51,12 @@ export default function ForgotPasswordScreen() {
     const cleanedEmail = cleanEmail();
 
     if (!cleanedEmail) {
-      Alert.alert('Missing email', 'Please enter your email address.');
+      Alert.alert(t('auth.passwordReset.missingEmailTitle'), t('auth.passwordReset.missingEmailMessage'));
       return;
     }
 
     if (!isValidEmail(cleanedEmail)) {
-      Alert.alert('Invalid email', 'Please enter a valid email address.');
+      Alert.alert(t('auth.invalidEmailTitle'), t('auth.invalidEmailMessage'));
       return;
     }
 
@@ -63,17 +66,17 @@ export default function ForgotPasswordScreen() {
       const { error } = await supabase.auth.resetPasswordForEmail(cleanedEmail);
 
       if (error) {
-        Alert.alert('Error', error.message);
+        Alert.alert(t('auth.passwordReset.errorTitle'), error.message);
         return;
       }
 
       setEmail(cleanedEmail);
       setCode('');
       setStep('code');
-      Alert.alert('Code sent', 'Please check your email for the 6-digit reset code.');
+      Alert.alert(t('auth.passwordReset.codeSentTitle'), t('auth.passwordReset.resetCodeSentMessage'));
     } catch (err) {
       console.log('[ForgotPassword] Send code error:', err);
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+      Alert.alert(t('auth.passwordReset.errorTitle'), t('auth.passwordReset.genericError'));
     } finally {
       setIsLoading(false);
     }
@@ -84,12 +87,12 @@ export default function ForgotPasswordScreen() {
     const cleanedCode = code.trim();
 
     if (!cleanedEmail || !cleanedCode) {
-      Alert.alert('Missing information', 'Please enter your email and reset code.');
+      Alert.alert(t('auth.passwordReset.missingInfoTitle'), t('auth.passwordReset.missingEmailCodeMessage'));
       return;
     }
 
     if (cleanedCode.length !== 6) {
-      Alert.alert('Invalid code', 'Please enter the 6-digit code from your email.');
+      Alert.alert(t('auth.passwordReset.invalidCodeTitle'), t('auth.passwordReset.invalidCodeMessage'));
       return;
     }
 
@@ -103,14 +106,14 @@ export default function ForgotPasswordScreen() {
       });
 
       if (error) {
-        Alert.alert('Invalid code', error.message);
+        Alert.alert(t('auth.passwordReset.invalidCodeTitle'), error.message);
         return;
       }
 
       setStep('password');
     } catch (err) {
       console.log('[ForgotPassword] Verify code error:', err);
-      Alert.alert('Error', 'Could not verify the code. Please try again.');
+      Alert.alert(t('auth.passwordReset.errorTitle'), t('auth.passwordReset.verifyCodeError'));
     } finally {
       setIsLoading(false);
     }
@@ -121,17 +124,17 @@ export default function ForgotPasswordScreen() {
     const cleanedConfirmPassword = confirmPassword.trim();
 
     if (!cleanedPassword || !cleanedConfirmPassword) {
-      Alert.alert('Missing information', 'Please enter and confirm your new password.');
+      Alert.alert(t('auth.passwordReset.missingInfoTitle'), t('auth.passwordReset.missingPasswordMessage'));
       return;
     }
 
     if (cleanedPassword.length < 6) {
-      Alert.alert('Password too short', 'Please use at least 6 characters.');
+      Alert.alert(t('auth.passwordReset.passwordTooShortTitle'), t('auth.passwordReset.passwordTooShortMessage'));
       return;
     }
 
     if (cleanedPassword !== cleanedConfirmPassword) {
-      Alert.alert('Passwords do not match', 'Please enter the same password twice.');
+      Alert.alert(t('auth.passwordReset.passwordsDoNotMatchTitle'), t('auth.passwordReset.passwordsDoNotMatchMessage'));
       return;
     }
 
@@ -143,14 +146,14 @@ export default function ForgotPasswordScreen() {
       });
 
       if (error) {
-        Alert.alert('Error', error.message);
+        Alert.alert(t('auth.passwordReset.errorTitle'), error.message);
         return;
       }
 
       setStep('done');
     } catch (err) {
       console.log('[ForgotPassword] Update password error:', err);
-      Alert.alert('Error', 'Could not update your password. Please try again.');
+      Alert.alert(t('auth.passwordReset.errorTitle'), t('auth.passwordReset.updatePasswordError'));
     } finally {
       setIsLoading(false);
     }
@@ -162,7 +165,7 @@ export default function ForgotPasswordScreen() {
         <Mail size={20} color="#64748b" style={styles.inputIcon} />
         <TextInput
           style={styles.input}
-          placeholder="Email address"
+          placeholder={t('auth.emailAddress')}
           placeholderTextColor="#64748b"
           value={email}
           onChangeText={setEmail}
@@ -183,13 +186,14 @@ export default function ForgotPasswordScreen() {
         {isLoading ? (
           <ActivityIndicator color="white" />
         ) : (
-          <Text style={styles.primaryButtonText}>Send Reset Code</Text>
+          <Text style={styles.primaryButtonText}>{t('auth.passwordReset.sendResetCode')}</Text>
         )}
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.loginLink} onPress={() => router.back()}>
         <Text style={styles.loginText}>
-          Remember your password? <Text style={styles.loginTextBold}>Sign In</Text>
+          {t('auth.passwordReset.rememberPassword')}{' '}
+          <Text style={styles.loginTextBold}>{t('auth.signIn')}</Text>
         </Text>
       </TouchableOpacity>
     </>
@@ -198,7 +202,7 @@ export default function ForgotPasswordScreen() {
   const renderCodeStep = () => (
     <>
       <Text style={styles.infoText}>
-        We sent a 6-digit reset code to{'\n'}
+        {t('auth.passwordReset.codeSentTo')}{'\n'}
         <Text style={styles.infoEmail}>{email}</Text>
       </Text>
 
@@ -206,7 +210,7 @@ export default function ForgotPasswordScreen() {
         <CheckCircle size={20} color="#64748b" style={styles.inputIcon} />
         <TextInput
           style={styles.input}
-          placeholder="6-digit code"
+          placeholder={t('auth.passwordReset.codePlaceholder')}
           placeholderTextColor="#64748b"
           value={code}
           onChangeText={(value) => setCode(value.replace(/\D/g, '').slice(0, 6))}
@@ -226,7 +230,7 @@ export default function ForgotPasswordScreen() {
         {isLoading ? (
           <ActivityIndicator color="white" />
         ) : (
-          <Text style={styles.primaryButtonText}>Verify Code</Text>
+          <Text style={styles.primaryButtonText}>{t('auth.passwordReset.verifyCode')}</Text>
         )}
       </TouchableOpacity>
 
@@ -236,7 +240,8 @@ export default function ForgotPasswordScreen() {
         disabled={isLoading}
       >
         <Text style={styles.loginText}>
-          Didn&apos;t receive it? <Text style={styles.loginTextBold}>Send again</Text>
+          {t('auth.passwordReset.didntReceiveIt')}{' '}
+          <Text style={styles.loginTextBold}>{t('auth.passwordReset.sendAgain')}</Text>
         </Text>
       </TouchableOpacity>
     </>
@@ -244,13 +249,13 @@ export default function ForgotPasswordScreen() {
 
   const renderPasswordStep = () => (
     <>
-      <Text style={styles.infoText}>Enter your new password.</Text>
+      <Text style={styles.infoText}>{t('auth.passwordReset.enterNewPassword')}</Text>
 
       <View style={styles.inputContainer}>
         <Lock size={20} color="#64748b" style={styles.inputIcon} />
         <TextInput
           style={styles.input}
-          placeholder="New password"
+          placeholder={t('auth.passwordReset.newPassword')}
           placeholderTextColor="#64748b"
           value={password}
           onChangeText={setPassword}
@@ -267,7 +272,7 @@ export default function ForgotPasswordScreen() {
         <Lock size={20} color="#64748b" style={styles.inputIcon} />
         <TextInput
           style={styles.input}
-          placeholder="Confirm new password"
+          placeholder={t('auth.passwordReset.confirmNewPassword')}
           placeholderTextColor="#64748b"
           value={confirmPassword}
           onChangeText={setConfirmPassword}
@@ -296,7 +301,7 @@ export default function ForgotPasswordScreen() {
         {isLoading ? (
           <ActivityIndicator color="white" />
         ) : (
-          <Text style={styles.primaryButtonText}>Update Password</Text>
+          <Text style={styles.primaryButtonText}>{t('auth.passwordReset.updatePassword')}</Text>
         )}
       </TouchableOpacity>
     </>
@@ -307,9 +312,9 @@ export default function ForgotPasswordScreen() {
       <View style={styles.successIconWrapper}>
         <CheckCircle size={56} color="#16a34a" />
       </View>
-      <Text style={styles.successTitle}>Password updated</Text>
+      <Text style={styles.successTitle}>{t('auth.passwordReset.passwordUpdatedTitle')}</Text>
       <Text style={styles.successText}>
-        Your password has been changed successfully. You can now sign in.
+        {t('auth.passwordReset.passwordUpdatedMessage')}
       </Text>
 
       <TouchableOpacity
@@ -317,10 +322,19 @@ export default function ForgotPasswordScreen() {
         onPress={() => router.replace('/(auth)/login')}
         testID="back-to-login"
       >
-        <Text style={styles.primaryButtonText}>Back to Sign In</Text>
+        <Text style={styles.primaryButtonText}>{t('auth.passwordReset.backToSignIn')}</Text>
       </TouchableOpacity>
     </View>
   );
+
+  const subtitle =
+    step === 'email'
+      ? t('auth.passwordReset.subtitleEmail')
+      : step === 'code'
+        ? t('auth.passwordReset.subtitleCode')
+        : step === 'password'
+          ? t('auth.passwordReset.subtitlePassword')
+          : t('auth.passwordReset.subtitleDone');
 
   return (
     <SafeAreaView style={styles.container}>
@@ -338,23 +352,18 @@ export default function ForgotPasswordScreen() {
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.header}>
-              <TouchableOpacity
-                style={styles.backButton}
-                onPress={() => router.back()}
-                testID="back-button"
-              >
-                <ArrowLeft size={24} color="white" />
-              </TouchableOpacity>
-              <Text style={styles.title}>Reset Password</Text>
-              <Text style={styles.subtitle}>
-                {step === 'email'
-                  ? 'We will send you a 6-digit reset code'
-                  : step === 'code'
-                    ? 'Enter the code from your email'
-                    : step === 'password'
-                      ? 'Create a new password'
-                      : 'Your password was updated'}
-              </Text>
+              <View style={styles.topRow}>
+                <TouchableOpacity
+                  style={styles.backButton}
+                  onPress={() => router.back()}
+                  testID="back-button"
+                >
+                  <ArrowLeft size={24} color="white" />
+                </TouchableOpacity>
+                <LanguageSelector variant="dark" />
+              </View>
+              <Text style={styles.title}>{t('auth.passwordReset.title')}</Text>
+              <Text style={styles.subtitle}>{subtitle}</Text>
             </View>
 
             <View style={styles.form}>
@@ -387,8 +396,15 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingTop: 60,
   },
-  backButton: {
+  topRow: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
     marginBottom: 24,
+  },
+  backButton: {
+    paddingVertical: 4,
+    paddingRight: 12,
   },
   title: {
     fontSize: 32,
