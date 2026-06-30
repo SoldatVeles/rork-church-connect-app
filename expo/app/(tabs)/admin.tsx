@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '@/lib/trpc';
 import type { Sermon } from '@/types/sermon';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 
 type Role = 'admin' | 'church_leader' | 'pastor' | 'member' | 'visitor';
 
@@ -21,6 +22,7 @@ interface Group {
 type AdminTab = 'users' | 'sermons' | 'groups' | 'countries';
 
 export default function AdminTabScreen() {
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<AdminTab>('users');
@@ -102,11 +104,11 @@ type AdminUserRow = {
       return rows
         .filter((p) => Boolean(p.email))
         .map((p) => {
-          const fullName = p.display_name || p.full_name || (p.email ? p.email.split('@')[0] : 'User');
+          const fullName = p.display_name || p.full_name || (p.email ? p.email.split('@')[0] : t('admin.users.userFallback'));
           const parts = fullName.trim().split(/\s+/);
           return {
             id: p.id,
-            firstName: parts[0] || 'User',
+            firstName: parts[0] || t('admin.users.userFallback'),
             lastName: parts.slice(1).join(' ') || '',
             email: p.email ?? '',
             role: ((p.role as Role) || 'member'),
@@ -178,13 +180,13 @@ type AdminUserRow = {
       setNewUser({ firstName: '', lastName: '', email: '', phone: '', password: '', role: 'member' });
       const requiresEmailConfirmation = Boolean(createdUser?.requiresEmailConfirmation);
       const successMessage = requiresEmailConfirmation
-        ? 'Account created. The user must confirm their email before they can sign in.'
-        : 'User created and ready to sign in.';
-      Alert.alert('Success', successMessage);
+        ? t('admin.alerts.accountCreatedConfirm')
+        : t('admin.alerts.userCreatedReady');
+      Alert.alert(t('admin.common.success'), successMessage);
     },
     onError: (error) => {
       console.error('[Admin] User creation failed', error);
-      Alert.alert('Error', error.message ?? 'Failed to create user');
+      Alert.alert(t('admin.common.error'), error.message ?? t('admin.alerts.failedToCreateUser'));
     },
   });
   
@@ -202,39 +204,39 @@ type AdminUserRow = {
       return input;
     },
     onSuccess: () => {
-      Alert.alert('Success', 'User role updated successfully');
+      Alert.alert(t('admin.common.success'), t('admin.alerts.userRoleUpdated'));
       void usersQuery.refetch();
       void queryClient.invalidateQueries({ queryKey: ['users', 'getAll'] });
     },
     onError: (error: Error) => {
-      Alert.alert('Error', error.message);
+      Alert.alert(t('admin.common.error'), error.message);
     },
   });
 
   const deleteUserMutation = trpc.users.delete.useMutation({
     onSuccess: () => {
-      Alert.alert('Success', 'User removed from church successfully');
+      Alert.alert(t('admin.common.success'), t('admin.alerts.userRemovedFromChurch'));
       void usersQuery.refetch();
     },
     onError: (error) => {
-      Alert.alert('Error', error.message);
+      Alert.alert(t('admin.common.error'), error.message);
     },
   });
 
   const blockUserMutation = trpc.users.block.useMutation({
     onSuccess: (data) => {
-      Alert.alert('Success', data.isBlocked ? 'User blocked successfully' : 'User unblocked successfully');
+      Alert.alert(t('admin.common.success'), data.isBlocked ? t('admin.alerts.userBlocked') : t('admin.alerts.userUnblocked'));
       void usersQuery.refetch();
     },
     onError: (error) => {
-      Alert.alert('Error', error.message);
+      Alert.alert(t('admin.common.error'), error.message);
     },
   });
   
   const createGroupMutation = useMutation({
     mutationFn: async (data: { name: string }) => {
       if (!user?.id) {
-        throw new Error('You must be logged in to create a group');
+        throw new Error(t('admin.alerts.mustBeLoggedInCreateChurch'));
       }
       
       console.log('[Admin] Creating group:', data.name, 'by user:', user.id);
@@ -268,12 +270,12 @@ type AdminUserRow = {
       return insertedData;
     },
     onSuccess: () => {
-      Alert.alert('Success', 'Church created');
+      Alert.alert(t('admin.common.success'), t('admin.alerts.churchCreated'));
       setGroupName('');
       void queryClient.invalidateQueries({ queryKey: ['groups'] });
       void queryClient.invalidateQueries({ queryKey: ['user-groups'] });
     },
-    onError: (e: Error) => Alert.alert('Error', e.message ?? 'Failed to create group'),
+    onError: (e: Error) => Alert.alert(t('admin.common.error'), e.message ?? t('admin.alerts.failedToCreateChurch')),
   });
   const groupPastorsQuery = useQuery<{ groupId: string; userId: string }[]>({
     queryKey: ['group-pastors'],
@@ -323,7 +325,7 @@ type AdminUserRow = {
       return userIds.map((uid: string) => {
         const p = profileMap.get(uid);
         if (p) {
-          const name = p.full_name || p.display_name || p.email?.split('@')[0] || 'Member';
+          const name = p.full_name || p.display_name || p.email?.split('@')[0] || t('admin.users.memberFallback');
           return {
             userId: p.id,
             fullName: name,
@@ -333,7 +335,7 @@ type AdminUserRow = {
         }
         return {
           userId: uid,
-          fullName: 'Member',
+          fullName: t('admin.users.memberFallback'),
           email: '',
           role: 'member',
         };
@@ -354,12 +356,12 @@ type AdminUserRow = {
       }
     },
     onSuccess: () => {
-      Alert.alert('Success', 'Pastor assigned to church');
+      Alert.alert(t('admin.common.success'), t('admin.alerts.pastorAssigned'));
       setSelectedPastorForGroup('');
       void groupPastorsQuery.refetch();
     },
     onError: (error: Error) => {
-      Alert.alert('Error', error.message);
+      Alert.alert(t('admin.common.error'), error.message);
     },
   });
 
@@ -375,11 +377,11 @@ type AdminUserRow = {
       }
     },
     onSuccess: () => {
-      Alert.alert('Success', 'Pastor removed from church');
+      Alert.alert(t('admin.common.success'), t('admin.alerts.pastorRemoved'));
       void groupPastorsQuery.refetch();
     },
     onError: (error: Error) => {
-      Alert.alert('Error', error.message);
+      Alert.alert(t('admin.common.error'), error.message);
     },
   });
 
@@ -422,7 +424,7 @@ type AdminUserRow = {
       }
     },
     onSuccess: () => {
-      Alert.alert('Success', 'Member removed from church');
+      Alert.alert(t('admin.common.success'), t('admin.alerts.memberRemovedFromChurch'));
       void queryClient.invalidateQueries({ queryKey: ['group-members', expandedGroupId] });
       void queryClient.invalidateQueries({ queryKey: ['groups'] });
       void queryClient.invalidateQueries({ queryKey: ['churches'] });
@@ -431,7 +433,7 @@ type AdminUserRow = {
       void queryClient.invalidateQueries({ queryKey: ['prayers'] });
       void queryClient.invalidateQueries({ queryKey: ['events'] });
     },
-    onError: (e: Error) => Alert.alert('Error', e.message),
+    onError: (e: Error) => Alert.alert(t('admin.common.error'), e.message),
   });
 
   const deleteGroupMutation = useMutation({
@@ -453,31 +455,31 @@ type AdminUserRow = {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
-      Alert.alert('Success', 'Church deleted');
+      Alert.alert(t('admin.common.success'), t('admin.alerts.churchDeleted'));
       setExpandedGroupId(null);
       void queryClient.invalidateQueries({ queryKey: ['groups'] });
     },
-    onError: (e: Error) => Alert.alert('Error', e.message),
+    onError: (e: Error) => Alert.alert(t('admin.common.error'), e.message),
   });
 
   const handleDeleteGroup = (groupId: string, groupName: string) => {
     Alert.alert(
-      'Delete Church',
-      `Are you sure you want to delete "${groupName}"? All members and messages will be removed.`,
+      t('admin.churches.deleteTitle'),
+      t('admin.churches.deleteMessage', { name: groupName }),
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => deleteGroupMutation.mutate(groupId) },
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('admin.common.delete'), style: 'destructive', onPress: () => deleteGroupMutation.mutate(groupId) },
       ]
     );
   };
 
   const handleRemoveMemberFromGroup = (groupId: string, userId: string, name: string) => {
     Alert.alert(
-      'Remove Member',
-      `Remove ${name} from this church?`,
+      t('admin.churches.removeMemberTitle'),
+      t('admin.churches.removeMemberMessage', { name }),
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Remove', style: 'destructive', onPress: () => removeMemberFromGroupMutation.mutate({ groupId, userId }) },
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('admin.common.remove'), style: 'destructive', onPress: () => removeMemberFromGroupMutation.mutate({ groupId, userId }) },
       ]
     );
   };
@@ -521,7 +523,7 @@ type AdminUserRow = {
       }
     },
     onSuccess: () => {
-      Alert.alert('Success', 'Members added to church');
+      Alert.alert(t('admin.common.success'), t('admin.alerts.membersAddedToChurch'));
       setSelectedGroupForAdding('');
       setSelectedUsersForGroup([]);
       void queryClient.invalidateQueries({ queryKey: ['groups'] });
@@ -532,7 +534,7 @@ type AdminUserRow = {
       void queryClient.invalidateQueries({ queryKey: ['prayers'] });
       void queryClient.invalidateQueries({ queryKey: ['events'] });
     },
-    onError: (e: Error) => Alert.alert('Error', e.message ?? 'Failed to add members'),
+    onError: (e: Error) => Alert.alert(t('admin.common.error'), e.message ?? t('admin.alerts.failedToAddMembers')),
   });
 
   const sermonsQuery = trpc.sermons.getAll.useQuery();
@@ -610,11 +612,11 @@ const userCountriesQuery = useQuery({
       return data;
     },
     onSuccess: () => {
-      Alert.alert('Success', 'Country created');
+      Alert.alert(t('admin.common.success'), t('admin.alerts.countryCreated'));
       setNewCountry({ code: '', name: '', flag: '' });
       void countriesQuery.refetch();
     },
-    onError: (e: Error) => Alert.alert('Error', e.message),
+    onError: (e: Error) => Alert.alert(t('admin.common.error'), e.message),
   });
 
   const deleteCountryMutation = useMutation({
@@ -630,7 +632,7 @@ const userCountriesQuery = useQuery({
       void countriesQuery.refetch();
       void groupsWithCountryQuery.refetch();
     },
-    onError: (e: Error) => Alert.alert('Error', e.message),
+    onError: (e: Error) => Alert.alert(t('admin.common.error'), e.message),
   });
 
   const setGroupCountryMutation = useMutation({
@@ -645,7 +647,7 @@ const userCountriesQuery = useQuery({
     onSuccess: () => {
       void groupsWithCountryQuery.refetch();
     },
-    onError: (e: Error) => Alert.alert('Error', e.message),
+    onError: (e: Error) => Alert.alert(t('admin.common.error'), e.message),
   });
 
 const addUserCountryMutation = useMutation({
@@ -669,7 +671,7 @@ const addUserCountryMutation = useMutation({
   onSuccess: async () => {
     await userCountriesQuery.refetch();
   },
-  onError: (e: Error) => Alert.alert('Error', e.message),
+  onError: (e: Error) => Alert.alert(t('admin.common.error'), e.message),
 });
 
   const removeUserCountryMutation = useMutation({
@@ -685,37 +687,37 @@ const addUserCountryMutation = useMutation({
     onSuccess: () => {
       void userCountriesQuery.refetch();
     },
-    onError: (e: Error) => Alert.alert('Error', e.message),
+    onError: (e: Error) => Alert.alert(t('admin.common.error'), e.message),
   });
   const createSermonMutation = trpc.sermons.create.useMutation({
     onSuccess: () => {
-      Alert.alert('Success', 'Sermon created successfully');
+      Alert.alert(t('admin.common.success'), t('admin.alerts.sermonCreated'));
       resetSermonForm();
       void sermonsQuery.refetch();
     },
     onError: (error) => {
-      Alert.alert('Error', error.message);
+      Alert.alert(t('admin.common.error'), error.message);
     },
   });
 
   const updateSermonMutation = trpc.sermons.update.useMutation({
     onSuccess: () => {
-      Alert.alert('Success', 'Sermon updated successfully');
+      Alert.alert(t('admin.common.success'), t('admin.alerts.sermonUpdated'));
       resetSermonForm();
       void sermonsQuery.refetch();
     },
     onError: (error) => {
-      Alert.alert('Error', error.message);
+      Alert.alert(t('admin.common.error'), error.message);
     },
   });
 
   const deleteSermonMutation = trpc.sermons.delete.useMutation({
     onSuccess: () => {
-      Alert.alert('Success', 'Sermon deleted successfully');
+      Alert.alert(t('admin.common.success'), t('admin.alerts.sermonDeleted'));
       void sermonsQuery.refetch();
     },
     onError: (error) => {
-      Alert.alert('Error', error.message);
+      Alert.alert(t('admin.common.error'), error.message);
     },
   });
 
@@ -736,7 +738,7 @@ const addUserCountryMutation = useMutation({
 
   const handleSermonSubmit = () => {
     if (!sermonForm.title || !sermonForm.speaker || !sermonForm.date || !sermonForm.duration) {
-      Alert.alert('Error', 'Please fill in all required fields');
+      Alert.alert(t('admin.common.error'), t('admin.alerts.fillRequiredFields'));
       return;
     }
 
@@ -773,12 +775,12 @@ const addUserCountryMutation = useMutation({
 
   const handleSermonDelete = (sermonId: string) => {
     Alert.alert(
-      'Delete Sermon',
-      'Are you sure you want to delete this sermon?',
+      t('admin.sermons.deleteTitle'),
+      t('admin.sermons.deleteMessage'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('admin.common.delete'),
           style: 'destructive',
           onPress: () => deleteSermonMutation.mutate({ id: sermonId }),
         },
@@ -789,24 +791,19 @@ const addUserCountryMutation = useMutation({
   const roles: Role[] = ['visitor', 'member', 'pastor', 'church_leader', 'admin'];
 
   const getRoleDisplayName = (role: Role): string => {
-    switch (role) {
-      case 'admin': return 'Admin';
-      case 'church_leader': return 'Church Leader';
-      case 'pastor': return 'Pastor';
-      case 'member': return 'Member';
-      case 'visitor': return 'Visitor';
-      default: return role;
-    }
+    return t(`admin.roles.${role}`, {
+      defaultValue: role,
+    });
   };
 
   const handleDeleteUser = (userId: string, userName: string) => {
     Alert.alert(
-      'Remove Member',
-      `Are you sure you want to remove ${userName} from the church? This action cannot be undone.`,
+      t('admin.users.removeMemberTitle'),
+      t('admin.users.removeMemberMessage', { name: userName }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Remove',
+          text: t('admin.common.remove'),
           style: 'destructive',
           onPress: () => deleteUserMutation.mutate({ userId }),
         },
@@ -816,12 +813,12 @@ const addUserCountryMutation = useMutation({
 
   const handleBlockUser = (userId: string, userName: string, currentlyBlocked: boolean) => {
     Alert.alert(
-      currentlyBlocked ? 'Unblock Member' : 'Block Member',
-      `Are you sure you want to ${currentlyBlocked ? 'unblock' : 'block'} ${userName}?`,
+      currentlyBlocked ? t('admin.users.unblockMemberTitle') : t('admin.users.blockMemberTitle'),
+      t(currentlyBlocked ? 'admin.users.unblockMemberMessage' : 'admin.users.blockMemberMessage', { name: userName }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: currentlyBlocked ? 'Unblock' : 'Block',
+          text: currentlyBlocked ? t('admin.common.unblock') : t('admin.common.block'),
           style: currentlyBlocked ? 'default' : 'destructive',
           onPress: () => blockUserMutation.mutate({ userId, isBlocked: !currentlyBlocked }),
         },
@@ -843,8 +840,8 @@ const addUserCountryMutation = useMutation({
         <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.accessDenied}>
           <Shield size={48} color="#ef4444" />
-          <Text style={styles.accessDeniedTitle}>Admin Access Only</Text>
-          <Text style={styles.accessDeniedText}>You do not have permission to access this section.</Text>
+          <Text style={styles.accessDeniedTitle}>{t('admin.accessDeniedTitle')}</Text>
+          <Text style={styles.accessDeniedText}>{t('admin.accessDeniedText')}</Text>
         </View>
       </View>
     );
@@ -855,22 +852,22 @@ const addUserCountryMutation = useMutation({
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
           <Text style={styles.statNumber}>{usersQuery.data?.length ?? 0}</Text>
-          <Text style={styles.statLabel}>Total Members</Text>
+          <Text style={styles.statLabel}>{t('admin.stats.totalMembers')}</Text>
         </View>
         <View style={styles.statCard}>
           <Text style={styles.statNumber}>{usersQuery.data?.filter(u => u.role === 'admin').length ?? 0}</Text>
-          <Text style={styles.statLabel}>Admins</Text>
+          <Text style={styles.statLabel}>{t('admin.stats.admins')}</Text>
         </View>
         <View style={styles.statCard}>
           <Text style={styles.statNumber}>{usersQuery.data?.filter(u => u.role === 'pastor').length ?? 0}</Text>
-          <Text style={styles.statLabel}>Pastors</Text>
+          <Text style={styles.statLabel}>{t('admin.stats.pastors')}</Text>
         </View>
       </View>
 
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <Users size={20} color="#1e3a8a" />
-          <Text style={styles.cardTitle}>Church Members</Text>
+          <Text style={styles.cardTitle}>{t('admin.users.churchMembers')}</Text>
           <TouchableOpacity
             style={styles.refreshButton}
             onPress={() => usersQuery.refetch()}
@@ -884,19 +881,19 @@ const addUserCountryMutation = useMutation({
           <View style={styles.loadingRow}><ActivityIndicator color="#1e3a8a" /></View>
         ) : isChurchLeaderUser && !userHomeGroupId ? (
           <View style={styles.errorContainer}>
-            <Text style={styles.errorTitle}>No church assigned</Text>
+            <Text style={styles.errorTitle}>{t('admin.users.noChurchAssigned')}</Text>
             <Text style={styles.errorMessage}>
-              This church leader does not have a home church assigned yet.
+              {t('admin.users.noChurchAssignedMessage')}
             </Text>
           </View>
         ) : usersQuery.isError ? (
           <View style={styles.errorContainer}>
-            <Text style={styles.errorTitle}>Unable to load members</Text>
+            <Text style={styles.errorTitle}>{t('admin.users.unableToLoadMembers')}</Text>
             <Text style={styles.errorMessage}>
-              {usersQuery.error?.message ?? 'Please check your connection.'}
+              {usersQuery.error?.message ?? t('admin.users.connectionError')}
             </Text>
             <TouchableOpacity style={styles.retryButton} onPress={() => usersQuery.refetch()}>
-              <Text style={styles.retryButtonText}>Retry</Text>
+              <Text style={styles.retryButtonText}>{t('admin.common.retry')}</Text>
             </TouchableOpacity>
           </View>
         ) : usersQuery.data && usersQuery.data.length > 0 ? (
@@ -921,7 +918,7 @@ const addUserCountryMutation = useMutation({
                     {u.isBlocked && (
                       <View style={styles.blockedBadge}>
                         <Ban size={10} color="#ef4444" />
-                        <Text style={styles.blockedBadgeText}>BLOCKED</Text>
+                        <Text style={styles.blockedBadgeText}>{t('admin.users.blocked')}</Text>
                       </View>
                     )}
                   </View>
@@ -939,13 +936,13 @@ const addUserCountryMutation = useMutation({
               {expandedUserId === u.id && (
                 <View style={styles.userExpandedPanel}>
                   <View style={styles.userDetailRow}>
-                    <Text style={styles.userDetailLabel}>Email</Text>
+                    <Text style={styles.userDetailLabel}>{t('admin.users.email')}</Text>
                     <Text style={styles.userDetailValue}>{u.email}</Text>
                   </View>
 
               {user?.role === 'admin' && (
                 <>
-                  <Text style={styles.roleLabel}>Change Role:</Text>
+                  <Text style={styles.roleLabel}>{t('admin.users.changeRole')}</Text>
                   <View style={styles.roleSelector}>
                     {roles.map((r) => (
                       <TouchableOpacity
@@ -985,7 +982,7 @@ const addUserCountryMutation = useMutation({
                   >
                     <Ban size={14} color={u.isBlocked ? "#f97316" : "#64748b"} />
                     <Text style={[styles.userActionButtonText, u.isBlocked && styles.userActionButtonTextWarning]}>
-                      {u.isBlocked ? 'Unblock' : 'Block'}
+                      {u.isBlocked ? t('admin.common.unblock') : t('admin.common.block')}
                     </Text>
                   </TouchableOpacity>
 
@@ -995,7 +992,7 @@ const addUserCountryMutation = useMutation({
                     disabled={deleteUserMutation.isPending}
                   >
                     <Trash2 size={14} color="#ef4444" />
-                    <Text style={styles.userActionButtonTextDanger}>Remove</Text>
+                    <Text style={styles.userActionButtonTextDanger}>{t('admin.common.remove')}</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -1004,7 +1001,7 @@ const addUserCountryMutation = useMutation({
             </View>
           ))
         ) : (
-          <Text style={styles.emptyText}>No members found</Text>
+          <Text style={styles.emptyText}>{t('admin.users.noMembersFound')}</Text>
         )}
       </View>
     
@@ -1022,8 +1019,8 @@ const addUserCountryMutation = useMutation({
               <UserPlus size={18} color="#fff" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.userName}>Add New Member</Text>
-              <Text style={styles.userEmail}>Tap to expand and fill in details</Text>
+              <Text style={styles.userName}>{t('admin.users.addNewMember')}</Text>
+              <Text style={styles.userEmail}>{t('admin.users.addNewMemberSubtitle')}</Text>
             </View>
             {addUserExpanded ? (
               <ChevronUp size={18} color="#1e3a8a" />
@@ -1037,14 +1034,14 @@ const addUserCountryMutation = useMutation({
               <View style={styles.row}>
                 <TextInput
                   style={styles.inputInPanel}
-                  placeholder="First name"
+                  placeholder={t('admin.users.firstName')}
                   value={newUser.firstName}
                   onChangeText={(t) => setNewUser((p) => ({ ...p, firstName: t }))}
                   placeholderTextColor="#94a3b8"
                 />
                 <TextInput
                   style={styles.inputInPanel}
-                  placeholder="Last name"
+                  placeholder={t('admin.users.lastName')}
                   value={newUser.lastName}
                   onChangeText={(t) => setNewUser((p) => ({ ...p, lastName: t }))}
                   placeholderTextColor="#94a3b8"
@@ -1053,7 +1050,7 @@ const addUserCountryMutation = useMutation({
 
               <TextInput
                 style={styles.inputInPanel}
-                placeholder="Email"
+                placeholder={t('admin.users.email')}
                 autoCapitalize="none"
                 keyboardType="email-address"
                 value={newUser.email}
@@ -1063,7 +1060,7 @@ const addUserCountryMutation = useMutation({
 
               <TextInput
                 style={styles.inputInPanel}
-                placeholder="Phone (optional)"
+                placeholder={t('admin.users.phoneOptional')}
                 keyboardType="phone-pad"
                 value={newUser.phone}
                 onChangeText={(t) => setNewUser((p) => ({ ...p, phone: t }))}
@@ -1072,14 +1069,14 @@ const addUserCountryMutation = useMutation({
 
               <TextInput
                 style={styles.inputInPanel}
-                placeholder="Password"
+                placeholder={t('admin.users.password')}
                 secureTextEntry
                 value={newUser.password}
                 onChangeText={(t) => setNewUser((p) => ({ ...p, password: t }))}
                 placeholderTextColor="#94a3b8"
               />
 
-              <Text style={styles.roleLabel}>Select Role:</Text>
+              <Text style={styles.roleLabel}>{t('admin.users.selectRole')}</Text>
               <View style={styles.roleSelectorInline}>
                 {roles.map((r) => (
                   <TouchableOpacity
@@ -1099,7 +1096,7 @@ const addUserCountryMutation = useMutation({
                 style={[styles.primaryButton, createUserMutation.isPending && { opacity: 0.7 }]}
                 onPress={() => {
                   if (!newUser.firstName || !newUser.lastName || !newUser.email || !newUser.password) {
-                    Alert.alert('Missing Information', 'Please fill in first name, last name, email, and password.');
+                    Alert.alert(t('admin.alerts.missingInformation'), t('admin.alerts.missingUserFields'));
                     return;
                   }
 
@@ -1119,7 +1116,7 @@ const addUserCountryMutation = useMutation({
                 ) : (
                   <View style={styles.buttonContent}>
                     <Plus size={18} color="#fff" />
-                    <Text style={styles.primaryButtonText}>Add Member</Text>
+                    <Text style={styles.primaryButtonText}>{t('admin.users.addMember')}</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -1135,13 +1132,13 @@ const addUserCountryMutation = useMutation({
         <View style={styles.cardHeader}>
           <BookOpen size={20} color="#1e3a8a" />
           <Text style={styles.cardTitle}>
-            {editingSermon ? 'Edit Sermon' : 'Add New Sermon'}
+            {editingSermon ? t('admin.sermons.editSermon') : t('admin.sermons.addNewSermon')}
           </Text>
         </View>
 
         <TextInput
           style={styles.input}
-          placeholder="Title *"
+          placeholder={t('admin.sermons.titlePlaceholder')}
           value={sermonForm.title}
           onChangeText={(text) => setSermonForm({ ...sermonForm, title: text })}
           placeholderTextColor="#94a3b8"
@@ -1149,7 +1146,7 @@ const addUserCountryMutation = useMutation({
 
         <TextInput
           style={styles.input}
-          placeholder="Speaker *"
+          placeholder={t('admin.sermons.speakerPlaceholder')}
           value={sermonForm.speaker}
           onChangeText={(text) => setSermonForm({ ...sermonForm, speaker: text })}
           placeholderTextColor="#94a3b8"
@@ -1158,14 +1155,14 @@ const addUserCountryMutation = useMutation({
         <View style={styles.row}>
           <TextInput
             style={[styles.input, { flex: 1 }]}
-            placeholder="Date * (e.g. January 14, 2025)"
+            placeholder={t('admin.sermons.datePlaceholder')}
             value={sermonForm.date}
             onChangeText={(text) => setSermonForm({ ...sermonForm, date: text })}
             placeholderTextColor="#94a3b8"
           />
           <TextInput
             style={[styles.input, { flex: 1 }]}
-            placeholder="Duration * (e.g. 45 min)"
+            placeholder={t('admin.sermons.durationPlaceholder')}
             value={sermonForm.duration}
             onChangeText={(text) => setSermonForm({ ...sermonForm, duration: text })}
             placeholderTextColor="#94a3b8"
@@ -1174,7 +1171,7 @@ const addUserCountryMutation = useMutation({
 
         <TextInput
           style={styles.input}
-          placeholder="Topic *"
+          placeholder={t('admin.sermons.topicPlaceholder')}
           value={sermonForm.topic}
           onChangeText={(text) => setSermonForm({ ...sermonForm, topic: text })}
           placeholderTextColor="#94a3b8"
@@ -1182,7 +1179,7 @@ const addUserCountryMutation = useMutation({
 
         <TextInput
           style={[styles.input, styles.textArea]}
-          placeholder="Description *"
+          placeholder={t('admin.sermons.descriptionPlaceholder')}
           value={sermonForm.description}
           onChangeText={(text) => setSermonForm({ ...sermonForm, description: text })}
           multiline
@@ -1193,12 +1190,12 @@ const addUserCountryMutation = useMutation({
         <View style={styles.youtubeSection}>
           <View style={styles.youtubeBadge}>
             <Youtube size={14} color="#ef4444" />
-            <Text style={styles.youtubeBadgeText}>YouTube Integration</Text>
+            <Text style={styles.youtubeBadgeText}>{t('admin.sermons.youtubeIntegration')}</Text>
           </View>
           
           <TextInput
             style={styles.inputLight}
-            placeholder="YouTube URL (optional)"
+            placeholder={t('admin.sermons.youtubeUrlPlaceholder')}
             value={sermonForm.youtube_url}
             onChangeText={(text) => setSermonForm({ ...sermonForm, youtube_url: text })}
             autoCapitalize="none"
@@ -1208,7 +1205,7 @@ const addUserCountryMutation = useMutation({
           
           <TextInput
             style={styles.inputLight}
-            placeholder="Thumbnail URL (optional)"
+            placeholder={t('admin.sermons.thumbnailUrlPlaceholder')}
             value={sermonForm.thumbnail_url}
             onChangeText={(text) => setSermonForm({ ...sermonForm, thumbnail_url: text })}
             autoCapitalize="none"
@@ -1218,7 +1215,7 @@ const addUserCountryMutation = useMutation({
         </View>
 
         <View style={styles.switchRow}>
-          <Text style={styles.switchLabel}>Featured Sermon</Text>
+          <Text style={styles.switchLabel}>{t('admin.sermons.featuredSermon')}</Text>
           <Switch
             value={sermonForm.is_featured}
             onValueChange={(value) => setSermonForm({ ...sermonForm, is_featured: value })}
@@ -1233,7 +1230,7 @@ const addUserCountryMutation = useMutation({
               style={[styles.secondaryButton, { flex: 1 }]}
               onPress={resetSermonForm}
             >
-              <Text style={styles.secondaryButtonText}>Cancel</Text>
+              <Text style={styles.secondaryButtonText}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity
@@ -1251,7 +1248,7 @@ const addUserCountryMutation = useMutation({
               <View style={styles.buttonContent}>
                 <Plus size={18} color="#fff" />
                 <Text style={styles.primaryButtonText}>
-                  {editingSermon ? 'Update' : 'Create'}
+                  {editingSermon ? t('admin.common.update') : t('admin.common.create')}
                 </Text>
               </View>
             )}
@@ -1262,7 +1259,7 @@ const addUserCountryMutation = useMutation({
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <BookOpen size={20} color="#1e3a8a" />
-          <Text style={styles.cardTitle}>Existing Sermons</Text>
+          <Text style={styles.cardTitle}>{t('admin.sermons.existingSermons')}</Text>
         </View>
 
         {sermonsQuery.isLoading ? (
@@ -1277,7 +1274,7 @@ const addUserCountryMutation = useMutation({
                   <Text style={styles.sermonTitle}>{sermon.title}</Text>
                   {sermon.is_featured && (
                     <View style={styles.featuredBadgeSmall}>
-                      <Text style={styles.featuredBadgeSmallText}>FEATURED</Text>
+                      <Text style={styles.featuredBadgeSmallText}>{t('admin.sermons.featured')}</Text>
                     </View>
                   )}
                 </View>
@@ -1287,7 +1284,7 @@ const addUserCountryMutation = useMutation({
                 {sermon.youtube_url && (
                   <View style={styles.youtubeIndicator}>
                     <Youtube size={12} color="#ef4444" />
-                    <Text style={styles.youtubeIndicatorText}>YouTube Video</Text>
+                    <Text style={styles.youtubeIndicatorText}>{t('admin.sermons.youtubeVideo')}</Text>
                   </View>
                 )}
               </View>
@@ -1309,7 +1306,7 @@ const addUserCountryMutation = useMutation({
             </View>
           ))
         ) : (
-          <Text style={styles.emptyText}>No sermons yet. Create your first one!</Text>
+          <Text style={styles.emptyText}>{t('admin.sermons.empty')}</Text>
         )}
       </View>
     </>
@@ -1325,11 +1322,11 @@ const addUserCountryMutation = useMutation({
 
   const handleAddMembersToGroup = () => {
     if (!selectedGroupForAdding) {
-      Alert.alert('Error', 'Please select a church first');
+      Alert.alert(t('admin.common.error'), t('admin.alerts.selectChurchFirst'));
       return;
     }
     if (selectedUsersForGroup.length === 0) {
-      Alert.alert('Error', 'Please select at least one member');
+      Alert.alert(t('admin.common.error'), t('admin.alerts.selectAtLeastOneMember'));
       return;
     }
     addMembersToGroupMutation.mutate({
@@ -1348,13 +1345,13 @@ const addUserCountryMutation = useMutation({
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <Church size={20} color="#1e3a8a" />
-          <Text style={styles.cardTitle}>Create Church</Text>
+          <Text style={styles.cardTitle}>{t('admin.churches.createChurch')}</Text>
         </View>
 
         <View style={styles.row}>
           <TextInput 
             style={styles.input} 
-            placeholder="Church name (e.g. Zürich)" 
+            placeholder={t('admin.churches.churchNamePlaceholder')} 
             value={groupName} 
             onChangeText={setGroupName}
             placeholderTextColor="#94a3b8"
@@ -1363,7 +1360,7 @@ const addUserCountryMutation = useMutation({
             style={[styles.primaryButtonCompact]}
             onPress={() => {
               if (!groupName.trim()) {
-                Alert.alert('Error', 'Please enter a group name');
+                Alert.alert(t('admin.common.error'), t('admin.alerts.enterChurchName'));
                 return;
               }
               createGroupMutation.mutate({ name: groupName.trim() });
@@ -1373,7 +1370,7 @@ const addUserCountryMutation = useMutation({
             {createGroupMutation.isPending ? (
               <ActivityIndicator color="#fff" size="small" />
             ) : (
-              <Text style={styles.primaryButtonText}>Create</Text>
+              <Text style={styles.primaryButtonText}>{t('admin.common.create')}</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -1382,7 +1379,7 @@ const addUserCountryMutation = useMutation({
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <Church size={20} color="#1e3a8a" />
-          <Text style={styles.cardTitle}>Existing Churches</Text>
+          <Text style={styles.cardTitle}>{t('admin.churches.existingChurches')}</Text>
         </View>
 
         {groupsQuery.isLoading ? (
@@ -1407,7 +1404,7 @@ const addUserCountryMutation = useMutation({
                 >
                   <Text style={styles.groupName}>{group.name}</Text>
                   <Text style={styles.groupMeta}>
-                    Created {new Date(group.created_at).toLocaleDateString()}
+                    {t('admin.churches.created', { date: new Date(group.created_at).toLocaleDateString(i18n.language) })}
                   </Text>
                 </TouchableOpacity>
                 <View style={styles.groupActions}>
@@ -1441,7 +1438,7 @@ const addUserCountryMutation = useMutation({
 
               {expandedGroupId === group.id && (
                 <View style={styles.membersPanel}>
-                  <Text style={styles.membersPanelTitle}>Church Members</Text>
+                  <Text style={styles.membersPanelTitle}>{t('admin.users.churchMembers')}</Text>
                   {groupMembersQuery.isLoading ? (
                     <ActivityIndicator color="#1e3a8a" style={{ paddingVertical: 12 }} />
                   ) : groupMembersQuery.data && groupMembersQuery.data.length > 0 ? (
@@ -1456,7 +1453,7 @@ const addUserCountryMutation = useMutation({
                           <Text style={styles.memberName}>{member.fullName}</Text>
                         </View>
                         <View style={styles.memberRoleBadge}>
-                          <Text style={styles.memberRoleText}>{member.role}</Text>
+                          <Text style={styles.memberRoleText}>{getRoleDisplayName(member.role as Role)}</Text>
                         </View>
                         <TouchableOpacity
                           style={styles.removeMemberBtn}
@@ -1468,11 +1465,11 @@ const addUserCountryMutation = useMutation({
                       </View>
                     ))
                   ) : (
-                    <Text style={styles.noMembersText}>No members in this church</Text>
+                    <Text style={styles.noMembersText}>{t('admin.churches.noMembersInChurch')}</Text>
                   )}
 
                   <View style={{ marginTop: 18 }}>
-                    <Text style={styles.membersPanelTitle}>Assigned Pastors</Text>
+                    <Text style={styles.membersPanelTitle}>{t('admin.churches.assignedPastors')}</Text>
 
                     {allPastorAssignments.filter((assignment) => assignment.groupId === group.id).length > 0 ? (
                       allPastorAssignments
@@ -1490,7 +1487,7 @@ const addUserCountryMutation = useMutation({
 
                               <View style={{ flex: 1 }}>
                                 <Text style={styles.memberName}>
-                                  {pastor ? `${pastor.firstName} ${pastor.lastName}` : 'Pastor'}
+                                  {pastor ? `${pastor.firstName} ${pastor.lastName}` : t('admin.roles.pastor')}
                                 </Text>
                                 {pastor?.email ? (
                                   <Text style={styles.memberEmail}>{pastor.email}</Text>
@@ -1513,10 +1510,10 @@ const addUserCountryMutation = useMutation({
                           );
                         })
                     ) : (
-                      <Text style={styles.noMembersText}>No pastors assigned to this church</Text>
+                      <Text style={styles.noMembersText}>{t('admin.churches.noPastorsAssigned')}</Text>
                     )}
 
-                    <Text style={[styles.roleLabel, { marginTop: 14 }]}>Add Pastor:</Text>
+                    <Text style={[styles.roleLabel, { marginTop: 14 }]}>{t('admin.churches.addPastor')}</Text>
 
                     <View style={styles.roleSelector}>
                       {allPastors
@@ -1549,7 +1546,7 @@ const addUserCountryMutation = useMutation({
                     </View>
 
                     {allPastors.length === 0 ? (
-                      <Text style={styles.noMembersText}>No users with Pastor role found</Text>
+                      <Text style={styles.noMembersText}>{t('admin.churches.noPastorUsers')}</Text>
                     ) : null}
 
                     {selectedPastorForGroup ? (
@@ -1570,7 +1567,7 @@ const addUserCountryMutation = useMutation({
                         {assignPastorToGroupMutation.isPending ? (
                           <ActivityIndicator color="#fff" />
                         ) : (
-                          <Text style={styles.primaryButtonText}>Assign Pastor</Text>
+                          <Text style={styles.primaryButtonText}>{t('admin.churches.assignPastor')}</Text>
                         )}
                       </TouchableOpacity>
                     ) : null}
@@ -1580,7 +1577,7 @@ const addUserCountryMutation = useMutation({
             </View>
           ))
         ) : (
-          <Text style={styles.emptyText}>No churches yet. Create your first one!</Text>
+          <Text style={styles.emptyText}>{t('admin.churches.empty')}</Text>
         )}
       </View>
 
@@ -1588,10 +1585,10 @@ const addUserCountryMutation = useMutation({
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <UserPlus size={20} color="#1e3a8a" />
-            <Text style={styles.cardTitle}>Add Members to Church</Text>
+            <Text style={styles.cardTitle}>{t('admin.churches.addMembersToChurch')}</Text>
           </View>
 
-          <Text style={styles.helpText}>Select members to add to this church:</Text>
+          <Text style={styles.helpText}>{t('admin.churches.selectMembersToAdd')}</Text>
 
           {usersQuery.isLoading ? (
             <View style={styles.loadingRow}>
@@ -1638,14 +1635,14 @@ const addUserCountryMutation = useMutation({
                   <View style={styles.buttonContent}>
                     <Plus size={18} color="#fff" />
                     <Text style={styles.primaryButtonText}>
-                      Add {selectedUsersForGroup.length} Member{selectedUsersForGroup.length !== 1 ? 's' : ''}
+                      {t('admin.churches.addMembersButton', { count: selectedUsersForGroup.length })}
                     </Text>
                   </View>
                 )}
               </TouchableOpacity>
             </>
           ) : (
-            <Text style={styles.emptyText}>No members available</Text>
+            <Text style={styles.emptyText}>{t('admin.churches.noMembersAvailable')}</Text>
           )}
         </View>
       )}
@@ -1663,12 +1660,12 @@ const addUserCountryMutation = useMutation({
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Globe size={20} color="#1e3a8a" />
-            <Text style={styles.cardTitle}>Countries</Text>
+            <Text style={styles.cardTitle}>{t('admin.countries.title')}</Text>
           </View>
           {countriesQuery.isLoading && countries.length === 0 ? (
             <ActivityIndicator color="#1e3a8a" />
           ) : countries.length === 0 ? (
-            <Text style={styles.emptyText}>No countries yet. Add the first one below.</Text>
+            <Text style={styles.emptyText}>{t('admin.countries.empty')}</Text>
           ) : (
             countries.map((c) => (
               <View key={c.id} style={styles.countryRow}>
@@ -1680,9 +1677,9 @@ const addUserCountryMutation = useMutation({
                 <TouchableOpacity
                   style={styles.iconButton}
                   onPress={() => {
-                    Alert.alert('Delete Country', `Remove ${c.name}? Churches assigned to it will become unassigned.`, [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Delete', style: 'destructive', onPress: () => deleteCountryMutation.mutate({ countryId: c.id }) },
+                    Alert.alert(t('admin.countries.deleteTitle'), t('admin.countries.deleteMessage', { name: c.name }), [
+                      { text: t('common.cancel'), style: 'cancel' },
+                      { text: t('admin.common.delete'), style: 'destructive', onPress: () => deleteCountryMutation.mutate({ countryId: c.id }) },
                     ]);
                   }}
                 >
@@ -1696,12 +1693,12 @@ const addUserCountryMutation = useMutation({
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Plus size={20} color="#1e3a8a" />
-            <Text style={styles.cardTitle}>Add Country</Text>
+            <Text style={styles.cardTitle}>{t('admin.countries.addCountry')}</Text>
           </View>
           <View style={styles.row}>
             <TextInput
               style={styles.input}
-              placeholder="Code (e.g. CH)"
+              placeholder={t('admin.countries.codePlaceholder')}
               autoCapitalize="characters"
               value={newCountry.code}
               onChangeText={(t) => setNewCountry((p) => ({ ...p, code: t.toUpperCase() }))}
@@ -1709,7 +1706,7 @@ const addUserCountryMutation = useMutation({
             />
             <TextInput
               style={styles.input}
-              placeholder="Flag (🇨🇭)"
+              placeholder={t('admin.countries.flagPlaceholder')}
               value={newCountry.flag}
               onChangeText={(t) => setNewCountry((p) => ({ ...p, flag: t }))}
               placeholderTextColor="#94a3b8"
@@ -1717,7 +1714,7 @@ const addUserCountryMutation = useMutation({
           </View>
           <TextInput
             style={styles.input}
-            placeholder="Name (e.g. Switzerland)"
+            placeholder={t('admin.countries.namePlaceholder')}
             value={newCountry.name}
             onChangeText={(t) => setNewCountry((p) => ({ ...p, name: t }))}
             placeholderTextColor="#94a3b8"
@@ -1726,7 +1723,7 @@ const addUserCountryMutation = useMutation({
             style={[styles.primaryButton, createCountryMutation.isPending && { opacity: 0.7 }]}
             onPress={() => {
               if (!newCountry.code.trim() || !newCountry.name.trim()) {
-                Alert.alert('Missing Information', 'Please provide both a code and a name.');
+                Alert.alert(t('admin.alerts.missingInformation'), t('admin.alerts.missingCountryFields'));
                 return;
               }
               createCountryMutation.mutate({
@@ -1740,7 +1737,7 @@ const addUserCountryMutation = useMutation({
             {createCountryMutation.isPending ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <View style={styles.buttonContent}><Plus size={16} color="#fff" /><Text style={styles.primaryButtonText}>Add Country</Text></View>
+              <View style={styles.buttonContent}><Plus size={16} color="#fff" /><Text style={styles.primaryButtonText}>{t('admin.countries.addCountry')}</Text></View>
             )}
           </TouchableOpacity>
         </View>
@@ -1748,12 +1745,12 @@ const addUserCountryMutation = useMutation({
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Church size={20} color="#1e3a8a" />
-            <Text style={styles.cardTitle}>Church → Country</Text>
+            <Text style={styles.cardTitle}>{t('admin.countries.churchCountry')}</Text>
           </View>
           {groupsWithCountryQuery.isLoading && groups.length === 0 ? (
             <ActivityIndicator color="#1e3a8a" />
           ) : groups.length === 0 ? (
-            <Text style={styles.emptyText}>No churches yet.</Text>
+            <Text style={styles.emptyText}>{t('admin.churches.noChurchesYet')}</Text>
           ) : (
             groups.map((g) => (
               <View key={g.id} style={styles.groupCountryRow}>
@@ -1779,12 +1776,12 @@ const addUserCountryMutation = useMutation({
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <UserPlus size={20} color="#1e3a8a" />
-            <Text style={styles.cardTitle}>Grant Extra Countries to User</Text>
+            <Text style={styles.cardTitle}>{t('admin.countries.grantExtraCountries')}</Text>
           </View>
           <Text style={styles.helpText}>
-            A user&apos;s primary country comes from their church. Use this to grant access to additional countries (e.g. for visiting members).
+            {t('admin.countries.grantExtraCountriesHelp')}
           </Text>
-          <Text style={styles.roleLabel}>Select a user:</Text>
+          <Text style={styles.roleLabel}>{t('admin.countries.selectUser')}</Text>
           <View style={styles.groupCountryChips}>
             {users.map((u) => (
               <TouchableOpacity
@@ -1801,7 +1798,7 @@ const addUserCountryMutation = useMutation({
 
           {selectedUserForCountries && (
             <View style={{ marginTop: 14 }}>
-              <Text style={styles.roleLabel}>Toggle countries:</Text>
+              <Text style={styles.roleLabel}>{t('admin.countries.toggleCountries')}</Text>
               <View style={styles.groupCountryChips}>
                 {countries.map((c) => {
                   const assigned = assignedCountryIds.has(c.id);
@@ -1842,8 +1839,8 @@ const addUserCountryMutation = useMutation({
       <Stack.Screen options={{ headerShown: false }} />
       
       <LinearGradient colors={['#1e3a8a', '#3b82f6']} style={styles.header}>
-        <Text style={styles.headerTitle}>Admin Dashboard</Text>
-        <Text style={styles.headerSubtitle}>Manage your church community</Text>
+        <Text style={styles.headerTitle}>{t('admin.title')}</Text>
+        <Text style={styles.headerSubtitle}>{t('admin.subtitle')}</Text>
       </LinearGradient>
       
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -1853,7 +1850,7 @@ const addUserCountryMutation = useMutation({
             onPress={() => setActiveTab('users')}
           >
             <Users size={16} color={activeTab === 'users' ? '#1e3a8a' : '#64748b'} />
-            <Text style={[styles.tabText, activeTab === 'users' && styles.tabTextActive]}>Members</Text>
+            <Text style={[styles.tabText, activeTab === 'users' && styles.tabTextActive]}>{t('admin.tabs.members')}</Text>
           </TouchableOpacity>
 
           {isAdminUser && (
@@ -1863,7 +1860,7 @@ const addUserCountryMutation = useMutation({
                 onPress={() => setActiveTab('sermons')}
               >
                 <BookOpen size={16} color={activeTab === 'sermons' ? '#1e3a8a' : '#64748b'} />
-                <Text style={[styles.tabText, activeTab === 'sermons' && styles.tabTextActive]}>Sermons</Text>
+                <Text style={[styles.tabText, activeTab === 'sermons' && styles.tabTextActive]}>{t('admin.tabs.sermons')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1871,7 +1868,7 @@ const addUserCountryMutation = useMutation({
                 onPress={() => setActiveTab('groups')}
               >
                 <Church size={16} color={activeTab === 'groups' ? '#1e3a8a' : '#64748b'} />
-                <Text style={[styles.tabText, activeTab === 'groups' && styles.tabTextActive]}>Churches</Text>
+                <Text style={[styles.tabText, activeTab === 'groups' && styles.tabTextActive]}>{t('admin.tabs.churches')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1879,7 +1876,7 @@ const addUserCountryMutation = useMutation({
                 onPress={() => setActiveTab('countries')}
               >
                 <Globe size={16} color={activeTab === 'countries' ? '#1e3a8a' : '#64748b'} />
-                <Text style={[styles.tabText, activeTab === 'countries' && styles.tabTextActive]}>Countries</Text>
+                <Text style={[styles.tabText, activeTab === 'countries' && styles.tabTextActive]}>{t('admin.countries.title')}</Text>
               </TouchableOpacity>
             </>
           )}
