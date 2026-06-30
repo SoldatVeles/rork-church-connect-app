@@ -123,6 +123,11 @@ export default function PrayersScreen() {
     queryKey: ['prayers', userHomeGroupId, userIsAdmin, homeChurchQuery.isFetched],
     enabled: userIsAdmin || homeChurchQuery.isFetched,
     queryFn: async () => {
+      if (!userIsAdmin && !userHomeGroupId) {
+        console.log('[Prayers] User has no home church, returning no prayers');
+        return [];
+      }
+
       let query = supabase
         .from('prayers')
         .select(`
@@ -132,11 +137,7 @@ export default function PrayersScreen() {
         .order('created_at', { ascending: false });
 
       if (!userIsAdmin) {
-        if (userHomeGroupId) {
-          query = query.or(`group_id.eq.${userHomeGroupId},is_shared_all_churches.eq.true`);
-        } else {
-          query = query.eq('is_shared_all_churches', true);
-        }
+        query = query.or(`group_id.eq.${userHomeGroupId},is_shared_all_churches.eq.true`);
       }
 
       const { data, error } = await query;
@@ -196,8 +197,11 @@ export default function PrayersScreen() {
   });
 
   const prayingQuery = useQuery({
-    queryKey: ['prayer_prayers'],
+    queryKey: ['prayer_prayers', userHomeGroupId, userIsAdmin],
+    enabled: userIsAdmin || Boolean(userHomeGroupId),
     queryFn: async () => {
+      if (!userIsAdmin && !userHomeGroupId) return [] as { prayer_id: string; user_id: string }[];
+
       const { data, error } = await supabase
         .from('prayer_prayers')
         .select('prayer_id, user_id');
@@ -212,8 +216,11 @@ export default function PrayersScreen() {
   });
 
   const updatesQuery = useQuery({
-    queryKey: ['prayer_updates'],
+    queryKey: ['prayer_updates', userHomeGroupId, userIsAdmin],
+    enabled: userIsAdmin || Boolean(userHomeGroupId),
     queryFn: async () => {
+      if (!userIsAdmin && !userHomeGroupId) return [] as PrayerUpdate[];
+
       const { data, error } = await supabase
         .from('prayer_updates')
         .select(`

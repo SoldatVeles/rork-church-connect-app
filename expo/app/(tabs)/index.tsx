@@ -315,7 +315,7 @@ export default function HomeScreen() {
 
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, role, home_group_id')
+      .select('id, role, home_group_id, created_at')
       .eq('id', user.id)
       .maybeSingle();
 
@@ -328,6 +328,7 @@ export default function HomeScreen() {
       id: string;
       role: string;
       home_group_id: string | null;
+      created_at: string | null;
     } | null;
   },
 });
@@ -382,22 +383,25 @@ const canManageSabbath =
     },
   });
   const userHomeGroupId = homeGroupQuery.data ?? null;
+  const userHasHomeChurch = Boolean(userHomeGroupId);
+  const shouldShowAssignmentNotice = !userIsAdmin && homeGroupQuery.isFetched && !userHasHomeChurch;
 
   const eventsQuery = useQuery({
     queryKey: ['home-events', userHomeGroupId, userIsAdmin, homeGroupQuery.isFetched],
     enabled: userIsAdmin || homeGroupQuery.isFetched,
     queryFn: async () => {
+      if (!userIsAdmin && !userHomeGroupId) {
+        console.log('[Home] User has no home church, returning no events');
+        return [];
+      }
+
       let query = supabase
         .from('events')
         .select('*')
         .order('start_at', { ascending: true });
 
       if (!userIsAdmin) {
-        if (userHomeGroupId) {
-          query = query.or(`group_id.eq.${userHomeGroupId},is_shared_all_churches.eq.true`);
-        } else {
-          query = query.eq('is_shared_all_churches', true);
-        }
+        query = query.or(`group_id.eq.${userHomeGroupId},is_shared_all_churches.eq.true`);
       }
 
       const { data, error } = await query;
@@ -416,6 +420,11 @@ const canManageSabbath =
     queryKey: ['home-prayers-active', userHomeGroupId, userIsAdmin, homeGroupQuery.isFetched],
     enabled: userIsAdmin || homeGroupQuery.isFetched,
     queryFn: async () => {
+      if (!userIsAdmin && !userHomeGroupId) {
+        console.log('[Home] User has no home church, returning no prayers');
+        return [];
+      }
+
       let query = supabase
         .from('prayers')
         .select('*')
@@ -423,11 +432,7 @@ const canManageSabbath =
         .order('created_at', { ascending: false });
 
       if (!userIsAdmin) {
-        if (userHomeGroupId) {
-          query = query.or(`group_id.eq.${userHomeGroupId},is_shared_all_churches.eq.true`);
-        } else {
-          query = query.eq('is_shared_all_churches', true);
-        }
+        query = query.or(`group_id.eq.${userHomeGroupId},is_shared_all_churches.eq.true`);
       }
 
       const { data, error } = await query;
@@ -443,7 +448,8 @@ const canManageSabbath =
   });
 
   const usersQuery = useQuery({
-    queryKey: ['home-members', currentChurchId, userIsAdmin],
+    queryKey: ['home-members', userHomeGroupId, userIsAdmin, homeGroupQuery.isFetched],
+    enabled: userIsAdmin || homeGroupQuery.isFetched,
     queryFn: async () => {
       if (userIsAdmin) {
         const { data, error } = await supabase
@@ -453,15 +459,15 @@ const canManageSabbath =
         return data || [];
       }
 
-      if (!currentChurchId) {
-        console.log('[Home] Non-admin user has no church selected, returning empty members');
+      if (!userHomeGroupId) {
+        console.log('[Home] Non-admin user has no home church, returning empty members');
         return [];
       }
 
       const { data: memberLinks, error: linkError } = await supabase
         .from('group_members')
         .select('user_id')
-        .eq('group_id', currentChurchId);
+        .eq('group_id', userHomeGroupId);
       if (linkError) throw new Error(linkError.message);
       const userIds = (memberLinks || []).map((m: any) => m.user_id as string);
       if (userIds.length === 0) return [];
@@ -480,15 +486,25 @@ const canManageSabbath =
   const activeRequestsCount = prayersActiveQuery.data?.length ?? 0;
   const membersCount = usersQuery.data?.length ?? 0;
 const notificationsCountQuery = useQuery({
-  queryKey: ['notifications', 'count', user?.id],
-  enabled: !!user?.id,
+  queryKey: ['notifications', 'count', user?.id, userHomeGroupId, userIsAdmin, homeGroupQuery.isFetched, homeProfileQuery.data?.created_at],
+  enabled: !!user?.id && (userIsAdmin || homeGroupQuery.isFetched),
   queryFn: async () => {
     if (!user?.id) return 0;
 
-    const { data: notificationsData, error: notificationsError } = await supabase
+    if (!userIsAdmin && !userHomeGroupId) {
+      return 0;
+    }
+
+    let notificationsQuery = supabase
       .from('notifications')
       .select('id')
       .or(`user_id.eq.${user.id},user_id.is.null`);
+
+    if (homeProfileQuery.data?.created_at) {
+      notificationsQuery = notificationsQuery.gte('created_at', homeProfileQuery.data.created_at);
+    }
+
+    const { data: notificationsData, error: notificationsError } = await notificationsQuery;
 
     if (notificationsError) {
       console.warn('[Home] Notifications count error:', notificationsError.message);
@@ -541,6 +557,7 @@ const notificationsCountQuery = useQuery({
     refetchInterval: 15000,
     queryFn: async (): Promise<number> => {
       if (!user?.id) return 0;
+      if (!userIsAdmin && !userHomeGroupId) return 0;
       const { data: memberships, error: mErr } = await supabase
         .from('group_members')
         .select('group_id')
@@ -750,7 +767,22 @@ const quickActions = useMemo(() => [
       </LinearGradient>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.quickActions}>
+        {shouldShowAssignmentNotice && (
+          <View style={styles.assignmentNoticeCard}>
+            <Text style={styles.assignmentNoticeTitle}>
+              {t('home.waitingAssignmentTitle', { defaultValue: 'Waiting for church assignment' })}
+            </Text>
+            <Text style={styles.assignmentNoticeText}>
+              {t('home.waitingAssignmentMessage', {
+                defaultValue:
+                  'An administrator or church leader needs to assign you to a church before you can see events, prayer requests, community members, chats, or notifications.',
+              })}
+            </Text>
+          </View>
+        )}
+
+        {!shouldShowAssignmentNotice && (
+          <View style={styles.quickActions}>
           <Text style={styles.sectionTitle}>{t('home.quickActions')}</Text>
           <View style={styles.actionsGrid}>
             {quickActions.map((action, index) => (
@@ -776,6 +808,7 @@ const quickActions = useMemo(() => [
             ))}
           </View>
         </View>
+        )}
 
         <View style={styles.todayVerse}>
           <View style={styles.verseHeader}>
@@ -794,6 +827,7 @@ const quickActions = useMemo(() => [
           </Text>
         </View>
 
+        {!shouldShowAssignmentNotice && (
         <View style={styles.announcements}>
           <Text style={styles.sectionTitle}>{t('home.recentAnnouncements')}</Text>
           {upcomingAnnouncements.length === 0 ? (
@@ -817,6 +851,7 @@ const quickActions = useMemo(() => [
             ))
           )}
         </View>
+        )}
 
         <View style={styles.spacer} />
       </ScrollView>
@@ -889,6 +924,30 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 24,
+  },
+  assignmentNoticeCard: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  assignmentNoticeTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1e3a8a',
+    marginBottom: 8,
+  },
+  assignmentNoticeText: {
+    fontSize: 14,
+    color: '#475569',
+    lineHeight: 20,
   },
   quickActions: {
     marginBottom: 32,

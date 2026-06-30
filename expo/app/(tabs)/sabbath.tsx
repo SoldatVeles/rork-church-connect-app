@@ -426,72 +426,148 @@ export default function SabbathScreen() {
   const churchScope = buildChurchScope(effectiveSabbathUser, userHomeGroupId, pastorGroupIds);
   const canManage = canManageAnySabbath(churchScope);
 
-  const accessibleCountriesQuery = useQuery({
-    queryKey: ['my-accessible-countries', user?.id],
-    enabled: !!user?.id,
-    queryFn: async () => {
-      if (!user?.id) return { primaryCountryId: null, countries: [] };
+const accessibleCountriesQuery = useQuery({
+  queryKey: ['my-accessible-countries', user?.id, pastorGroupIds.join(',')],
+  enabled: !!user?.id,
+  queryFn: async (): Promise<{
+    primaryCountryId: string | null;
+    countries: {
+      id: string;
+      code: string;
+      name: string;
+      flag_emoji: string | null;
+      is_active: boolean | null;
+    }[];
+  }> => {
+    if (!user?.id) {
+      return { primaryCountryId: null, countries: [] };
+    }
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('home_group_id')
-        .eq('id', user.id)
-        .single();
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('home_group_id, role')
+      .eq('id', user.id)
+      .maybeSingle();
 
-      const homeGroupId = (profile as any)?.home_group_id ?? null;
-      const accessibleIds = new Set<string>();
-      let primaryCountryId: string | null = null;
+    if (profileError) {
+      console.warn('[Sabbath] accessible countries profile error:', profileError.message);
+    }
 
-      if (homeGroupId) {
-        const { data: group } = await supabase
-          .from('groups')
-          .select('country_id')
-          .eq('id', homeGroupId)
-          .single();
+    const userRole = (profile as any)?.role ?? user.role;
+    const isAdminUser = userRole === 'admin';
 
-        const countryId = (group as any)?.country_id ?? null;
+    let homeGroupId = (profile as any)?.home_group_id ?? null;
 
-        if (countryId) {
-          accessibleIds.add(countryId);
+    if (!homeGroupId) {
+      const { data: memberships, error: membershipError } = await supabase
+        .from('group_members')
+        .select('group_id')
+        .eq('user_id', user.id)
+        .limit(1);
+
+      if (membershipError) {
+        console.warn('[Sabbath] accessible countries memberships error:', membershipError.message);
+      }
+
+      homeGroupId = memberships?.[0]?.group_id ?? null;
+    }
+
+    const accessibleGroupIds = new Set<string>();
+
+    if (homeGroupId) {
+      accessibleGroupIds.add(homeGroupId);
+    }
+
+    pastorGroupIds.forEach((groupId) => {
+      if (groupId) {
+        accessibleGroupIds.add(groupId);
+      }
+    });
+
+    const accessibleCountryIds = new Set<string>();
+    let primaryCountryId: string | null = null;
+
+    const groupIds = Array.from(accessibleGroupIds);
+
+    if (groupIds.length > 0) {
+      const { data: groups, error: groupsError } = await supabase
+        .from('groups')
+        .select('id, country_id')
+        .in('id', groupIds);
+
+      if (groupsError) {
+        console.warn('[Sabbath] accessible countries groups error:', groupsError.message);
+      }
+
+      (groups ?? []).forEach((group: any) => {
+        const countryId = group.country_id as string | null;
+
+        if (!countryId) return;
+
+        accessibleCountryIds.add(countryId);
+
+        if (group.id === homeGroupId && !primaryCountryId) {
           primaryCountryId = countryId;
         }
-      }
-
-      const { data: extras } = await supabase
-        .from('user_countries')
-        .select('country_id')
-        .eq('user_id', user.id);
-
-      (extras ?? []).forEach((row: any) => {
-        if (row.country_id) accessibleIds.add(row.country_id);
       });
+    }
 
-      const ids = Array.from(accessibleIds);
-
-      if (ids.length === 0) {
-        const { data } = await supabase
-          .from('countries')
-          .select('id, code, name, flag_emoji, is_active')
-          .order('name');
-
-        return {
-          primaryCountryId: null,
-          countries: data ?? [],
-        };
-      }
-
-      const { data } = await supabase
+    if (isAdminUser) {
+      const { data, error } = await supabase
         .from('countries')
         .select('id, code, name, flag_emoji, is_active')
-        .in('id', ids)
         .order('name');
+
+      if (error) {
+        throw new Error(error.message);
+      }
 
       return {
         primaryCountryId,
         countries: data ?? [],
       };
-    },
-  });
+    }
+
+    const { data: extras, error: extrasError } = await supabase
+      .from('user_countries')
+      .select('country_id')
+      .eq('user_id', user.id);
+
+    if (extrasError) {
+      console.warn('[Sabbath] accessible countries extras error:', extrasError.message);
+    }
+
+    (extras ?? []).forEach((row: any) => {
+      if (row.country_id) {
+        accessibleCountryIds.add(row.country_id);
+      }
+    });
+
+    const ids = Array.from(accessibleCountryIds);
+
+    if (ids.length === 0) {
+      return {
+        primaryCountryId: null,
+        countries: [],
+      };
+    }
+
+    const { data, error } = await supabase
+      .from('countries')
+      .select('id, code, name, flag_emoji, is_active')
+      .in('id', ids)
+      .order('name');
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return {
+      primaryCountryId,
+      countries: data ?? [],
+    };
+  },
+});
 
   useEffect(() => {
     if (!accessibleCountriesQuery.data) return;
@@ -514,10 +590,16 @@ export default function SabbathScreen() {
     return list.find((c) => c.id === selectedCountryId) ?? null;
   }, [accessibleCountriesQuery.data, selectedCountryId]);
 
+  const selectedCountryIsAccessible = useMemo(() => {
+  const list = accessibleCountriesQuery.data?.countries ?? [];
+
+  return !!selectedCountryId && list.some((country) => country.id === selectedCountryId);
+}, [accessibleCountriesQuery.data, selectedCountryId]);
+
   useFocusEffect(
     useCallback(() => {
       void accessibleCountriesQuery.refetch();
-    }, [accessibleCountriesQuery])
+    }, [accessibleCountriesQuery.refetch])
   );
 
   const getTodayDateString = () => {
@@ -583,11 +665,11 @@ export default function SabbathScreen() {
     },
   });
 
-  const countryQuery = useQuery({
-    queryKey: ['sabbath-country-upcoming', selectedCountryId, activeTab, i18n.language],
-    enabled: activeTab === 'country' && !!selectedCountryId,
-    queryFn: async () => {
-      if (!selectedCountryId) return [];
+const countryQuery = useQuery({
+  queryKey: ['sabbath-country-upcoming', selectedCountryId, activeTab, selectedCountryIsAccessible],
+  enabled: activeTab === 'country' && !!selectedCountryId && selectedCountryIsAccessible,
+  queryFn: async () => {
+    if (!selectedCountryId || !selectedCountryIsAccessible) return [];
 
       const { data: sabbaths, error } = await supabase
         .from('sabbaths')

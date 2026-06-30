@@ -179,18 +179,18 @@ const filterOptions = useMemo<{ key: EventType | 'all'; label: string; accent: s
     queryFn: async () => {
       console.log('[Events] Fetching events, userHomeGroupId:', userHomeGroupId, 'isAdmin:', userIsAdmin);
 
+      if (!userIsAdmin && !userHomeGroupId) {
+        console.log('[Events] User has no home church, returning no events');
+        return [];
+      }
+
       let query = supabase
         .from('events')
         .select('*')
         .order('start_at', { ascending: true });
 
       if (!userIsAdmin) {
-        if (userHomeGroupId) {
-          query = query.or(`group_id.eq.${userHomeGroupId},is_shared_all_churches.eq.true`);
-        } else {
-          // No home group: only see globally-shared events
-          query = query.eq('is_shared_all_churches', true);
-        }
+        query = query.or(`group_id.eq.${userHomeGroupId},is_shared_all_churches.eq.true`);
       }
 
       const { data, error } = await query;

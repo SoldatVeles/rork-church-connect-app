@@ -44,6 +44,56 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
+  const notificationScopeQuery = useQuery({
+    queryKey: ['notification-scope', user?.id],
+    enabled: !!user?.id,
+    queryFn: async (): Promise<{ role: string | null; homeGroupId: string | null; createdAt: string | null }> => {
+      if (!user?.id) return { role: null, homeGroupId: null, createdAt: null };
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role, home_group_id, created_at')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        console.warn('[Notifications] Profile scope fetch error:', profileError.message);
+        return { role: user.role ?? null, homeGroupId: null, createdAt: null };
+      }
+
+      const profileHomeGroupId = (profile as any)?.home_group_id as string | null;
+
+      if (profileHomeGroupId) {
+        return {
+          role: ((profile as any)?.role ?? user.role ?? null) as string | null,
+          homeGroupId: profileHomeGroupId,
+          createdAt: ((profile as any)?.created_at ?? null) as string | null,
+        };
+      }
+
+      const { data: memberships, error: membershipsError } = await supabase
+        .from('group_members')
+        .select('group_id')
+        .eq('user_id', user.id)
+        .limit(1);
+
+      if (membershipsError) {
+        console.warn('[Notifications] Membership scope fetch error:', membershipsError.message);
+      }
+
+      return {
+        role: ((profile as any)?.role ?? user.role ?? null) as string | null,
+        homeGroupId: memberships && memberships.length > 0 ? ((memberships[0] as any).group_id as string) : null,
+        createdAt: ((profile as any)?.created_at ?? null) as string | null,
+      };
+    },
+  });
+
+  const notificationScope = notificationScopeQuery.data;
+  const notificationUserIsAdmin = notificationScope?.role === 'admin';
+  const notificationHomeGroupId = notificationScope?.homeGroupId ?? null;
+  const notificationUserCreatedAt = notificationScope?.createdAt ?? null;
+
 const refreshNotificationCounts = () => {
   void notificationsQuery.refetch();
   void queryClient.invalidateQueries({ queryKey: ['notifications'] });
@@ -51,16 +101,26 @@ const refreshNotificationCounts = () => {
   onNotificationsChanged?.();
 };
   const notificationsQuery = useQuery({
-    queryKey: ['notifications', user?.id],
-    enabled: !!user?.id,
+    queryKey: ['notifications', user?.id, notificationHomeGroupId, notificationUserIsAdmin, notificationUserCreatedAt, notificationScopeQuery.isFetched],
+    enabled: !!user?.id && notificationScopeQuery.isFetched,
     queryFn: async (): Promise<NotificationItem[]> => {
       if (!user?.id) return [];
 
-      const { data: notificationsData, error: notificationsError } = await supabase
+      if (!notificationUserIsAdmin && !notificationHomeGroupId) {
+        return [];
+      }
+
+      let notificationsQuery = supabase
         .from('notifications')
         .select('*')
         .or(`user_id.eq.${user.id},user_id.is.null`)
         .order('created_at', { ascending: false });
+
+      if (notificationUserCreatedAt) {
+        notificationsQuery = notificationsQuery.gte('created_at', notificationUserCreatedAt);
+      }
+
+      const { data: notificationsData, error: notificationsError } = await notificationsQuery;
 
       if (notificationsError) {
         throw new Error(notificationsError.message);

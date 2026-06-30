@@ -136,7 +136,7 @@ export default function SabbathDetailScreen() {
       const sabbathRec = sabbathRow as Sabbath;
 
       const [groupRes, profileRes, pastorRes, assignmentsRes, myAttRes] = await Promise.all([
-        supabase.from('groups').select('id, name').eq('id', sabbathRec.group_id).maybeSingle(),
+        supabase.from('groups').select('id, name, country_id').eq('id', sabbathRec.group_id).maybeSingle(),
         supabase.from('profiles').select('id, role, home_group_id').eq('id', user.id).maybeSingle(),
         supabase.from('group_pastors').select('id').eq('group_id', sabbathRec.group_id).eq('user_id', user.id).maybeSingle(),
         supabase.from('sabbath_assignments').select('*').eq('sabbath_id', sabbathId),
@@ -144,11 +144,27 @@ export default function SabbathDetailScreen() {
       ]);
 
       const profile = profileRes.data as { id: string; role: string; home_group_id: string | null } | null;
+      let resolvedHomeGroupId = profile?.home_group_id ?? null;
+
+      if (!resolvedHomeGroupId) {
+        const { data: memberships, error: membershipError } = await supabase
+          .from('group_members')
+          .select('group_id')
+          .eq('user_id', user.id)
+          .limit(1);
+
+        if (membershipError) {
+          console.warn('[SabbathDetail] membership fallback error:', membershipError.message);
+        }
+
+        resolvedHomeGroupId = (memberships?.[0] as any)?.group_id ?? null;
+      }
+
       const isAdminRole = profile?.role === 'admin';
       const isPastorOfGroup = !!pastorRes.data;
-      const isLeaderOfGroup = profile?.role === 'church_leader' && profile?.home_group_id === sabbathRec.group_id;
+      const isLeaderOfGroup = profile?.role === 'church_leader' && resolvedHomeGroupId === sabbathRec.group_id;
       const canManageVal = isAdminRole || isPastorOfGroup || isLeaderOfGroup;
-      const isHomeChurchVal = profile?.home_group_id === sabbathRec.group_id;
+      const isHomeChurchVal = resolvedHomeGroupId === sabbathRec.group_id;
 
       const groupInfo: SabbathGroupInfo = groupRes.data
         ? { id: (groupRes.data as any).id, name: (groupRes.data as any).name }
@@ -156,6 +172,91 @@ export default function SabbathDetailScreen() {
 
       const assignmentsList = (assignmentsRes.data ?? []) as any[];
       const isAssignedUserVal = assignmentsList.some((a) => a.user_id === user.id);
+
+      const sabbathCountryId =
+        ((sabbathRec as any).country_id as string | null | undefined) ??
+        ((groupRes.data as any)?.country_id as string | null | undefined) ??
+        null;
+
+      let canAccessByCountryVal = false;
+
+      if (
+        !isAdminRole &&
+        !canManageVal &&
+        !isHomeChurchVal &&
+        !isAssignedUserVal &&
+        sabbathCountryId &&
+        (sabbathRec.status === 'published' || sabbathRec.status === 'cancelled')
+      ) {
+        const accessibleCountryIds = new Set<string>();
+        const accessibleGroupIds = new Set<string>();
+
+        if (resolvedHomeGroupId) {
+          accessibleGroupIds.add(resolvedHomeGroupId);
+        }
+
+        const { data: pastorGroups, error: pastorGroupsError } = await supabase
+          .from('group_pastors')
+          .select('group_id')
+          .eq('user_id', user.id);
+
+        if (pastorGroupsError) {
+          console.warn('[SabbathDetail] pastor country access error:', pastorGroupsError.message);
+        }
+
+        (pastorGroups ?? []).forEach((row: any) => {
+          if (row.group_id) {
+            accessibleGroupIds.add(row.group_id);
+          }
+        });
+
+        const groupIds = Array.from(accessibleGroupIds);
+
+        if (groupIds.length > 0) {
+          const { data: groups, error: groupsError } = await supabase
+            .from('groups')
+            .select('id, country_id')
+            .in('id', groupIds);
+
+          if (groupsError) {
+            console.warn('[SabbathDetail] group country access error:', groupsError.message);
+          }
+
+          (groups ?? []).forEach((group: any) => {
+            if (group.country_id) {
+              accessibleCountryIds.add(group.country_id);
+            }
+          });
+        }
+
+        const { data: extraCountries, error: extraCountriesError } = await supabase
+          .from('user_countries')
+          .select('country_id')
+          .eq('user_id', user.id);
+
+        if (extraCountriesError) {
+          console.warn('[SabbathDetail] extra country access error:', extraCountriesError.message);
+        }
+
+        (extraCountries ?? []).forEach((row: any) => {
+          if (row.country_id) {
+            accessibleCountryIds.add(row.country_id);
+          }
+        });
+
+        canAccessByCountryVal = accessibleCountryIds.has(sabbathCountryId);
+      }
+
+      const hasDetailAccess =
+        isAdminRole ||
+        canManageVal ||
+        isHomeChurchVal ||
+        isAssignedUserVal ||
+        canAccessByCountryVal;
+
+      if (!hasDetailAccess) {
+        throw new Error(t('sabbathDetail.errors.notFound'));
+      }
 
 const shouldShowAssignmentsVal =
   sabbathRec.status === 'published' ||
@@ -209,7 +310,7 @@ const shouldShowAssignmentsVal =
       }
 
       const myAttendanceStatusVal = (myAttRes.data as any)?.status ?? null;
-      const canRespondAttendanceVal = sabbathRec.status === 'published';
+      const canRespondAttendanceVal = sabbathRec.status === 'published' && (isHomeChurchVal || canManageVal);
       const canRespondAssignmentVal = sabbathRec.status !== 'cancelled' && isAssignedUserVal;
 
       return {
@@ -716,6 +817,64 @@ const declineMutation = useMutation({
   const attendanceMutation = useMutation({
     mutationFn: async ({ sabbathId: sid, status }: { sabbathId: string; status: SabbathAttendanceStatus }) => {
       if (!user?.id) throw new Error(t('sabbath.notAuthenticated'));
+
+      const { data: sabbathRow, error: sabbathError } = await supabase
+        .from('sabbaths')
+        .select('id, group_id, status')
+        .eq('id', sid)
+        .maybeSingle();
+
+      if (sabbathError || !sabbathRow) {
+        throw new Error(sabbathError?.message ?? t('sabbathDetail.errors.notFound'));
+      }
+
+      const currentSabbath = sabbathRow as {
+        id: string;
+        group_id: string;
+        status: SabbathStatus;
+      };
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, home_group_id')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      let resolvedHomeGroupId = (profile as any)?.home_group_id as string | null;
+
+      if (!resolvedHomeGroupId) {
+        const { data: memberships } = await supabase
+          .from('group_members')
+          .select('group_id')
+          .eq('user_id', user.id)
+          .limit(1);
+
+        resolvedHomeGroupId = (memberships?.[0] as any)?.group_id ?? null;
+      }
+
+      const { data: pastorRow } = await supabase
+        .from('group_pastors')
+        .select('id')
+        .eq('group_id', currentSabbath.group_id)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      const role = (profile as any)?.role as string | null | undefined;
+      const canManageAttendance =
+        role === 'admin' ||
+        !!pastorRow ||
+        (role === 'church_leader' && resolvedHomeGroupId === currentSabbath.group_id);
+
+      const canRespond =
+        currentSabbath.status === 'published' &&
+        (resolvedHomeGroupId === currentSabbath.group_id || canManageAttendance);
+
+      if (!canRespond) {
+        throw new Error(t('sabbathDetail.errors.notAllowed', {
+          defaultValue: 'You are not allowed to respond to this Sabbath.',
+        }));
+      }
+
       const { data: existing } = await supabase
         .from('sabbath_attendance')
         .select('id')
