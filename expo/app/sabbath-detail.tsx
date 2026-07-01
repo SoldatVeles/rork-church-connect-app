@@ -130,7 +130,6 @@ export default function SabbathDetailScreen() {
         .eq('id', sabbathId)
         .single();
       if (sErr || !sabbathRow) {
-        console.error('[SabbathDetail] sabbath fetch error:', sErr);
         throw new Error(t('sabbathDetail.errors.notFound'));
       }
       const sabbathRec = sabbathRow as Sabbath;
@@ -154,8 +153,8 @@ export default function SabbathDetailScreen() {
           .limit(1);
 
         if (membershipError) {
-          console.warn('[SabbathDetail] membership fallback error:', membershipError.message);
-        }
+        // Non-critical cleanup/notification lookup failed; keep the main flow working.
+      }
 
         resolvedHomeGroupId = (memberships?.[0] as any)?.group_id ?? null;
       }
@@ -201,8 +200,8 @@ export default function SabbathDetailScreen() {
           .eq('user_id', user.id);
 
         if (pastorGroupsError) {
-          console.warn('[SabbathDetail] pastor country access error:', pastorGroupsError.message);
-        }
+        // Non-critical cleanup/notification lookup failed; keep the main flow working.
+      }
 
         (pastorGroups ?? []).forEach((row: any) => {
           if (row.group_id) {
@@ -219,8 +218,8 @@ export default function SabbathDetailScreen() {
             .in('id', groupIds);
 
           if (groupsError) {
-            console.warn('[SabbathDetail] group country access error:', groupsError.message);
-          }
+          // Non-critical cleanup/notification lookup failed; keep the main flow working.
+      }
 
           (groups ?? []).forEach((group: any) => {
             if (group.country_id) {
@@ -235,8 +234,8 @@ export default function SabbathDetailScreen() {
           .eq('user_id', user.id);
 
         if (extraCountriesError) {
-          console.warn('[SabbathDetail] extra country access error:', extraCountriesError.message);
-        }
+        // Non-critical cleanup/notification lookup failed; keep the main flow working.
+      }
 
         (extraCountries ?? []).forEach((row: any) => {
           if (row.country_id) {
@@ -349,7 +348,6 @@ const fetchGroupedMembers = useCallback(async (primaryGroupId: string): Promise<
   });
 
   if (error) {
-    console.warn('[SabbathDetail] assignable members rpc error:', error.message);
     return [];
   }
 
@@ -430,7 +428,7 @@ const publishMutation = useMutation({
       .single();
 
     if (sabbathError || !sabbathRow) {
-      throw new Error(sabbathError?.message ?? t('sabbathDetail.errors.notFound'));
+      throw new Error(t('sabbathDetail.errors.notFound'));
     }
 
     const currentSabbath = sabbathRow as {
@@ -450,7 +448,7 @@ const publishMutation = useMutation({
       .eq('sabbath_id', sid);
 
     if (assignmentsError) {
-      throw new Error(assignmentsError.message);
+      throw new Error(t('sabbathDetail.failedToPublish'));
     }
 
     for (const role of ALL_ROLES) {
@@ -475,7 +473,7 @@ const publishMutation = useMutation({
       })
       .eq('id', sid);
 
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(t('sabbathDetail.failedToPublish'));
 
     try {
       const { data: group } = await supabase
@@ -490,7 +488,7 @@ const publishMutation = useMutation({
         .eq('group_id', currentSabbath.group_id);
 
       if (membersError) {
-        console.warn('[SabbathDetail] Failed to fetch group members for notification:', membersError.message);
+      // Non-critical cleanup/notification lookup failed; keep the main flow working.
       }
 
       const assignedUserIds = ((assignments ?? []) as any[])
@@ -533,11 +531,11 @@ const publishMutation = useMutation({
           .insert(notificationRows);
 
         if (notificationError) {
-          console.warn('[SabbathDetail] Failed to create Sabbath notifications:', notificationError.message);
-        }
+        // Non-critical cleanup/notification lookup failed; keep the main flow working.
       }
-    } catch (notificationError) {
-      console.warn('[SabbathDetail] Notification creation failed:', notificationError);
+      }
+    } catch {
+      // Notification failures should not block the main action.
     }
   },
   onSuccess: () => {
@@ -563,7 +561,7 @@ const cancelMutation = useMutation({
       .single();
 
     if (sabbathError || !sabbathRow) {
-      throw new Error(sabbathError?.message ?? t('sabbathDetail.errors.notFound'));
+      throw new Error(t('sabbathDetail.errors.notFound'));
     }
 
     const currentSabbath = sabbathRow as {
@@ -580,7 +578,7 @@ const cancelMutation = useMutation({
       target_cancellation_reason: cancellationReason,
     });
 
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(t('sabbathDetail.failedToCancel', { defaultValue: 'Failed to cancel.' }));
 
     if (!wasPublished) {
       return;
@@ -599,10 +597,7 @@ const cancelMutation = useMutation({
         .eq('sabbath_id', sid);
 
       if (assignmentsError) {
-        console.warn(
-          '[SabbathDetail] Failed to fetch assignments for cancellation notification:',
-          assignmentsError.message
-        );
+      // Non-critical cleanup/notification lookup failed; keep the main flow working.
       }
 
       const { data: groupMembers, error: membersError } = await supabase
@@ -611,10 +606,7 @@ const cancelMutation = useMutation({
         .eq('group_id', currentSabbath.group_id);
 
       if (membersError) {
-        console.warn(
-          '[SabbathDetail] Failed to fetch group members for cancellation notification:',
-          membersError.message
-        );
+      // Non-critical cleanup/notification lookup failed; keep the main flow working.
       }
 
       const assignedUserIds = ((assignments ?? []) as any[])
@@ -664,14 +656,11 @@ const cancelMutation = useMutation({
           .insert(notificationRows);
 
         if (notificationError) {
-          console.warn(
-            '[SabbathDetail] Failed to create Sabbath cancellation notifications:',
-            notificationError.message
-          );
-        }
+        // Non-critical cleanup/notification lookup failed; keep the main flow working.
       }
-    } catch (notificationError) {
-      console.warn('[SabbathDetail] Cancellation notification creation failed:', notificationError);
+      }
+    } catch {
+      // Notification failures should not block the main action.
     }
   },
   onSuccess: () => {
@@ -687,7 +676,7 @@ const cancelMutation = useMutation({
         .from('sabbaths')
         .update({ status: 'draft', updated_by: user.id })
         .eq('id', sid);
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(t('sabbathDetail.failedToRevert'));
     },
     onSuccess: invalidateAll,
   });
@@ -697,7 +686,7 @@ const cancelMutation = useMutation({
       await supabase.from('sabbath_attendance').delete().eq('sabbath_id', sid);
       await supabase.from('sabbath_assignments').delete().eq('sabbath_id', sid);
       const { error } = await supabase.from('sabbaths').delete().eq('id', sid);
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(t('sabbathDetail.failedToDelete'));
     },
     onSuccess: invalidateAll,
   });
@@ -719,7 +708,7 @@ const assignRoleMutation = useMutation({
       .single();
 
     if (sabbathError || !sabbathRow) {
-      throw new Error(sabbathError?.message ?? t('sabbathDetail.errors.notFound'));
+      throw new Error(t('sabbathDetail.errors.notFound'));
     }
 
     const currentSabbath = sabbathRow as {
@@ -750,7 +739,7 @@ const assignRoleMutation = useMutation({
     });
 
     if (error) {
-      throw new Error(error.message);
+      throw new Error(t('sabbathDetail.failedToAssign'));
     }
 
     if (previousUserId === userId) {
@@ -779,11 +768,8 @@ const assignRoleMutation = useMutation({
       });
 
     if (notificationError) {
-      console.warn(
-        '[SabbathDetail] Failed to create assignment notification:',
-        notificationError.message
-      );
-    }
+    // Non-critical cleanup/notification lookup failed; keep the main flow working.
+      }
   },
   onSuccess: () => {
     invalidateAll();
@@ -797,7 +783,7 @@ const assignRoleMutation = useMutation({
         .from('sabbath_assignments')
         .update({ status: 'accepted' })
         .eq('id', assignmentId);
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(t('sabbathDetail.failedToAcceptAssignment'));
     },
     onSuccess: invalidateAll,
   });
@@ -821,11 +807,9 @@ const declineMutation = useMutation({
     );
 
     if (error) {
-      console.error('[SabbathDetail] Decline assignment RPC failed:', error);
-      throw new Error(error.message);
+      throw new Error(t('sabbathDetail.failedToDeclineAssignment'));
     }
 
-    console.log('[SabbathDetail] Decline assignment RPC success:', data);
 
     return data;
   },
@@ -834,8 +818,7 @@ const declineMutation = useMutation({
     void queryClient.invalidateQueries({ queryKey: ['notifications'] });
   },
   onError: (error: Error) => {
-    console.error('[SabbathDetail] Decline assignment failed:', error);
-    Alert.alert(t('sabbath.errorTitle'), error.message || t('sabbathDetail.failedToDeclineAssignment'));
+    Alert.alert(t('sabbath.errorTitle'), t('sabbathDetail.failedToDeclineAssignment'));
   },
 });
 
@@ -850,7 +833,7 @@ const declineMutation = useMutation({
         .maybeSingle();
 
       if (sabbathError || !sabbathRow) {
-        throw new Error(sabbathError?.message ?? t('sabbathDetail.errors.notFound'));
+        throw new Error(t('sabbathDetail.errors.notFound'));
       }
 
       const currentSabbath = sabbathRow as {
@@ -911,12 +894,12 @@ const declineMutation = useMutation({
           .from('sabbath_attendance')
           .update({ status })
           .eq('id', (existing as any).id);
-        if (error) throw new Error(error.message);
+        if (error) throw new Error(t('sabbathDetail.failedToUpdateAttendance'));
       } else {
         const { error } = await supabase
           .from('sabbath_attendance')
           .insert({ sabbath_id: sid, user_id: user.id, status });
-        if (error) throw new Error(error.message);
+        if (error) throw new Error(t('sabbathDetail.failedToUpdateAttendance'));
       }
     },
     onSuccess: invalidateAll,
@@ -939,7 +922,7 @@ const suggestReplacementMutation = useMutation({
       .single();
 
     if (assignmentFetchError || !assignmentRow) {
-      throw new Error(assignmentFetchError?.message ?? t('sabbathDetail.errors.assignmentNotFound'));
+      throw new Error(t('sabbathDetail.errors.assignmentNotFound'));
     }
 
     const assignment = assignmentRow as {
@@ -957,7 +940,7 @@ const suggestReplacementMutation = useMutation({
       })
       .eq('id', assignmentId);
 
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(t('sabbath.failedToSuggestReplacement'));
 
     try {
       const { data: sabbathRow } = await supabase
@@ -988,10 +971,7 @@ const suggestReplacementMutation = useMutation({
         .eq('group_id', currentSabbath.group_id);
 
       if (pastorsError) {
-        console.warn(
-          '[SabbathDetail] Failed to fetch pastors for replacement notification:',
-          pastorsError.message
-        );
+      // Non-critical cleanup/notification lookup failed; keep the main flow working.
       }
 
       const { data: leaders, error: leadersError } = await supabase
@@ -1001,10 +981,7 @@ const suggestReplacementMutation = useMutation({
         .in('role', ['church_leader', 'admin']);
 
       if (leadersError) {
-        console.warn(
-          '[SabbathDetail] Failed to fetch leaders for replacement notification:',
-          leadersError.message
-        );
+      // Non-critical cleanup/notification lookup failed; keep the main flow working.
       }
 
       const recipientIds = Array.from(
@@ -1069,13 +1046,10 @@ const suggestReplacementMutation = useMutation({
         .insert(notificationRows);
 
       if (notificationError) {
-        console.warn(
-          '[SabbathDetail] Failed to create replacement suggested notifications:',
-          notificationError.message
-        );
+      // Non-critical cleanup/notification lookup failed; keep the main flow working.
       }
-    } catch (notificationError) {
-      console.warn('[SabbathDetail] Replacement notification creation failed:', notificationError);
+    } catch {
+      // Notification failures should not block the main action.
     }
   },
   onSuccess: () => {
@@ -1190,10 +1164,9 @@ const myAssignments = useMemo(
               { sabbathId: sabbath.id },
               {
                 onSuccess: () => {
-                  console.log('[SabbathDetail] Published:', sabbath.id);
                   void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                 },
-                onError: (err) => Alert.alert(t('sabbath.errorTitle'), err.message || t('sabbathDetail.failedToPublish')),
+                onError: () => Alert.alert(t('sabbath.errorTitle'), t('sabbathDetail.failedToPublish')),
               }
             );
           },
@@ -1213,12 +1186,11 @@ const myAssignments = useMemo(
       { sabbathId: sabbath.id, cancellationReason: cancelReason.trim() || null },
       {
         onSuccess: () => {
-          console.log('[SabbathDetail] Cancelled:', sabbath.id);
           setCancelReason('');
           setShowCancelModal(false);
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         },
-        onError: (err) => Alert.alert('Error', err.message || 'Failed to cancel.'),
+        onError: () => Alert.alert(t('sabbath.errorTitle'), t('sabbathDetail.failedToCancel', { defaultValue: 'Failed to cancel.' })),
       }
     );
   }, [sabbath, cancelMutation, cancelReason]);
@@ -1238,13 +1210,11 @@ const myAssignments = useMemo(
               { sabbathId: sabbath.id },
               {
                 onSuccess: () => {
-                  console.log('[SabbathDetail] Deleted:', sabbath.id);
                   void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                   router.back();
                 },
                 onError: (err) => {
-                  console.error('[SabbathDetail] Delete error:', err);
-                  Alert.alert(t('sabbath.errorTitle'), err.message || t('sabbathDetail.failedToDelete'));
+                  Alert.alert(t('sabbath.errorTitle'), t('sabbathDetail.failedToDelete'));
                 },
               }
             );
@@ -1269,10 +1239,9 @@ const myAssignments = useMemo(
               { sabbathId: sabbath.id },
               {
                 onSuccess: () => {
-                  console.log('[SabbathDetail] Reverted to draft:', sabbath.id);
                   void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                 },
-                onError: (err) => Alert.alert(t('sabbath.errorTitle'), err.message || t('sabbathDetail.failedToRevert')),
+                onError: () => Alert.alert(t('sabbath.errorTitle'), t('sabbathDetail.failedToRevert')),
               }
             );
           },
@@ -1288,14 +1257,12 @@ const myAssignments = useMemo(
         { sabbathId: sabbath.id, role: assigningRole, userId: memberId },
         {
           onSuccess: () => {
-            console.log('[SabbathDetail] Assigned:', assigningRole, 'to:', memberId);
             setShowAssignModal(false);
             setAssigningRole(null);
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           },
           onError: (err) => {
-  console.error('[SabbathDetail] Assign role error:', err);
-  Alert.alert(t('sabbath.errorTitle'), err.message || t('sabbathDetail.failedToAssign'));
+  Alert.alert(t('sabbath.errorTitle'), t('sabbathDetail.failedToAssign'));
 },
         }
       );
@@ -1309,10 +1276,9 @@ const handleAcceptAssignment = useCallback(
       { assignmentId: assignment.id },
       {
         onSuccess: () => {
-          console.log('[SabbathDetail] Accepted assignment:', assignment.id);
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         },
-        onError: (err) => Alert.alert(t('sabbath.errorTitle'), err.message || t('sabbathDetail.failedToAcceptAssignment')),
+        onError: () => Alert.alert(t('sabbath.errorTitle'), t('sabbathDetail.failedToAcceptAssignment')),
       }
     );
   },
@@ -1325,13 +1291,12 @@ const handleAcceptAssignment = useCallback(
       { assignmentId: decliningAssignment.id, reason: declineReason.trim() || null },
       {
         onSuccess: () => {
-          console.log('[SabbathDetail] Declined:', decliningAssignment.id);
           setShowDeclineModal(false);
           setDecliningAssignment(null);
           setDeclineReason('');
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         },
-        onError: (err) => Alert.alert(t('sabbath.errorTitle'), err.message || t('sabbathDetail.failedToDecline')),
+        onError: () => Alert.alert(t('sabbath.errorTitle'), t('sabbathDetail.failedToDecline')),
       }
     );
   }, [decliningAssignment, declineReason, declineMutation]);
@@ -1343,13 +1308,12 @@ const handleAcceptAssignment = useCallback(
         { assignmentId: suggestingAssignment.id, suggestedUserId },
         {
           onSuccess: () => {
-            console.log('[SabbathDetail] Suggested replacement for:', suggestingAssignment.id, 'with user:', suggestedUserId);
             setShowSuggestModal(false);
             setSuggestingAssignment(null);
             void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             Alert.alert(t('sabbath.suggestReplacement'), t('sabbathDetail.replacementSuggestedAlertMessage'));
           },
-          onError: (err) => Alert.alert(t('sabbath.errorTitle'), err.message || t('sabbath.failedToSuggestReplacement')),
+          onError: () => Alert.alert(t('sabbath.errorTitle'), t('sabbath.failedToSuggestReplacement')),
         }
       );
     },
@@ -1363,10 +1327,9 @@ const handleAcceptAssignment = useCallback(
         { sabbathId: sabbath.id, status },
         {
           onSuccess: () => {
-            console.log('[SabbathDetail] Attendance:', status);
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           },
-          onError: (err) => Alert.alert(t('sabbath.errorTitle'), err.message || t('sabbathDetail.failedToUpdateAttendance')),
+          onError: () => Alert.alert(t('sabbath.errorTitle'), t('sabbathDetail.failedToUpdateAttendance')),
         }
       );
     },
@@ -1381,7 +1344,7 @@ const handleAcceptAssignment = useCallback(
         <Stack.Screen options={{ headerShown: false }} />
         <View style={[styles.centered, { paddingTop: insets.top + 60 }]}>
           {detailQuery.error ? (
-            <Text style={styles.loadingText}>{detailQuery.error.message}</Text>
+            <Text style={styles.loadingText}>{t('sabbathDetail.errors.notFound')}</Text>
           ) : (
             <>
               <ActivityIndicator size="large" color="#1e3a8a" />
