@@ -48,7 +48,6 @@ const normalizeEventType = (value: unknown): EventType | null => {
   if (allowedEventTypes.includes(value as EventType)) {
     return value as EventType;
   }
-  console.log('[Events] Normalized unexpected event type to bible_study:', value);
   return 'bible_study';
 };
 
@@ -68,12 +67,10 @@ export default function EventsScreen() {
 
   const openedEventNotificationRef = useRef<string | null>(null);
 
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user } = useAuth();
   const { currentChurch } = useChurch();
-  const currentChurchId = currentChurch?.id ?? null;
   const userIsAdmin = isAdmin(user);
   
-  console.log('[Events] Auth state:', { user: user?.id, isAuthenticated, isLoading, churchId: currentChurchId });
   const [selectedFilter, setSelectedFilter] = useState<EventType | 'all'>('all');
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [showDetailsModal, setShowDetailsModal] = useState<boolean>(false);
@@ -167,7 +164,6 @@ const filterOptions = useMemo<{ key: EventType | 'all'; label: string; accent: s
   // Strict: only use the user's actual home group for scoping. Never fall back to the church picker.
   const userHomeGroupId = userHomeChurch?.id ?? null;
   // For display/labels we can still fall back to the church picker name.
-  const effectiveChurchId = userHomeGroupId ?? currentChurchId;
   const effectiveChurchName = userHomeChurch?.name ?? currentChurch?.name ?? null;
 
   const listQuery = useQuery({
@@ -177,10 +173,7 @@ const filterOptions = useMemo<{ key: EventType | 'all'; label: string; accent: s
     refetchOnWindowFocus: true,
     staleTime: 0,
     queryFn: async () => {
-      console.log('[Events] Fetching events, userHomeGroupId:', userHomeGroupId, 'isAdmin:', userIsAdmin);
-
       if (!userIsAdmin && !userHomeGroupId) {
-        console.log('[Events] User has no home church, returning no events');
         return [];
       }
 
@@ -196,8 +189,7 @@ const filterOptions = useMemo<{ key: EventType | 'all'; label: string; accent: s
       const { data, error } = await query;
 
       if (error) {
-        console.error('[Events] Failed to fetch events:', error);
-        throw new Error(error.message ?? t('events.errors.failedToLoad'));
+        throw new Error(t('events.errors.failedToLoad'));
       }
 
       // Client-side safety filter: enforce visibility even if RLS/column issues exist.
@@ -207,8 +199,6 @@ const filterOptions = useMemo<{ key: EventType | 'all'; label: string; accent: s
         const sameGroup = !!userHomeGroupId && e?.group_id === userHomeGroupId;
         return shared || sameGroup;
       });
-
-      console.log('[Events] Fetched events:', data?.length, 'visible after safety filter:', visibleRaw.length);
 
       const sanitizedEvents = visibleRaw
         .map((event: any) => {
@@ -261,8 +251,6 @@ const filterOptions = useMemo<{ key: EventType | 'all'; label: string; accent: s
       createdBy: string;
       isSharedAllChurches: boolean;
     }) => {
-      console.log('[Events] mutationFn called with:', eventData);
-
       // Combine date and time into single timestamp
       const startAt = new Date(
         eventData.startDate.getFullYear(),
@@ -301,37 +289,25 @@ const filterOptions = useMemo<{ key: EventType | 'all'; label: string; accent: s
         is_shared_all_churches: eventData.isSharedAllChurches === true,
       };
 
-      console.log('[Events] Inserting event with data:', JSON.stringify(insertData, null, 2));
-
       const { data: checkSession } = await supabase.auth.getSession();
-      console.log('[Events] Current auth session uid:', checkSession?.session?.user?.id ?? 'NO SESSION');
-      console.log('[Events] created_by value:', eventData.createdBy);
-
       if (!checkSession?.session) {
         throw new Error(t('events.errors.sessionExpired'));
       }
 
-      const { data, error, status } = await supabase
+      const { data, error } = await supabase
         .from('events')
         .insert(insertData)
         .select()
         .single();
 
-      console.log('[Events] Insert response status:', status);
-      console.log('[Events] Insert response data:', JSON.stringify(data));
-      console.log('[Events] Insert response error:', JSON.stringify(error));
-
       if (error) {
-        console.error('[Events] Insert failed:', JSON.stringify(error));
-        throw new Error(error.message ?? t('events.errors.createFailed'));
+        throw new Error(t('events.errors.createFailed'));
       }
 
       if (!data) {
-        console.error('[Events] Insert returned no data - likely RLS policy blocking insert');
         throw new Error(t('events.errors.noPermissionCreate'));
       }
 
-console.log('[Events] Insert succeeded, created event:', data.id);
 
 try {
   const createdEventId = (data as any).id as string;
@@ -363,7 +339,7 @@ try {
       });
 
     if (notificationError) {
-      console.warn('[Events] Failed to create global notification:', notificationError.message);
+      // Notification failure should not block event creation.
     }
   } else if (eventGroupId) {
     const { data: recipients, error: recipientsError } = await supabase.rpc(
@@ -375,7 +351,7 @@ try {
     );
 
     if (recipientsError) {
-      console.warn('[Events] Failed to fetch notification recipients:', recipientsError.message);
+      // Notification recipient lookup failure should not block event creation.
     }
 
     const recipientIds = ((recipients ?? []) as any[])
@@ -399,19 +375,18 @@ try {
         .insert(notificationRows);
 
       if (notificationError) {
-        console.warn('[Events] Failed to create member notifications:', notificationError.message);
+        // Notification failure should not block event creation.
       }
     }
   }
 } catch (notificationError) {
-  console.warn('[Events] Notification creation failed:', notificationError);
+  // Notification failure should not block event creation.
 }
 
 return data;
 
     },
     onSuccess: async () => {
-      console.log('[Events] Mutation success, invalidating + refetching events');
       await queryClient.invalidateQueries({ queryKey: ['events'] });
       await listQuery.refetch();
       await queryClient.invalidateQueries({ queryKey: ['notifications'] });
@@ -432,14 +407,12 @@ return data;
       Alert.alert(t('events.successTitle'), t('events.createSuccess'));
     },
     onError: (error) => {
-      console.error('[Events] Mutation error:', error);
       Alert.alert(t('events.errorTitle'), (error as Error).message ?? t('events.errors.createFailedTryAgain'));
     },
   });
 
   useFocusEffect(
     useCallback(() => {
-      console.log('[Events] Screen focused, refetching events');
       void listQuery.refetch();
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
@@ -466,14 +439,12 @@ return data;
     }
     const exists = allEvents.some(item => item.id === selectedEvent.id);
     if (!exists) {
-      console.log('[Events] Selected event no longer available, closing details modal');
       setShowDetailsModal(false);
       setSelectedEvent(null);
     }
   }, [allEvents, selectedEvent]);
 
   const handleOpenDetails = useCallback((event: Event) => {
-    console.log('[Events] Opening details for event', event.id);
     setSelectedEvent(event);
     setShowDetailsModal(true);
   }, []);
@@ -494,7 +465,6 @@ return data;
     const eventToOpen = allEvents.find((event) => event.id === eventIdParam);
 
     if (!eventToOpen) {
-      console.warn('[Events] Event from notification not found or already past:', eventIdParam);
       return;
     }
 
@@ -504,7 +474,6 @@ return data;
   }, [eventIdParam, notificationIdParam, allEvents, listQuery.isLoading]);
 
   const handleCloseDetails = useCallback(() => {
-    console.log('[Events] Closing event details modal');
     setShowDetailsModal(false);
     setSelectedEvent(null);
   }, []);
@@ -522,11 +491,9 @@ const registerMutation = useMutation({
     });
 
 if (error) {
-  console.error('[Events] Registration RPC failed:', error);
-  throw new Error(error.message ?? t('events.errors.registrationUpdateFailed'));
+  throw new Error(t('events.errors.registrationUpdateFailed'));
 }
 
-console.log('[Events] Registration RPC success:', data);
 
 return data;
   },
@@ -571,44 +538,32 @@ return data;
   };
 
   const handleCreate = () => {
-    console.log('[Events] handleCreate called');
-    console.log('[Events] Current form state:', JSON.stringify(form, null, 2));
-    console.log('[Events] Current user:', JSON.stringify(user, null, 2));
-    console.log('[Events] Auth state:', { isAuthenticated, isLoading });
-    console.log('[Events] Mutation state:', { isPending: createMutation.isPending, error: createMutation.error });
-    
     if (!user) {
-      console.log('[Events] No user found');
       Alert.alert(t('events.errorTitle'), t('events.errors.mustBeLoggedInCreate'));
       return;
     }
 
     if (!user.id) {
-      console.log('[Events] User has no ID');
       Alert.alert(t('events.errorTitle'), t('events.errors.invalidSession'));
       return;
     }
 
     if (!form.title.trim()) {
-      console.log('[Events] Title validation failed');
       Alert.alert(t('events.errorTitle'), t('events.errors.enterTitle'));
       return;
     }
     
     if (!form.description.trim()) {
-      console.log('[Events] Description validation failed');
       Alert.alert(t('events.errorTitle'), t('events.errors.enterDescription'));
       return;
     }
     
     if (!form.location.trim()) {
-      console.log('[Events] Location validation failed');
       Alert.alert(t('events.errorTitle'), t('events.errors.enterLocation'));
       return;
     }
     
     if (createMutation.isPending) {
-      console.log('[Events] Mutation already in progress, skipping');
       return;
     }
     
@@ -630,11 +585,8 @@ return data;
       form.endTime.getMinutes()
     );
 
-    console.log('[Events] Calculated dates:', { startDateTime, endDateTime });
-
     // Validate dates
     if (endDateTime <= startDateTime) {
-      console.log('[Events] Date validation failed');
       Alert.alert(t('events.errorTitle'), t('events.errors.endAfterStart'));
       return;
     }
@@ -653,21 +605,14 @@ return data;
       isSharedAllChurches: form.isSharedAllChurches,
     };
 
-    console.log('[Events] Creating event with payload:', JSON.stringify(payload, null, 2));
-    console.log('[Events] About to call createMutation.mutate');
-    
     try {
       createMutation.mutate(payload);
-      console.log('[Events] createMutation.mutate called successfully');
     } catch (error) {
-      console.error('[Events] Error calling createMutation.mutate:', error);
       Alert.alert(t('events.errorTitle'), t('events.errors.startCreationFailed'));
     }
   };
 
-  const handleDateTimeChange = (event: any, selectedDate?: Date) => {
-    console.log('[Events] DateTimePicker change:', { event, selectedDate, field: showDatePicker.field });
-    
+  const handleDateTimeChange = (_event: any, selectedDate?: Date) => {
     // On Android, the picker automatically closes after selection
     if (Platform.OS === 'android') {
       setShowDatePicker({ field: null, mode: 'date' });
@@ -675,7 +620,6 @@ return data;
     
     // Update the form if a date was selected and we have a field
     if (selectedDate && showDatePicker.field) {
-      console.log('[Events] Updating field:', showDatePicker.field, 'with date:', selectedDate);
       setForm(prev => ({
         ...prev,
         [showDatePicker.field!]: selectedDate
@@ -684,7 +628,6 @@ return data;
   };
 
   const closeDatePicker = () => {
-    console.log('[Events] Closing date picker');
     setShowDatePicker({ field: null, mode: 'date' });
   };
 
@@ -1061,10 +1004,7 @@ return data;
             </TouchableOpacity>
             <Text style={styles.modalTitle}>{t('events.newEvent')}</Text>
             <TouchableOpacity 
-              onPress={() => {
-                console.log('[Events] Create button pressed!');
-                handleCreate();
-              }} 
+              onPress={handleCreate} 
               disabled={createMutation.isPending}
               testID="submit-event-button"
             >
@@ -1232,10 +1172,7 @@ return data;
             <TouchableOpacity
               testID="submit-event-button-bottom"
               style={[styles.createButtonBottom, createMutation.isPending && styles.createButtonBottomDisabled]}
-              onPress={() => {
-                console.log('[Events] Bottom create button pressed!');
-                handleCreate();
-              }}
+              onPress={handleCreate}
               disabled={createMutation.isPending}
               activeOpacity={0.8}
             >
@@ -1308,7 +1245,7 @@ return data;
                   <View style={styles.datePickerContainer}>
                     <View style={styles.datePickerHeader}>
                       <TouchableOpacity onPress={closeDatePicker}>
-                        <Text style={styles.datePickerCancel}>Cancel</Text>
+                        <Text style={styles.datePickerCancel}>{t('common.cancel')}</Text>
                       </TouchableOpacity>
                       <Text style={styles.datePickerTitle}>
                         {showDatePicker.mode === 'date' ? t('events.selectDate') : t('events.selectTime')}
