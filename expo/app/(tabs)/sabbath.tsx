@@ -224,7 +224,7 @@ function MyChurchSection({
   }
 
   if (error) {
-    return <ErrorState message={error.message} />;
+    return <ErrorState message={t('sabbath.somethingWentWrong')} />;
   }
 
   if (!sabbathData) {
@@ -316,7 +316,7 @@ function CountrySection({
   }
 
   if (error) {
-    return <ErrorState message={error.message} />;
+    return <ErrorState message={t('sabbath.somethingWentWrong')} />;
   }
 
   if (dateGroups.length === 0) {
@@ -367,7 +367,6 @@ export default function SabbathScreen() {
         .maybeSingle();
 
       if (error) {
-        console.warn('[Sabbath] profile fetch error:', error.message);
         return null;
       }
 
@@ -391,7 +390,6 @@ export default function SabbathScreen() {
         .eq('user_id', user.id);
 
       if (error) {
-        console.warn('[Sabbath] pastor groups fetch error:', error.message);
         return [] as { id: string; group_id: string; user_id: string }[];
       }
 
@@ -450,7 +448,7 @@ const accessibleCountriesQuery = useQuery({
       .maybeSingle();
 
     if (profileError) {
-      console.warn('[Sabbath] accessible countries profile error:', profileError.message);
+      // Continue with fallback sources below.
     }
 
     const userRole = (profile as any)?.role ?? user.role;
@@ -466,7 +464,7 @@ const accessibleCountriesQuery = useQuery({
         .limit(1);
 
       if (membershipError) {
-        console.warn('[Sabbath] accessible countries memberships error:', membershipError.message);
+        // Continue without membership fallback.
       }
 
       homeGroupId = memberships?.[0]?.group_id ?? null;
@@ -496,7 +494,7 @@ const accessibleCountriesQuery = useQuery({
         .in('id', groupIds);
 
       if (groupsError) {
-        console.warn('[Sabbath] accessible countries groups error:', groupsError.message);
+        // Continue without group-country fallback.
       }
 
       (groups ?? []).forEach((group: any) => {
@@ -519,7 +517,7 @@ const accessibleCountriesQuery = useQuery({
         .order('name');
 
       if (error) {
-        throw new Error(error.message);
+        throw new Error(t('sabbath.somethingWentWrong'));
       }
 
       return {
@@ -534,7 +532,7 @@ const accessibleCountriesQuery = useQuery({
       .eq('user_id', user.id);
 
     if (extrasError) {
-      console.warn('[Sabbath] accessible countries extras error:', extrasError.message);
+      // Continue without extra country access.
     }
 
     (extras ?? []).forEach((row: any) => {
@@ -559,7 +557,7 @@ const accessibleCountriesQuery = useQuery({
       .order('name');
 
     if (error) {
-      throw new Error(error.message);
+      throw new Error(t('sabbath.somethingWentWrong'));
     }
 
     return {
@@ -663,7 +661,7 @@ const isWaitingForChurchAssignment = useMemo(() => {
         .limit(1)
         .maybeSingle();
 
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(t('sabbath.somethingWentWrong'));
       if (!sabbath) return null;
 
       const { data: group } = await supabase
@@ -696,7 +694,7 @@ const countryQuery = useQuery({
         .order('sabbath_date', { ascending: true })
         .limit(200);
 
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(t('sabbath.somethingWentWrong'));
       if (!sabbaths || sabbaths.length === 0) return [];
 
       const groupIds = [...new Set(sabbaths.map((s: any) => s.group_id))];
@@ -744,7 +742,7 @@ const countryQuery = useQuery({
       const group = myChurchQuery.data?.group;
 
       if (!sabbath || !group || !user?.id) {
-        throw new Error('Sabbath not found');
+        throw new Error(t('sabbathDetail.errors.notFound', { defaultValue: t('sabbath.somethingWentWrong') }));
       }
 
       const { data: assignmentsRaw } = await supabase
@@ -852,7 +850,7 @@ const countryQuery = useQuery({
         .maybeSingle();
 
       if (existingError) {
-        throw new Error(existingError.message);
+        throw new Error(t('sabbath.failedToRespond'));
       }
 
       if (existing?.id) {
@@ -863,7 +861,7 @@ const countryQuery = useQuery({
           .select()
           .single();
 
-        if (error) throw new Error(error.message);
+        if (error) throw new Error(t('sabbath.somethingWentWrong'));
         return data;
       }
 
@@ -877,7 +875,7 @@ const countryQuery = useQuery({
         .select()
         .single();
 
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(t('sabbath.somethingWentWrong'));
       return data;
     },
     onSuccess: (_data, variables) => {
@@ -890,18 +888,16 @@ const countryQuery = useQuery({
       }
     },
     onError: (err: Error) => {
-      console.error('[Sabbath] Attendance error:', err);
-      Alert.alert(t('sabbath.errorTitle'), err.message || t('sabbath.failedToRespond'));
+      Alert.alert(t('sabbath.errorTitle'), t('sabbath.failedToRespond'));
     },
   });
 
   const acceptMutation = trpc.sabbaths.acceptAssignment.useMutation({
     onSuccess: () => {
-      console.log('[Sabbath] Assignment accepted');
       void sabbathDetailQuery.refetch();
     },
     onError: (err) => {
-      Alert.alert(t('sabbath.errorTitle'), err.message ?? t('sabbath.failedToAccept'));
+      Alert.alert(t('sabbath.errorTitle'), t('sabbath.failedToAccept'));
     },
   });
 
@@ -926,23 +922,18 @@ const countryQuery = useQuery({
       );
 
       if (error) {
-        console.error('[Sabbath] Decline assignment RPC failed:', error);
-        throw new Error(error.message);
+        throw new Error(t('sabbath.failedToDecline'));
       }
-
-      console.log('[Sabbath] Decline assignment RPC success:', data);
 
       return data;
     },
     onSuccess: () => {
-      console.log('[Sabbath] Assignment declined');
       void myChurchQuery.refetch();
       void sabbathDetailQuery.refetch();
       void countryQuery.refetch();
     },
     onError: (err: Error) => {
-      console.error('[Sabbath] Decline assignment failed:', err);
-      Alert.alert(t('sabbath.errorTitle'), err.message ?? t('sabbath.failedToDecline'));
+      Alert.alert(t('sabbath.errorTitle'), t('sabbath.failedToDecline'));
     },
   });
 
@@ -961,14 +952,13 @@ const countryQuery = useQuery({
 
   const suggestReplacementMutation = trpc.sabbaths.suggestReplacement.useMutation({
     onSuccess: () => {
-      console.log('[Sabbath] Replacement suggested');
       setShowSuggestModal(false);
       setSuggestingAssignmentId(null);
       void sabbathDetailQuery.refetch();
       Alert.alert(t('sabbath.sentTitle'), t('sabbath.replacementSuggestedMessage'));
     },
     onError: (err) => {
-      Alert.alert(t('sabbath.errorTitle'), err.message ?? t('sabbath.failedToSuggestReplacement'));
+      Alert.alert(t('sabbath.errorTitle'), t('sabbath.failedToSuggestReplacement'));
     },
   });
 
