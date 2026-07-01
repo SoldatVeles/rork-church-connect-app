@@ -535,6 +535,13 @@ sabbathPlanner: {
   },
 },
 sabbathDetail: {
+  assignableRoles: {
+  admin: 'Admin',
+  church_leader: 'Church Leader',
+  pastor: 'Pastor',
+  member: 'Member',
+  visitor: 'Visitor',
+},
   loading: 'Loading...',
   sameCountry: 'Same Country',
   assignedAs: "You're assigned as",
@@ -584,12 +591,6 @@ sabbathDetail: {
   failedToDecline: 'Failed to decline.',
   failedToDeclineAssignment: 'Failed to decline assignment.',
   failedToUpdateAttendance: 'Failed to update attendance.',
-  assignableRoles: {
-    admin: 'Admin',
-    church_leader: 'Church Leader',
-    pastor: 'Pastor',
-    member: 'Member',
-  },
   errors: {
     missingData: 'Missing Sabbath ID or user.',
     notFound: 'Sabbath not found',

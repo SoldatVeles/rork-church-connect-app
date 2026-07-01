@@ -536,8 +536,15 @@ sabbathPlanner: {
 },
 
 sabbathDetail: {
+  assignableRoles: {
+  admin: 'Administratur',
+  church_leader: 'Manader da baselgia',
+  pastor: 'Pastur',
+  member: 'Commember',
+  visitor: 'Visitader',
+},
+sameCountry: 'Medem pajais',
   loading: 'Chargiar...',
-  sameCountry: 'Medem pajais',
   assignedAs: 'Ti es attribuì sco',
   acceptedAssignment: 'Ti has acceptà questa incumbensa',
   assignments: 'Incumbensas',
@@ -586,12 +593,6 @@ sabbathDetail: {
   failedToDecline: 'Betg reussì da refusar.',
   failedToDeclineAssignment: 'Betg reussì da refusar l’incumbensa.',
   failedToUpdateAttendance: 'Betg reussì d’actualisar la participaziun.',
-  assignableRoles: {
-    admin: 'Admin',
-    church_leader: 'Manader da baselgia',
-    pastor: 'Pastor',
-    member: 'Commember',
-  },
   errors: {
     missingData: 'ID dal sabbat u utilisader manca.',
     notFound: 'Sabbat betg chattà',

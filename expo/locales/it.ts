@@ -536,6 +536,13 @@ sabbathPlanner: {
 },
 
 sabbathDetail: {
+  assignableRoles: {
+  admin: 'Amministratore',
+  church_leader: 'Responsabile di chiesa',
+  pastor: 'Pastore',
+  member: 'Membro',
+  visitor: 'Visitatore',
+},
   loading: 'Caricamento...',
   sameCountry: 'Stesso paese',
   assignedAs: 'Sei assegnato come',
@@ -586,12 +593,6 @@ sabbathDetail: {
   failedToDecline: 'Impossibile rifiutare.',
   failedToDeclineAssignment: 'Impossibile rifiutare l’assegnazione.',
   failedToUpdateAttendance: 'Impossibile aggiornare la presenza.',
-  assignableRoles: {
-    admin: 'Admin',
-    church_leader: 'Responsabile di chiesa',
-    pastor: 'Pastore',
-    member: 'Membro',
-  },
   errors: {
     missingData: 'ID del sabato o utente mancante.',
     notFound: 'Sabato non trovato',

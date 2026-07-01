@@ -536,6 +536,13 @@ sabbathPlanner: {
 },
 
 sabbathDetail: {
+  assignableRoles: {
+  admin: 'Адміністратор',
+  church_leader: 'Церковний керівник',
+  pastor: 'Пастор',
+  member: 'Член',
+  visitor: 'Відвідувач',
+},        
   loading: 'Завантаження...',
   sameCountry: 'Та сама країна',
   assignedAs: 'Вас призначено як',
@@ -586,12 +593,6 @@ sabbathDetail: {
   failedToDecline: 'Не вдалося відхилити.',
   failedToDeclineAssignment: 'Не вдалося відхилити призначення.',
   failedToUpdateAttendance: 'Не вдалося оновити присутність.',
-  assignableRoles: {
-    admin: 'Адмін',
-    church_leader: 'Керівник церкви',
-    pastor: 'Пастор',
-    member: 'Член',
-  },
   errors: {
     missingData: 'Відсутній ID суботи або користувач.',
     notFound: 'Суботу не знайдено',

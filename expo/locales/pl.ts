@@ -536,6 +536,13 @@ sabbathPlanner: {
 },
 
 sabbathDetail: {
+  assignableRoles: {
+  admin: 'Administrator',
+  church_leader: 'Lider zboru',
+  pastor: 'Pastor',
+  member: 'Członek',
+  visitor: 'Gość',
+},
   loading: 'Ładowanie...',
   sameCountry: 'Ten sam kraj',
   assignedAs: 'Jesteś przypisany jako',
@@ -586,12 +593,6 @@ sabbathDetail: {
   failedToDecline: 'Nie udało się odrzucić.',
   failedToDeclineAssignment: 'Nie udało się odrzucić zadania.',
   failedToUpdateAttendance: 'Nie udało się zaktualizować obecności.',
-  assignableRoles: {
-    admin: 'Admin',
-    church_leader: 'Lider kościoła',
-    pastor: 'Pastor',
-    member: 'Członek',
-  },
   errors: {
     missingData: 'Brakuje ID sabatu lub użytkownika.',
     notFound: 'Nie znaleziono sabatu',

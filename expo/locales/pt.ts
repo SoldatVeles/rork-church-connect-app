@@ -536,6 +536,13 @@ sabbathPlanner: {
 },
 
 sabbathDetail: {
+  assignableRoles: {
+  admin: 'Administrador',
+  church_leader: 'Líder da igreja',
+  pastor: 'Pastor',
+  member: 'Membro',
+  visitor: 'Visitante',
+},
   loading: 'A carregar...',
   sameCountry: 'Mesmo país',
   assignedAs: 'Está atribuído como',
@@ -586,12 +593,6 @@ sabbathDetail: {
   failedToDecline: 'Falha ao recusar.',
   failedToDeclineAssignment: 'Falha ao recusar atribuição.',
   failedToUpdateAttendance: 'Falha ao atualizar presença.',
-  assignableRoles: {
-    admin: 'Admin',
-    church_leader: 'Líder de igreja',
-    pastor: 'Pastor',
-    member: 'Membro',
-  },
   errors: {
     missingData: 'Falta o ID do sábado ou o utilizador.',
     notFound: 'Sábado não encontrado',
