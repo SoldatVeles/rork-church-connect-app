@@ -210,12 +210,33 @@ type AdminUserRow = {
     },
   });
 
-  const blockUserMutation = trpc.users.block.useMutation({
+  const blockUserMutation = useMutation({
+    mutationFn: async (input: { userId: string; isBlocked: boolean }) => {
+      if (!user?.id || user.role !== 'admin') {
+        throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
+      }
+
+      if (input.userId === user.id) {
+        throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
+      }
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ is_blocked: input.isBlocked })
+        .eq('id', input.userId);
+
+      if (error) {
+        throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
+      }
+
+      return input;
+    },
     onSuccess: (data) => {
       Alert.alert(t('admin.common.success'), data.isBlocked ? t('admin.alerts.userBlocked') : t('admin.alerts.userUnblocked'));
       void usersQuery.refetch();
+      void queryClient.invalidateQueries({ queryKey: ['users', 'getAll'] });
     },
-    onError: (error) => {
+    onError: () => {
       Alert.alert(t('admin.common.error'), t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
     },
   });
