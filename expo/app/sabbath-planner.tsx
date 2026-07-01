@@ -98,6 +98,22 @@ const STATUS_COLORS: Record<SabbathStatus, { bg: string; text: string; border: s
 
 type FilterType = 'all' | 'upcoming' | 'past' | 'draft' | 'published' | 'cancelled';
 
+function getReadableMessage(value: unknown): string | null {
+  if (!value) return null;
+
+  if (value instanceof Error && typeof value.message === 'string') {
+    return value.message;
+  }
+
+  if (typeof value === 'object' && 'message' in value) {
+    const message = (value as { message?: unknown }).message;
+    return typeof message === 'string' ? message : null;
+  }
+
+  return null;
+}
+
+
 export default function SabbathPlannerScreen() {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -117,7 +133,6 @@ export default function SabbathPlannerScreen() {
         .maybeSingle();
 
       if (error) {
-        console.warn('[SabbathPlanner] profile fetch error:', error.message);
         return null;
       }
 
@@ -136,7 +151,6 @@ export default function SabbathPlannerScreen() {
         .eq('user_id', user.id);
 
       if (error) {
-        console.error('[SabbathPlanner] pastor groups error:', error.message);
         return [] as { id: string; group_id: string; user_id: string }[];
       }
 
@@ -191,8 +205,9 @@ export default function SabbathPlannerScreen() {
         .order('sabbath_date', { ascending: true });
 
       if (error) {
-        console.error('[SabbathPlanner] getAll error:', error.message);
-        throw new Error(error.message);
+        throw new Error(t('sabbathPlanner.errors.failedToLoad', {
+          defaultValue: 'Failed to load Sabbath plans.',
+        }));
       }
 
       return (data || []) as Sabbath[];
@@ -221,8 +236,9 @@ export default function SabbathPlannerScreen() {
         .maybeSingle();
 
       if (existingError) {
-        console.error('[SabbathPlanner] existing sabbath check error:', existingError);
-        throw new Error(existingError.message);
+        throw new Error(t('sabbathPlanner.errors.checkExistingFailed', {
+          defaultValue: 'Could not check if a Sabbath already exists for this date.',
+        }));
       }
 
       let sabbath: Sabbath;
@@ -247,8 +263,7 @@ export default function SabbathPlannerScreen() {
           .single();
 
         if (reactivateError || !reactivated) {
-          console.error('[SabbathPlanner] reactivate cancelled sabbath error:', reactivateError);
-          throw new Error(reactivateError?.message ?? t('sabbathPlanner.errors.reactivateFailed'));
+          throw new Error(t('sabbathPlanner.errors.reactivateFailed'));
         }
 
         sabbath = reactivated as Sabbath;
@@ -267,8 +282,7 @@ export default function SabbathPlannerScreen() {
           .single();
 
         if (insertError || !inserted) {
-          console.error('[SabbathPlanner] insert error:', insertError);
-          throw new Error(insertError?.message ?? t('sabbathPlanner.errors.createFailed'));
+          throw new Error(t('sabbathPlanner.errors.createFailed'));
         }
 
         sabbath = inserted as Sabbath;
@@ -285,14 +299,11 @@ export default function SabbathPlannerScreen() {
         .from('sabbath_assignments')
         .insert(assignmentRows);
 
-      if (assignError) {
-        console.warn('[SabbathPlanner] assignment rows error:', assignError.message);
-      }
+      void assignError;
 
       return sabbath as Sabbath;
     },
     onSuccess: () => {
-      console.log('[SabbathPlanner] createDraft success, invalidating');
       void queryClient.invalidateQueries({ queryKey: ['sabbaths-all'] });
     },
   });
@@ -320,7 +331,6 @@ export default function SabbathPlannerScreen() {
         .select('id, name');
 
       if (error) {
-        console.error('[SabbathPlanner] Error fetching groups:', error.message);
         return [];
       }
 
@@ -405,17 +415,15 @@ export default function SabbathPlannerScreen() {
         notes: notes.trim() || null,
       });
 
-      console.log('[SabbathPlanner] Created sabbath:', result.id);
-
       setShowCreateModal(false);
       setSelectedDate(null);
       setNotes('');
       setSelectedGroupId(null);
 
       router.push({ pathname: '/sabbath-detail' as any, params: { sabbathId: result.id } });
-    } catch (err: any) {
-      console.error('[SabbathPlanner] Create error:', err);
-      Alert.alert(t('sabbathPlanner.alerts.errorTitle'), err.message || t('sabbathPlanner.errors.createFailed'));
+    } catch (err: unknown) {
+      const message = getReadableMessage(err) ?? t('sabbathPlanner.errors.createFailed');
+      Alert.alert(t('sabbathPlanner.alerts.errorTitle'), message);
     }
   }, [selectedDate, effectiveGroupId, notes, createSabbathMutation, t]);
 
