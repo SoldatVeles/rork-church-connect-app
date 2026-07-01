@@ -73,7 +73,6 @@ export default function PrayersScreen() {
         .single();
 
       if (profileError || !profile) {
-        console.warn('[Prayers] Could not fetch profile home_group_id:', profileError?.message);
         return null;
       }
 
@@ -87,7 +86,6 @@ export default function PrayersScreen() {
           .single();
 
         if (!groupError && group) {
-          console.log('[Prayers] Resolved home church:', group.name);
           return { id: group.id as string, name: group.name as string };
         }
       }
@@ -107,7 +105,6 @@ export default function PrayersScreen() {
           .single();
 
         if (group) {
-          console.log('[Prayers] Resolved church from group_members:', group.name);
           return { id: group.id as string, name: group.name as string };
         }
       }
@@ -127,7 +124,6 @@ export default function PrayersScreen() {
     enabled: userIsAdmin || homeChurchQuery.isFetched,
     queryFn: async () => {
       if (!userIsAdmin && !userHomeGroupId) {
-        console.log('[Prayers] User has no home church, returning no prayers');
         return [];
       }
 
@@ -146,8 +142,7 @@ export default function PrayersScreen() {
       const { data, error } = await query;
 
       if (error) {
-        console.error('[Prayers] Fetch error:', error.message);
-        throw new Error(error.message);
+        throw new Error(t('prayers.createFailed'));
       }
 
       const rows = (data || []) as any[];
@@ -210,7 +205,6 @@ export default function PrayersScreen() {
         .select('prayer_id, user_id');
 
       if (error) {
-        console.warn('[Prayers] prayer_prayers table not available or query failed:', error.message);
         return [] as { prayer_id: string; user_id: string }[];
       }
 
@@ -238,7 +232,6 @@ export default function PrayersScreen() {
         .order('created_at', { ascending: true });
 
       if (error) {
-        console.warn('[Prayers] prayer_updates table not available:', error.message);
         return [] as PrayerUpdate[];
       }
 
@@ -324,7 +317,6 @@ export default function PrayersScreen() {
         .maybeSingle();
 
       if (prayerError) {
-        console.warn('[Prayers] Failed to fetch answered prayer:', prayerError.message);
         return;
       }
 
@@ -332,14 +324,10 @@ export default function PrayersScreen() {
         return;
       }
 
-      const { data: prayedRows, error: prayedError } = await supabase
+      const { data: prayedRows } = await supabase
         .from('prayer_prayers')
         .select('user_id')
         .eq('prayer_id', prayerId);
-
-      if (prayedError) {
-        console.warn('[Prayers] Failed to fetch prayer supporters:', prayedError.message);
-      }
 
       const recipientIds = Array.from(
         new Set([
@@ -368,13 +356,9 @@ export default function PrayersScreen() {
         prayer_id: prayerId,
       }));
 
-      const { error: notificationError } = await supabase
+      await supabase
         .from('notifications')
         .insert(notificationRows);
-
-      if (notificationError) {
-        console.warn('[Prayers] Failed to create answered prayer notifications:', notificationError.message);
-      }
     },
     [t]
   );
@@ -411,8 +395,8 @@ export default function PrayersScreen() {
         .select()
         .single();
 
-      if (error && /is_urgent/i.test(error.message)) {
-        console.warn('[Prayers] is_urgent column missing, run database-add-prayer-urgent.sql');
+      const createErrorMessage = String(error?.message ?? '');
+      if (error && /is_urgent/i.test(createErrorMessage)) {
         const retry = await supabase
           .from('prayers')
           .insert(basePayload)
@@ -423,7 +407,7 @@ export default function PrayersScreen() {
         error = retry.error;
       }
 
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(t('prayers.createFailed'));
 
       try {
         const createdPrayerId = (data as any).id as string;
@@ -446,7 +430,7 @@ export default function PrayersScreen() {
           : { name: prayerData.requestedByName };
 
         if (prayerData.isSharedAllChurches) {
-          const { error: notificationError } = await supabase
+          await supabase
             .from('notifications')
             .insert({
               type: 'prayer',
@@ -458,22 +442,14 @@ export default function PrayersScreen() {
               user_id: null,
               prayer_id: createdPrayerId,
             });
-
-          if (notificationError) {
-            console.warn('[Prayers] Failed to create global notification:', notificationError.message);
-          }
         } else if (groupForInsert) {
-          const { data: recipients, error: recipientsError } = await supabase.rpc(
+          const { data: recipients } = await supabase.rpc(
             'get_church_notification_recipient_ids',
             {
               target_group_id: groupForInsert,
               extra_user_ids: [prayerData.requestedBy],
             }
           );
-
-          if (recipientsError) {
-            console.warn('[Prayers] Failed to fetch notification recipients:', recipientsError.message);
-          }
 
           const recipientIds = ((recipients ?? []) as any[])
             .map((recipient) => recipient.user_id as string | null)
@@ -491,17 +467,12 @@ export default function PrayersScreen() {
               prayer_id: createdPrayerId,
             }));
 
-            const { error: notificationError } = await supabase
+            await supabase
               .from('notifications')
               .insert(notificationRows);
-
-            if (notificationError) {
-              console.warn('[Prayers] Failed to create member notifications:', notificationError.message);
-            }
           }
         }
-      } catch (notificationError) {
-        console.warn('[Prayers] Notification creation failed:', notificationError);
+      } catch {
       }
 
       return data;
@@ -521,9 +492,8 @@ export default function PrayersScreen() {
       setShowAddModal(false);
       Alert.alert(t('prayers.successTitle'), t('prayers.submitSuccess'));
     },
-    onError: (error: Error) => {
-      console.error('[Prayers] Error creating prayer:', error);
-      Alert.alert(t('prayers.errorTitle'), error.message || t('prayers.createFailed'));
+    onError: () => {
+      Alert.alert(t('prayers.errorTitle'), t('prayers.createFailed'));
     },
   });
 
@@ -551,7 +521,7 @@ export default function PrayersScreen() {
         })
         .eq('id', data.prayerId);
 
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(t('prayers.statusUpdateFailed'));
 
       if (willBeAnswered && !wasAnswered) {
         await createPrayerAnsweredNotifications({
@@ -566,9 +536,8 @@ export default function PrayersScreen() {
       void queryClient.invalidateQueries({ queryKey: ['notifications'] });
       Alert.alert(t('prayers.successTitle'), t('prayers.statusUpdated'));
     },
-    onError: (error: Error) => {
-      console.error('Error updating prayer status:', error);
-      Alert.alert(t('prayers.errorTitle'), error.message || t('prayers.statusUpdateFailed'));
+    onError: () => {
+      Alert.alert(t('prayers.errorTitle'), t('prayers.statusUpdateFailed'));
     },
   });
 
@@ -587,11 +556,12 @@ export default function PrayersScreen() {
       });
 
       if (error) {
-        if (error.message.includes('relation') && error.message.includes('does not exist')) {
+        const updateErrorMessage = String(error?.message ?? '');
+        if (updateErrorMessage.includes('relation') && updateErrorMessage.includes('does not exist')) {
           throw new Error(PRAYER_UPDATES_NOT_CONFIGURED);
         }
 
-        throw new Error(error.message);
+        throw new Error(t('prayers.updateFailed'));
       }
 
       if (data.isAnsweredUpdate) {
@@ -629,10 +599,10 @@ export default function PrayersScreen() {
       Alert.alert(t('prayers.successTitle'), t('prayers.updatePosted'));
     },
     onError: (error: Error) => {
-      console.error('[Prayers] Error creating update:', error);
-      const message = error.message === PRAYER_UPDATES_NOT_CONFIGURED
+      const errorMessage = String((error as Error).message ?? '');
+      const message = errorMessage === PRAYER_UPDATES_NOT_CONFIGURED
         ? t('prayers.errors.prayerUpdatesNotConfigured')
-        : error.message || t('prayers.updateFailed');
+        : t('prayers.updateFailed');
       Alert.alert(t('prayers.errorTitle'), message);
     },
   });
@@ -717,7 +687,6 @@ export default function PrayersScreen() {
     const prayerToOpen = allPrayers.find((prayer) => prayer.id === prayerIdParam);
 
     if (!prayerToOpen) {
-      console.warn('[Prayers] Prayer from notification not found or no longer visible:', prayerIdParam);
       return;
     }
 
@@ -787,11 +756,12 @@ export default function PrayersScreen() {
         });
 
         if (error) {
-          if (error.message.includes('relation') && error.message.includes('does not exist')) {
+          const prayErrorMessage = String(error?.message ?? '');
+          if (prayErrorMessage.includes('relation') && prayErrorMessage.includes('does not exist')) {
             throw new Error(PRAYER_TRACKING_NOT_CONFIGURED);
           }
 
-          throw new Error(error.message);
+          throw new Error(t('prayers.statusUpdateFailed'));
         }
       } else {
         const { error } = await supabase
@@ -801,8 +771,9 @@ export default function PrayersScreen() {
           .eq('user_id', payload.userId);
 
         if (error) {
-          if (!error.message.includes('relation') || !error.message.includes('does not exist')) {
-            throw new Error(error.message);
+          const prayDeleteErrorMessage = String(error?.message ?? '');
+          if (!prayDeleteErrorMessage.includes('relation') || !prayDeleteErrorMessage.includes('does not exist')) {
+            throw new Error(t('prayers.statusUpdateFailed'));
           }
         }
       }
@@ -840,19 +811,18 @@ export default function PrayersScreen() {
       return { prevPrayers, prevLinks };
     },
     onError: (err: Error, _vars, ctx) => {
-      console.error('[Prayers] Toggle pray failed:', err);
-
       if (ctx?.prevPrayers) queryClient.setQueryData(['prayers', effectiveChurchId], ctx.prevPrayers);
       if (ctx?.prevLinks) queryClient.setQueryData(['prayer_prayers'], ctx.prevLinks);
 
-      if (err.message === PRAYER_TRACKING_NOT_CONFIGURED) {
+      const errorMessage = String((err as Error).message ?? '');
+      if (errorMessage === PRAYER_TRACKING_NOT_CONFIGURED) {
         Alert.alert(
           t('prayers.databaseSetupTitle'),
           t('prayers.databaseSetupMessage'),
           [{ text: t('prayers.ok', { defaultValue: 'OK' }) }]
         );
       } else {
-        Alert.alert(t('prayers.errorTitle'), err.message ?? t('prayers.statusUpdateFailed'));
+        Alert.alert(t('prayers.errorTitle'), t('prayers.statusUpdateFailed'));
       }
     },
     onSettled: () => {
@@ -880,12 +850,6 @@ export default function PrayersScreen() {
         {
           text: t('prayers.confirm'),
           onPress: () => {
-            console.log('[Prayers] Updating prayer status:', {
-              prayerId: prayer.id,
-              status: newStatus,
-              userId: user.id,
-              userRole: user.role,
-            });
 
             updateStatusMutation.mutate({
               prayerId: prayer.id,
@@ -909,17 +873,6 @@ export default function PrayersScreen() {
       Alert.alert(t('prayers.errorTitle'), t('prayers.mustBeLoggedInCreate'));
       return;
     }
-
-    console.log('[Prayers] Creating prayer with data:', {
-      title: newPrayer.title.trim(),
-      description: newPrayer.description.trim(),
-      isAnonymous: newPrayer.isAnonymous,
-      isUrgent: newPrayer.isUrgent,
-      isSharedAllChurches: newPrayer.isSharedAllChurches,
-      requestedBy: user.id,
-      requestedByName: `${user.firstName} ${user.lastName}`,
-      groupId: effectiveChurchId,
-    });
 
     createPrayerMutation.mutate({
       title: newPrayer.title.trim(),
@@ -1085,7 +1038,6 @@ export default function PrayersScreen() {
                   }
 
                   const willPray = !hasUserPrayed(prayer);
-                  console.log('[Prayers] Toggling pray', { prayerId: prayer.id, willPray, userId: user.id });
                   togglePrayMutation.mutate({ prayerId: prayer.id, willPray, userId: user.id });
                 }}
                 disabled={togglePrayMutation.isPending}
@@ -1185,7 +1137,6 @@ export default function PrayersScreen() {
             testID="add-prayer-button"
             style={styles.addButton}
             onPress={() => {
-              console.log('[Prayers] + pressed');
               setShowAddModal(true);
             }}
           >
@@ -1258,9 +1209,7 @@ export default function PrayersScreen() {
         visible={showAddModal}
         animationType="slide"
         presentationStyle="pageSheet"
-        onShow={() => console.log('[Prayers] Modal shown')}
         onRequestClose={() => {
-          console.log('[Prayers] Modal request close');
           setShowAddModal(false);
         }}
       >
