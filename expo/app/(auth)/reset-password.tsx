@@ -20,6 +20,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from '@/components/LanguageSelector';
 import { supabase } from '@/lib/supabase';
+import { translateAuthError } from '@/utils/auth-errors';
 
 export default function ResetPasswordScreen() {
   const { t } = useTranslation();
@@ -64,7 +65,7 @@ export default function ResetPasswordScreen() {
           });
 
           if (error) {
-            Alert.alert(t('auth.passwordReset.resetLinkErrorTitle'), error.message);
+            Alert.alert(t('auth.passwordReset.resetLinkErrorTitle'), translateAuthError(error, t));
           }
         }
       } catch (error) {
@@ -105,7 +106,7 @@ export default function ResetPasswordScreen() {
       });
 
       if (error) {
-        Alert.alert(t('auth.passwordReset.errorTitle'), error.message);
+        Alert.alert(t('auth.passwordReset.errorTitle'), translateAuthError(error, t));
         return;
       }
 

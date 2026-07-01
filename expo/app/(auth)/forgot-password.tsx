@@ -19,6 +19,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from '@/components/LanguageSelector';
 import { supabase } from '@/lib/supabase';
+import { translateAuthError } from '@/utils/auth-errors';
 
 type ResetStep = 'email' | 'code' | 'password' | 'done';
 
@@ -66,7 +67,7 @@ export default function ForgotPasswordScreen() {
       const { error } = await supabase.auth.resetPasswordForEmail(cleanedEmail);
 
       if (error) {
-        Alert.alert(t('auth.passwordReset.errorTitle'), error.message);
+        Alert.alert(t('auth.passwordReset.errorTitle'), translateAuthError(error, t));
         return;
       }
 
@@ -106,7 +107,7 @@ export default function ForgotPasswordScreen() {
       });
 
       if (error) {
-        Alert.alert(t('auth.passwordReset.invalidCodeTitle'), error.message);
+        Alert.alert(t('auth.passwordReset.invalidCodeTitle'), translateAuthError(error, t));
         return;
       }
 
@@ -146,7 +147,7 @@ export default function ForgotPasswordScreen() {
       });
 
       if (error) {
-        Alert.alert(t('auth.passwordReset.errorTitle'), error.message);
+        Alert.alert(t('auth.passwordReset.errorTitle'), translateAuthError(error, t));
         return;
       }
 

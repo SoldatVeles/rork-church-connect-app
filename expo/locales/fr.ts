@@ -55,6 +55,18 @@ export default {
   },
 },
   auth: {
+    errors: {
+      generic: 'Une erreur est survenue. Veuillez réessayer.',
+      invalidLoginCredentials: 'Adresse e-mail ou mot de passe invalide.',
+      emailNotConfirmed: 'Veuillez confirmer votre adresse e-mail avant de vous connecter. Vérifiez votre boîte de réception.',
+      emailAlreadyRegistered: 'Un compte existe déjà avec cette adresse e-mail. Veuillez vous connecter à la place.',
+      signupDisabled: 'La création de nouveaux comptes est actuellement désactivée.',
+      passwordTooShort: 'Veuillez utiliser au moins 6 caractères.',
+      codeExpired: 'Ce code ou ce lien a expiré. Veuillez en demander un nouveau.',
+      invalidCode: 'Le code est invalide. Vérifiez-le et réessayez.',
+      tooManyRequests: 'Trop de tentatives. Veuillez attendre un moment puis réessayer.',
+      network: 'Erreur réseau. Vérifiez votre connexion internet.',
+    },
     welcomeBack: 'Bon retour',
     signInContinue: 'Connectez-vous pour continuer',
     emailAddress: 'Adresse e-mail',

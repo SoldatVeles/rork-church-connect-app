@@ -55,6 +55,18 @@ export default {
   },
 },
   auth: {
+    errors: {
+      generic: 'Etwas ist schiefgelaufen. Bitte versuche es erneut.',
+      invalidLoginCredentials: 'Ungültige E-Mail-Adresse oder ungültiges Passwort.',
+      emailNotConfirmed: 'Bitte bestätige deine E-Mail-Adresse, bevor du dich anmeldest. Prüfe dein Postfach.',
+      emailAlreadyRegistered: 'Für diese E-Mail-Adresse existiert bereits ein Konto. Bitte melde dich stattdessen an.',
+      signupDisabled: 'Das Erstellen neuer Konten ist momentan deaktiviert.',
+      passwordTooShort: 'Bitte verwende mindestens 6 Zeichen.',
+      codeExpired: 'Dieser Code oder Link ist abgelaufen. Bitte fordere einen neuen an.',
+      invalidCode: 'Der Code ist ungültig. Bitte prüfe ihn und versuche es erneut.',
+      tooManyRequests: 'Zu viele Versuche. Bitte warte einen Moment und versuche es erneut.',
+      network: 'Netzwerkfehler. Bitte prüfe deine Internetverbindung.',
+    },
     welcomeBack: 'Willkommen zurück',
     signInContinue: 'Melde dich an, um fortzufahren',
     emailAddress: 'E-Mail-Adresse',

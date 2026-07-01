@@ -55,6 +55,18 @@ export default {
   },
 },
   auth: {
+    errors: {
+      generic: 'Qualcosa è andato storto. Riprova.',
+      invalidLoginCredentials: 'Email o password non validi.',
+      emailNotConfirmed: 'Conferma la tua email prima di accedere. Controlla la tua casella di posta.',
+      emailAlreadyRegistered: 'Esiste già un account con questa email. Accedi invece di crearne uno nuovo.',
+      signupDisabled: 'La creazione di nuovi account è attualmente disattivata.',
+      passwordTooShort: 'Usa almeno 6 caratteri.',
+      codeExpired: 'Questo codice o link è scaduto. Richiedine uno nuovo.',
+      invalidCode: 'Il codice non è valido. Controllalo e riprova.',
+      tooManyRequests: 'Troppi tentativi. Attendi un momento e riprova.',
+      network: 'Errore di rete. Controlla la tua connessione internet.',
+    },
     welcomeBack: 'Bentornato',
     signInContinue: 'Accedi per continuare',
     emailAddress: 'Indirizzo e-mail',

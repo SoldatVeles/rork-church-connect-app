@@ -55,6 +55,18 @@ export default {
   },
 },
   auth: {
+    errors: {
+      generic: 'Coś poszło nie tak. Spróbuj ponownie.',
+      invalidLoginCredentials: 'Nieprawidłowy adres e-mail lub hasło.',
+      emailNotConfirmed: 'Potwierdź swój adres e-mail przed zalogowaniem. Sprawdź swoją skrzynkę odbiorczą.',
+      emailAlreadyRegistered: 'Konto z tym adresem e-mail już istnieje. Zaloguj się zamiast tworzyć nowe konto.',
+      signupDisabled: 'Tworzenie nowych kont jest obecnie wyłączone.',
+      passwordTooShort: 'Użyj co najmniej 6 znaków.',
+      codeExpired: 'Ten kod lub link wygasł. Poproś o nowy.',
+      invalidCode: 'Kod jest nieprawidłowy. Sprawdź go i spróbuj ponownie.',
+      tooManyRequests: 'Zbyt wiele prób. Poczekaj chwilę i spróbuj ponownie.',
+      network: 'Błąd sieci. Sprawdź połączenie internetowe.',
+    },
     welcomeBack: 'Witamy ponownie',
     signInContinue: 'Zaloguj się, aby kontynuować',
     emailAddress: 'Adres e-mail',

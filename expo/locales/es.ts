@@ -55,6 +55,18 @@ export default {
   },
 },
   auth: {
+    errors: {
+      generic: 'Algo salió mal. Inténtalo de nuevo.',
+      invalidLoginCredentials: 'Correo electrónico o contraseña inválidos.',
+      emailNotConfirmed: 'Por favor confirma tu correo electrónico antes de iniciar sesión. Revisa tu bandeja de entrada.',
+      emailAlreadyRegistered: 'Ya existe una cuenta con este correo electrónico. Inicia sesión en su lugar.',
+      signupDisabled: 'La creación de nuevas cuentas está desactivada actualmente.',
+      passwordTooShort: 'Usa al menos 6 caracteres.',
+      codeExpired: 'Este código o enlace ha expirado. Solicita uno nuevo.',
+      invalidCode: 'El código no es válido. Revísalo e inténtalo de nuevo.',
+      tooManyRequests: 'Demasiados intentos. Espera un momento e inténtalo de nuevo.',
+      network: 'Error de red. Revisa tu conexión a internet.',
+    },
     welcomeBack: 'Bienvenido de nuevo',
     signInContinue: 'Inicia sesión para continuar',
     emailAddress: 'Correo electrónico',

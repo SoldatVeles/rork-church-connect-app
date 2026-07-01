@@ -55,6 +55,18 @@ export default {
   },
 },
   auth: {
+    errors: {
+      generic: 'Insatge è ì mal. Emprova per plaschair anc ina giada.',
+      invalidLoginCredentials: 'E-mail u pled-clav nunvalid.',
+      emailNotConfirmed: 'Conferma per plaschair tia adressa dad e-mail avant che ti t’annunzias. Guarda en tia posta entrada.',
+      emailAlreadyRegistered: 'Igl exista gia in conto cun questa adressa dad e-mail. T’annunzia per plaschair empè da crear in nov conto.',
+      signupDisabled: 'Crear novs contos è actualmain deactivà.',
+      passwordTooShort: 'Dovra per plaschair almain 6 segns.',
+      codeExpired: 'Quest code u link è scadì. Dumonda per plaschair in nov.',
+      invalidCode: 'Il code n’è betg valid. Controllescha el ed emprova anc ina giada.',
+      tooManyRequests: 'Memia bleras emprovas. Spetga in mument ed emprova anc ina giada.',
+      network: 'Errur da rait. Controllescha per plaschair tia connexiun d’internet.',
+    },
     welcomeBack: 'Bainvegni enavos',
     signInContinue: 'T’annunzia per cuntinuar',
     emailAddress: 'Adressa dad e-mail',

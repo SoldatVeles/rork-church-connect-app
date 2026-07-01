@@ -55,6 +55,18 @@ export default {
   },
 },
   auth: {
+    errors: {
+      generic: 'Something went wrong. Please try again.',
+      invalidLoginCredentials: 'Invalid email or password.',
+      emailNotConfirmed: 'Please verify your email before signing in. Check your inbox for the confirmation email.',
+      emailAlreadyRegistered: 'An account with this email already exists. Please sign in instead.',
+      signupDisabled: 'Creating new accounts is currently disabled.',
+      passwordTooShort: 'Please use at least 6 characters.',
+      codeExpired: 'This code or link has expired. Please request a new one.',
+      invalidCode: 'The code is invalid. Please check it and try again.',
+      tooManyRequests: 'Too many attempts. Please wait a moment and try again.',
+      network: 'Network error. Please check your internet connection.',
+    },
     welcomeBack: 'Welcome Back',
     signInContinue: 'Sign in to continue',
     emailAddress: 'Email address',

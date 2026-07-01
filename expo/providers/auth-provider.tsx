@@ -7,8 +7,11 @@ import type { AuthState, User as AppUser, UserRole } from '@/types/user';
 import { supabase } from '@/lib/supabase';
 import type { User as SupaUser, Session } from '@supabase/supabase-js';
 import * as Linking from 'expo-linking';
+import { useTranslation } from 'react-i18next';
+import { translateAuthError } from '@/utils/auth-errors';
 
 export const [AuthProvider, useAuth] = createContextHook(() => {
+  const { t } = useTranslation();
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
     isLoading: true,
@@ -154,45 +157,30 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const loginMutation = useMutation({
     mutationFn: async ({ email, password }: { email: string; password: string }) => {
-      console.log('Attempting login with email:', email);
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
       if (error) {
-        console.error('Login error:', error);
-        console.error('Error code:', error.status);
-        console.error('Error name:', error.name);
-        
-      if (error.message.includes('Email not confirmed')) {
-        throw new Error(
-          'Please verify your email before signing in.\n\nIf the confirmation page showed an expired-link message, try signing in again first — your email may already have been confirmed successfully.'
-        );
+        throw new Error(translateAuthError(error, t));
       }
-        
-        if (error.message.includes('Email not confirmed')) {
-          throw new Error('Please verify your email before signing in. Check your inbox for the confirmation link.');
-        }
-        
-        throw new Error(error.message);
-      }
-      console.log('Login successful, session:', data.session);
+
       return data;
     },
     onSuccess: async (data) => {
-      console.log('Login onSuccess, data:', data);
       setSession(data.session);
+
       if (data.session) {
         try {
           const profile = await getOrCreateProfile(data.session.user);
-          console.log('Profile created/fetched:', profile);
           setAuthState({ user: profile, isLoading: false, isAuthenticated: true });
           router.replace('/(tabs)');
-        } catch (error) {
-          console.error('Error getting profile after login:', error);
+        } catch {
           setAuthState({ user: null, isLoading: false, isAuthenticated: false });
         }
       }
     },
-    onError: (error) => {
-      console.error('Login mutation error:', error);
+    onError: () => {
+      // Keep this silent. The login screen displays the translated error via loginError.
+      // console.error in Expo development creates a black LogBox overlay.
     },
   });
 
@@ -259,7 +247,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           },
         },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(translateAuthError(error, t));
       return data;
     },
     onSuccess: async (data) => {
@@ -289,13 +277,13 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     isLoginLoading: loginMutation.isPending,
     isLogoutLoading: logoutMutation.isPending,
     isRegisterLoading: registerMutation.isPending,
-    loginError: (loginMutation.error as any)?.message as string | undefined,
-    logoutError: (logoutMutation.error as any)?.message as string | undefined,
-    registerError: (registerMutation.error as any)?.message as string | undefined,
+    loginError: loginMutation.error ? translateAuthError(loginMutation.error, t) : undefined,
+    logoutError: logoutMutation.error ? translateAuthError(logoutMutation.error, t) : undefined,
+    registerError: registerMutation.error ? translateAuthError(registerMutation.error, t) : undefined,
     hasPermission,
     isRole,
     isAdmin,
     isChurchLeader,
     isPastor,
-  }), [authState, session, loginMutation, logoutMutation, registerMutation, hasPermission, isRole, isAdmin, isChurchLeader, isPastor]);
+  }), [authState, session, loginMutation, logoutMutation, registerMutation, hasPermission, isRole, isAdmin, isChurchLeader, isPastor, t]);
 });
