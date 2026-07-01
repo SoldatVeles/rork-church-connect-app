@@ -41,7 +41,7 @@ export default function AdminTabScreen() {
         .single();
 
       if (error) {
-        throw new Error(error.message);
+        throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
       }
 
       return data as {
@@ -89,7 +89,7 @@ type AdminUserRow = {
       }
 
       const { data, error } = await query;
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
       const rows = (data ?? []) as Array<{
         id: string;
         email: string | null;
@@ -124,17 +124,6 @@ type AdminUserRow = {
     refetchOnWindowFocus: false,
   });
 
-  React.useEffect(() => {
-    if (usersQuery.data) {
-      console.log('[Admin] Users loaded:', usersQuery.data.length);
-    }
-  }, [usersQuery.data]);
-
-  React.useEffect(() => {
-    if (usersQuery.error) {
-      console.error('[Admin] Users query error:', usersQuery.error);
-    }
-  }, [usersQuery.error]);
 
   const _diagnosticsQuery = trpc.users.diagnostics.useQuery(undefined, {
     enabled: false,
@@ -174,7 +163,6 @@ type AdminUserRow = {
 
   const createUserMutation = trpc.users.create.useMutation({
     onSuccess: (createdUser) => {
-      console.log('[Admin] User created successfully', createdUser);
       void queryClient.invalidateQueries({ queryKey: ['users', 'getAll'] });
       void usersQuery.refetch();
       setNewUser({ firstName: '', lastName: '', email: '', phone: '', password: '', role: 'member' });
@@ -185,8 +173,7 @@ type AdminUserRow = {
       Alert.alert(t('admin.common.success'), successMessage);
     },
     onError: (error) => {
-      console.error('[Admin] User creation failed', error);
-      Alert.alert(t('admin.common.error'), error.message ?? t('admin.alerts.failedToCreateUser'));
+      Alert.alert(t('admin.common.error'), t('admin.alerts.failedToCreateUser'));
     },
   });
   
@@ -198,7 +185,7 @@ type AdminUserRow = {
       });
 
       if (error) {
-        throw new Error(error.message);
+        throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
       }
 
       return input;
@@ -209,7 +196,7 @@ type AdminUserRow = {
       void queryClient.invalidateQueries({ queryKey: ['users', 'getAll'] });
     },
     onError: (error: Error) => {
-      Alert.alert(t('admin.common.error'), error.message);
+      Alert.alert(t('admin.common.error'), t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
     },
   });
 
@@ -219,7 +206,7 @@ type AdminUserRow = {
       void usersQuery.refetch();
     },
     onError: (error) => {
-      Alert.alert(t('admin.common.error'), error.message);
+      Alert.alert(t('admin.common.error'), t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
     },
   });
 
@@ -229,7 +216,7 @@ type AdminUserRow = {
       void usersQuery.refetch();
     },
     onError: (error) => {
-      Alert.alert(t('admin.common.error'), error.message);
+      Alert.alert(t('admin.common.error'), t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
     },
   });
   
@@ -238,8 +225,6 @@ type AdminUserRow = {
       if (!user?.id) {
         throw new Error(t('admin.alerts.mustBeLoggedInCreateChurch'));
       }
-      
-      console.log('[Admin] Creating group:', data.name, 'by user:', user.id);
       
       const { data: insertedData, error } = await supabase
         .from('groups')
@@ -250,21 +235,14 @@ type AdminUserRow = {
         .select();
       
       if (error) {
-        console.error('[Admin] Group creation error:', error);
-        throw new Error(error.message);
+        throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
       }
       
-      console.log('[Admin] Group created successfully:', insertedData);
-
       if (insertedData && insertedData[0]) {
         const newGroupId = insertedData[0].id;
-        console.log('[Admin] Auto-adding creator as member of group:', newGroupId);
-        const { error: memberError } = await supabase
+        await supabase
           .from('group_members')
           .upsert({ group_id: newGroupId, user_id: user.id }, { onConflict: 'group_id,user_id', ignoreDuplicates: true });
-        if (memberError) {
-          console.warn('[Admin] Error auto-adding creator as member:', memberError.message);
-        }
       }
 
       return insertedData;
@@ -275,7 +253,7 @@ type AdminUserRow = {
       void queryClient.invalidateQueries({ queryKey: ['groups'] });
       void queryClient.invalidateQueries({ queryKey: ['user-groups'] });
     },
-    onError: (e: Error) => Alert.alert(t('admin.common.error'), e.message ?? t('admin.alerts.failedToCreateChurch')),
+    onError: (e: Error) => Alert.alert(t('admin.common.error'), t('admin.alerts.failedToCreateChurch')),
   });
   const groupPastorsQuery = useQuery<{ groupId: string; userId: string }[]>({
     queryKey: ['group-pastors'],
@@ -285,7 +263,7 @@ type AdminUserRow = {
         .select('group_id, user_id');
 
       if (error) {
-        throw new Error(error.message);
+        throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
       }
 
       return (data ?? []).map((row: any) => ({
@@ -299,25 +277,20 @@ type AdminUserRow = {
     queryKey: ['group-members', expandedGroupId],
     queryFn: async () => {
       if (!expandedGroupId) return [];
-      console.log('[Admin] Fetching members for group:', expandedGroupId);
       const { data: memberLinks, error: linkError } = await supabase
         .from('group_members')
         .select('user_id')
         .eq('group_id', expandedGroupId);
-      console.log('[Admin] Member links result:', { memberLinks, linkError });
-      if (linkError) throw new Error(linkError.message);
+      if (linkError) throw new Error(t('admin.alerts.failedToLoadMembers', { defaultValue: 'Failed to load members.' }));
       if (!memberLinks || memberLinks.length === 0) {
-        console.log('[Admin] No member links found for group:', expandedGroupId);
         return [];
       }
       const userIds = memberLinks.map((m: any) => m.user_id);
-      console.log('[Admin] Looking up profiles for user IDs:', userIds);
       const { data: profiles, error: profileError } = await supabase
         .from('profiles')
         .select('id, full_name, display_name, email, role')
         .in('id', userIds);
-      console.log('[Admin] Profiles result:', { profiles, profileError });
-      if (profileError) throw new Error(profileError.message);
+      if (profileError) throw new Error(t('admin.alerts.failedToLoadMembers', { defaultValue: 'Failed to load members.' }));
 
       const profileMap = new Map<string, any>();
       (profiles || []).forEach((p: any) => profileMap.set(p.id, p));
@@ -352,7 +325,7 @@ type AdminUserRow = {
       });
 
       if (error) {
-        throw new Error(error.message);
+        throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
       }
     },
     onSuccess: () => {
@@ -361,7 +334,7 @@ type AdminUserRow = {
       void groupPastorsQuery.refetch();
     },
     onError: (error: Error) => {
-      Alert.alert(t('admin.common.error'), error.message);
+      Alert.alert(t('admin.common.error'), t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
     },
   });
 
@@ -373,7 +346,7 @@ type AdminUserRow = {
       });
 
       if (error) {
-        throw new Error(error.message);
+        throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
       }
     },
     onSuccess: () => {
@@ -381,7 +354,7 @@ type AdminUserRow = {
       void groupPastorsQuery.refetch();
     },
     onError: (error: Error) => {
-      Alert.alert(t('admin.common.error'), error.message);
+      Alert.alert(t('admin.common.error'), t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
     },
   });
 
@@ -392,7 +365,7 @@ type AdminUserRow = {
         .delete()
         .eq('group_id', data.groupId)
         .eq('user_id', data.userId);
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
 
       const { data: profile } = await supabase
         .from('profiles')
@@ -411,16 +384,11 @@ type AdminUserRow = {
           ? otherMemberships[0].group_id
           : null;
 
-        const { error: updateError } = await supabase
+        await supabase
           .from('profiles')
           .update({ home_group_id: newHomeGroupId })
           .eq('id', data.userId);
 
-        if (updateError) {
-          console.warn('[Admin] Failed to clear home_group_id for user:', data.userId, updateError.message);
-        } else {
-          console.log('[Admin] Updated home_group_id for user:', data.userId, '→', newHomeGroupId);
-        }
       }
     },
     onSuccess: () => {
@@ -433,7 +401,7 @@ type AdminUserRow = {
       void queryClient.invalidateQueries({ queryKey: ['prayers'] });
       void queryClient.invalidateQueries({ queryKey: ['events'] });
     },
-    onError: (e: Error) => Alert.alert(t('admin.common.error'), e.message),
+    onError: (e: Error) => Alert.alert(t('admin.common.error'), t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' })),
   });
 
   const deleteGroupMutation = useMutation({
@@ -442,24 +410,28 @@ type AdminUserRow = {
         .from('group_members')
         .delete()
         .eq('group_id', groupId);
-      if (membersError) console.warn('[Admin] Error deleting group members:', membersError.message);
+      if (membersError) {
+        // Continue deleting the church even if related member rows are already unavailable.
+      }
       const { error: messagesError } = await supabase
         .from('group_messages')
         .delete()
         .eq('group_id', groupId);
-      if (messagesError) console.warn('[Admin] Error deleting group messages:', messagesError.message);
+      if (messagesError) {
+        // Continue deleting the church even if related message rows are already unavailable.
+      }
       const { error } = await supabase
         .from('groups')
         .delete()
         .eq('id', groupId);
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
     },
     onSuccess: () => {
       Alert.alert(t('admin.common.success'), t('admin.alerts.churchDeleted'));
       setExpandedGroupId(null);
       void queryClient.invalidateQueries({ queryKey: ['groups'] });
     },
-    onError: (e: Error) => Alert.alert(t('admin.common.error'), e.message),
+    onError: (e: Error) => Alert.alert(t('admin.common.error'), t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' })),
   });
 
   const handleDeleteGroup = (groupId: string, groupName: string) => {
@@ -492,7 +464,7 @@ type AdminUserRow = {
         .select('*')
         .order('created_at', { ascending: false });
       
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
       return (data as Group[] | null) ?? [];
     },
   });
@@ -507,19 +479,14 @@ type AdminUserRow = {
         .from('group_members')
         .upsert(rows, { onConflict: 'group_id,user_id', ignoreDuplicates: true });
       
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
 
       for (const userId of data.userIds) {
-        const { error: updateError } = await supabase
+        await supabase
           .from('profiles')
           .update({ home_group_id: data.groupId })
           .eq('id', userId);
 
-        if (updateError) {
-          console.warn('[Admin] Failed to sync home_group_id for user:', userId, updateError.message);
-        } else {
-          console.log('[Admin] Synced home_group_id for user:', userId, '→', data.groupId);
-        }
       }
     },
     onSuccess: () => {
@@ -534,7 +501,7 @@ type AdminUserRow = {
       void queryClient.invalidateQueries({ queryKey: ['prayers'] });
       void queryClient.invalidateQueries({ queryKey: ['events'] });
     },
-    onError: (e: Error) => Alert.alert(t('admin.common.error'), e.message ?? t('admin.alerts.failedToAddMembers')),
+    onError: (e: Error) => Alert.alert(t('admin.common.error'), t('admin.alerts.failedToAddMembers')),
   });
 
   const sermonsQuery = trpc.sermons.getAll.useQuery();
@@ -548,8 +515,7 @@ const countriesQuery = useQuery({
       .order('name');
 
     if (error) {
-      console.error('[countriesQuery]', error);
-      throw error;
+      throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
     }
 
     return data ?? [];
@@ -569,8 +535,7 @@ const groupsWithCountryQuery = useQuery({
       .order('name');
 
     if (error) {
-      console.error('[groupsWithCountryQuery]', error);
-      throw error;
+      throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
     }
 
     return data ?? [];
@@ -589,7 +554,7 @@ const userCountriesQuery = useQuery({
       .select('id, country_id, created_at')
       .eq('user_id', selectedUserForCountries);
 
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
 
     return data ?? [];
   },
@@ -608,7 +573,7 @@ const userCountriesQuery = useQuery({
         .select()
         .single();
 
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
       return data;
     },
     onSuccess: () => {
@@ -616,7 +581,7 @@ const userCountriesQuery = useQuery({
       setNewCountry({ code: '', name: '', flag: '' });
       void countriesQuery.refetch();
     },
-    onError: (e: Error) => Alert.alert(t('admin.common.error'), e.message),
+    onError: (e: Error) => Alert.alert(t('admin.common.error'), t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' })),
   });
 
   const deleteCountryMutation = useMutation({
@@ -626,13 +591,13 @@ const userCountriesQuery = useQuery({
         .delete()
         .eq('id', input.countryId);
 
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
     },
     onSuccess: () => {
       void countriesQuery.refetch();
       void groupsWithCountryQuery.refetch();
     },
-    onError: (e: Error) => Alert.alert(t('admin.common.error'), e.message),
+    onError: (e: Error) => Alert.alert(t('admin.common.error'), t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' })),
   });
 
   const setGroupCountryMutation = useMutation({
@@ -642,12 +607,12 @@ const userCountriesQuery = useQuery({
         .update({ country_id: input.countryId })
         .eq('id', input.groupId);
 
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
     },
     onSuccess: () => {
       void groupsWithCountryQuery.refetch();
     },
-    onError: (e: Error) => Alert.alert(t('admin.common.error'), e.message),
+    onError: (e: Error) => Alert.alert(t('admin.common.error'), t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' })),
   });
 
 const addUserCountryMutation = useMutation({
@@ -666,12 +631,12 @@ const addUserCountryMutation = useMutation({
         }
       );
 
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
   },
   onSuccess: async () => {
     await userCountriesQuery.refetch();
   },
-  onError: (e: Error) => Alert.alert(t('admin.common.error'), e.message),
+  onError: (e: Error) => Alert.alert(t('admin.common.error'), t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' })),
 });
 
   const removeUserCountryMutation = useMutation({
@@ -682,12 +647,12 @@ const addUserCountryMutation = useMutation({
         .eq('user_id', input.userId)
         .eq('country_id', input.countryId);
 
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
     },
     onSuccess: () => {
       void userCountriesQuery.refetch();
     },
-    onError: (e: Error) => Alert.alert(t('admin.common.error'), e.message),
+    onError: (e: Error) => Alert.alert(t('admin.common.error'), t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' })),
   });
   const createSermonMutation = trpc.sermons.create.useMutation({
     onSuccess: () => {
@@ -696,7 +661,7 @@ const addUserCountryMutation = useMutation({
       void sermonsQuery.refetch();
     },
     onError: (error) => {
-      Alert.alert(t('admin.common.error'), error.message);
+      Alert.alert(t('admin.common.error'), t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
     },
   });
 
@@ -707,7 +672,7 @@ const addUserCountryMutation = useMutation({
       void sermonsQuery.refetch();
     },
     onError: (error) => {
-      Alert.alert(t('admin.common.error'), error.message);
+      Alert.alert(t('admin.common.error'), t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
     },
   });
 
@@ -717,7 +682,7 @@ const addUserCountryMutation = useMutation({
       void sermonsQuery.refetch();
     },
     onError: (error) => {
-      Alert.alert(t('admin.common.error'), error.message);
+      Alert.alert(t('admin.common.error'), t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
     },
   });
 
@@ -890,7 +855,7 @@ const addUserCountryMutation = useMutation({
           <View style={styles.errorContainer}>
             <Text style={styles.errorTitle}>{t('admin.users.unableToLoadMembers')}</Text>
             <Text style={styles.errorMessage}>
-              {usersQuery.error?.message ?? t('admin.users.connectionError')}
+              {t('admin.users.connectionError')}
             </Text>
             <TouchableOpacity style={styles.retryButton} onPress={() => usersQuery.refetch()}>
               <Text style={styles.retryButtonText}>{t('admin.common.retry')}</Text>
