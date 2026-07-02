@@ -75,8 +75,7 @@ export default function ForgotPasswordScreen() {
       setCode('');
       setStep('code');
       Alert.alert(t('auth.passwordReset.codeSentTitle'), t('auth.passwordReset.resetCodeSentMessage'));
-    } catch (err) {
-      console.log('[ForgotPassword] Send code error:', err);
+    } catch {
       Alert.alert(t('auth.passwordReset.errorTitle'), t('auth.passwordReset.genericError'));
     } finally {
       setIsLoading(false);
@@ -112,8 +111,7 @@ export default function ForgotPasswordScreen() {
       }
 
       setStep('password');
-    } catch (err) {
-      console.log('[ForgotPassword] Verify code error:', err);
+    } catch {
       Alert.alert(t('auth.passwordReset.errorTitle'), t('auth.passwordReset.verifyCodeError'));
     } finally {
       setIsLoading(false);
@@ -152,8 +150,7 @@ export default function ForgotPasswordScreen() {
       }
 
       setStep('done');
-    } catch (err) {
-      console.log('[ForgotPassword] Update password error:', err);
+    } catch {
       Alert.alert(t('auth.passwordReset.errorTitle'), t('auth.passwordReset.updatePasswordError'));
     } finally {
       setIsLoading(false);
