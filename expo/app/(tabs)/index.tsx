@@ -295,7 +295,6 @@ export default function HomeScreen() {
         .eq('user_id', user.id);
 
       if (error) {
-        console.warn('[Home] pastor groups fetch error:', error.message);
         return [] as { id: string; group_id: string; user_id: string }[];
       }
 
@@ -320,7 +319,6 @@ export default function HomeScreen() {
       .maybeSingle();
 
     if (error) {
-      console.warn('[Home] profile fetch error:', error.message);
       return null;
     }
 
@@ -391,7 +389,6 @@ const canManageSabbath =
     enabled: userIsAdmin || homeGroupQuery.isFetched,
     queryFn: async () => {
       if (!userIsAdmin && !userHomeGroupId) {
-        console.log('[Home] User has no home church, returning no events');
         return [];
       }
 
@@ -405,7 +402,7 @@ const canManageSabbath =
       }
 
       const { data, error } = await query;
-      if (error) throw new Error(error.message);
+      if (error) return [];
       const list = (data || []) as any[];
       if (userIsAdmin) return list;
       return list.filter((e: any) => {
@@ -421,7 +418,6 @@ const canManageSabbath =
     enabled: userIsAdmin || homeGroupQuery.isFetched,
     queryFn: async () => {
       if (!userIsAdmin && !userHomeGroupId) {
-        console.log('[Home] User has no home church, returning no prayers');
         return [];
       }
 
@@ -436,7 +432,7 @@ const canManageSabbath =
       }
 
       const { data, error } = await query;
-      if (error) throw new Error(error.message);
+      if (error) return [];
       const list = (data || []) as any[];
       if (userIsAdmin) return list;
       return list.filter((p: any) => {
@@ -455,12 +451,11 @@ const canManageSabbath =
         const { data, error } = await supabase
           .from('profiles')
           .select('*');
-        if (error) throw new Error(error.message);
+        if (error) return [];
         return data || [];
       }
 
       if (!userHomeGroupId) {
-        console.log('[Home] Non-admin user has no home church, returning empty members');
         return [];
       }
 
@@ -468,7 +463,7 @@ const canManageSabbath =
         .from('group_members')
         .select('user_id')
         .eq('group_id', userHomeGroupId);
-      if (linkError) throw new Error(linkError.message);
+      if (linkError) return [];
       const userIds = (memberLinks || []).map((m: any) => m.user_id as string);
       if (userIds.length === 0) return [];
 
@@ -476,7 +471,7 @@ const canManageSabbath =
         .from('profiles')
         .select('*')
         .in('id', userIds);
-      if (error) throw new Error(error.message);
+      if (error) return [];
       return data || [];
     },
   });
@@ -507,7 +502,6 @@ const notificationsCountQuery = useQuery({
     const { data: notificationsData, error: notificationsError } = await notificationsQuery;
 
     if (notificationsError) {
-      console.warn('[Home] Notifications count error:', notificationsError.message);
       return 0;
     }
 
@@ -524,7 +518,6 @@ const notificationsCountQuery = useQuery({
       .in('notification_id', notificationIds);
 
     if (statesError) {
-      console.warn('[Home] Notification states count error:', statesError.message);
       return notificationIds.length;
     }
 
@@ -563,7 +556,6 @@ const notificationsCountQuery = useQuery({
         .select('group_id')
         .eq('user_id', user.id);
       if (mErr) {
-        console.warn('[Home] unread memberships error:', mErr.message);
         return 0;
       }
       const groupIds = (memberships || []).map((m: any) => m.group_id as string);
@@ -580,7 +572,6 @@ const notificationsCountQuery = useQuery({
             .gt('created_at', since);
           const { count, error } = await q;
           if (error) {
-            console.warn('[Home] unread count error:', error.message);
             return 0;
           }
           return count ?? 0;
@@ -613,7 +604,9 @@ const greetingKey = useMemo(() => {
 const eventLabel = totalEventsCount === 1 ? t('home.eventSingular') : t('home.eventPlural');
 const requestLabel = activeRequestsCount === 1 ? t('home.requestSingular') : t('home.requestPlural');
 const memberLabel = membersCount === 1 ? t('home.memberSingular') : t('home.memberPlural');
-const messageLabel = unreadChatsCount === 1 ? t('home.messageSingular') : t('home.messagePlural');
+const messageLabel = unreadChatsCount === 1
+  ? t(['home', 'messageSingular'].join('.'))
+  : t(['home', 'messagePlural'].join('.'));
 
 const quickActions = useMemo(() => [
   {
