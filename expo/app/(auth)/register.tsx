@@ -112,8 +112,7 @@ export default function RegisterScreen() {
       setCode('');
       setStep('code');
       Alert.alert(t('auth.passwordReset.codeSentTitle'), t('auth.registerScreen.confirmationCodeSentMessage'));
-    } catch (error) {
-      console.log('[Register] Sign up error:', error);
+    } catch {
       Alert.alert(t('auth.passwordReset.errorTitle'), t('auth.registerScreen.createAccountError'));
     } finally {
       setIsLoading(false);
@@ -150,8 +149,7 @@ export default function RegisterScreen() {
 
       await supabase.auth.signOut({ scope: 'local' });
       setStep('done');
-    } catch (error) {
-      console.log('[Register] Verify code error:', error);
+    } catch {
       Alert.alert(t('auth.passwordReset.errorTitle'), t('auth.passwordReset.verifyCodeError'));
     } finally {
       setIsLoading(false);
@@ -180,8 +178,7 @@ export default function RegisterScreen() {
       }
 
       Alert.alert(t('auth.passwordReset.codeSentTitle'), t('auth.registerScreen.newestCodeSentMessage'));
-    } catch (error) {
-      console.log('[Register] Resend code error:', error);
+    } catch {
       Alert.alert(t('auth.passwordReset.errorTitle'), t('auth.registerScreen.resendCodeError'));
     } finally {
       setIsLoading(false);
