@@ -1,0 +1,32 @@
+export const churches = [
+  {
+    name: "Gemeinde Zürich",
+    slug: "zuerich",
+    address: "Langfurrenstrasse 64",
+    postalCode: "8105",
+    city: "Regensdorf",
+    country: "Schweiz",
+    note: "Gemieteter Raum",
+    languages: ["DE"],
+  },
+  {
+    name: "Gemeinde Genève",
+    slug: "geneve",
+    address: "Chemin du Clos 20",
+    postalCode: "1212",
+    city: "Grand-Lancy",
+    country: "Schweiz",
+    note: "Gemieteter Raum",
+    languages: ["FR"],
+  },
+  {
+    name: "Gemeinde Bern",
+    slug: "bern",
+    address: "Oberbottigenweg 35",
+    postalCode: "3019",
+    city: "Bern",
+    country: "Schweiz",
+    note: "Kirche Oberbottigen · Gemieteter Raum",
+    languages: ["DE"],
+  },
+];
