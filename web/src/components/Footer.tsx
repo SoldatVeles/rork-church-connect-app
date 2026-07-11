@@ -18,8 +18,8 @@ export function Footer() {
           </div>
 
           <p className="text-sm leading-6 text-white/75">
-            {siteConfig.name}.
-            Verbunden im Glauben, im Gebet und in der Mission.
+            {siteConfig.name}. Verbunden im Glauben, im Gebet und in der
+            Mission.
           </p>
         </div>
 
@@ -48,6 +48,14 @@ export function Footer() {
             <li>
               <Link href="/gebet" className="hover:text-white">
                 Gebet
+              </Link>
+            </li>
+            <li>
+              <Link
+                href={siteConfig.freeBooks.href}
+                className="hover:text-white"
+              >
+                Kostenlose Bücher
               </Link>
             </li>
             <li>

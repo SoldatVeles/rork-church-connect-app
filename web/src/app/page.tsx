@@ -51,8 +51,14 @@ export default function Home() {
               >
                 Veranstaltungen ansehen
               </Link>
+              <Link
+                href={siteConfig.freeBooks.href}
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-white/20 bg-white/10 px-6 py-3 font-semibold text-white backdrop-blur transition hover:bg-white/20"
+              >
+                Kostenlose Bücher
+              </Link>
             </div>
-
+            
             <div className="mt-10 grid max-w-xl grid-cols-3 gap-4 border-t border-white/10 pt-8">
               <div>
                 <p className="text-3xl font-bold text-[#f0d28a]">3</p>

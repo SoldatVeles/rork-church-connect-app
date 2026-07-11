@@ -4,6 +4,14 @@ export const siteConfig = {
   domain: "sdarm.ch",
   email: "info@sdarm.ch",
 
+    freeBooks: {
+    title: "Kostenlose Bücher bestellen",
+    shortTitle: "Kostenlose Bücher",
+    href: "/kostenlose-buecher",
+    description:
+        "Bestellen Sie kostenlos ausgewählte christliche Bücher und Bibelmaterial für Ihr persönliches Studium.",
+    },
+
   defaultLanguage: "de",
 
   languages: [

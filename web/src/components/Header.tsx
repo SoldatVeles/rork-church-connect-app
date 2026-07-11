@@ -1,9 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, Smartphone } from "lucide-react";
-import { useState } from "react";
+import { Menu, Smartphone, X } from "lucide-react";
 
 import { siteConfig } from "@/config/site";
 
@@ -22,8 +22,8 @@ export function Header() {
           </div>
 
           <div className="leading-tight">
-           <p className="text-lg font-bold text-[#0b2341]">
-            STA Reformationsbewegung
+            <p className="text-lg font-bold text-[#0b2341]">
+              STA Reformationsbewegung
             </p>
             <p className="text-sm font-semibold text-[#496b3f]">Schweiz</p>
           </div>
@@ -52,6 +52,13 @@ export function Header() {
         </nav>
 
         <div className="hidden items-center gap-3 lg:flex">
+          <Link
+            href={siteConfig.freeBooks.href}
+            className="inline-flex items-center rounded-md bg-[#d6a63f] px-4 py-2.5 text-sm font-semibold text-[#0b2341] shadow-sm hover:bg-[#c99631]"
+          >
+            {siteConfig.freeBooks.shortTitle}
+          </Link>
+
           <Link
             href="/app"
             className="inline-flex items-center gap-2 rounded-md bg-[#0b2341] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#12365f]"
@@ -87,9 +94,17 @@ export function Header() {
             ))}
 
             <Link
+              href={siteConfig.freeBooks.href}
+              onClick={() => setOpen(false)}
+              className="mt-3 rounded-md bg-[#d6a63f] px-4 py-3 text-center text-sm font-semibold text-[#0b2341]"
+            >
+              {siteConfig.freeBooks.shortTitle}
+            </Link>
+
+            <Link
               href="/app"
               onClick={() => setOpen(false)}
-              className="mt-3 rounded-md bg-[#0b2341] px-4 py-3 text-center text-sm font-semibold text-white"
+              className="rounded-md bg-[#0b2341] px-4 py-3 text-center text-sm font-semibold text-white"
             >
               Church Connect App
             </Link>
