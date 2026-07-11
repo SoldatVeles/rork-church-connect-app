@@ -1,3 +1,4 @@
+import { siteConfig } from "@/config/site";
 import Link from "next/link";
 import { Mail, MapPin, Globe } from "lucide-react";
 
@@ -17,7 +18,7 @@ export function Footer() {
           </div>
 
           <p className="text-sm leading-6 text-white/75">
-            Siebenten-Tags-Adventisten Reformbewegung Schweiz.
+            {siteConfig.name}.
             Verbunden im Glauben, im Gebet und in der Mission.
           </p>
         </div>
@@ -62,11 +63,11 @@ export function Footer() {
           <ul className="space-y-3 text-sm text-white/75">
             <li className="flex gap-2">
               <Globe size={16} />
-              sdarm.ch
+              {siteConfig.domain}
             </li>
             <li className="flex gap-2">
               <Mail size={16} />
-              info@sdarm.ch
+              {siteConfig.email}
             </li>
             <li className="flex gap-2">
               <MapPin size={16} />
@@ -78,7 +79,7 @@ export function Footer() {
 
       <div className="border-t border-white/10">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-6 py-5 text-xs text-white/60 md:flex-row md:items-center md:justify-between lg:px-8">
-          <p>© 2026 Siebenten-Tags-Adventisten Reformbewegung Schweiz.</p>
+          <p>© 2026 {siteConfig.name}.</p>
 
           <div className="flex gap-5">
             <Link href="/impressum" className="hover:text-white">

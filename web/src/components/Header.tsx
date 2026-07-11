@@ -5,16 +5,9 @@ import { usePathname } from "next/navigation";
 import { Menu, X, Smartphone } from "lucide-react";
 import { useState } from "react";
 
-const navigation = [
-  { name: "Startseite", href: "/" },
-  { name: "Gemeinden", href: "/gemeinden" },
-  { name: "Veranstaltungen", href: "/veranstaltungen" },
-  { name: "Gebet", href: "/gebet" },
-  { name: "Über uns", href: "/ueber-uns" },
-  { name: "Glaubensgrundsätze", href: "/glaubensgrundsaetze" },
-  { name: "Ressourcen", href: "/ressourcen" },
-  { name: "Kontakt", href: "/kontakt" },
-];
+import { siteConfig } from "@/config/site";
+
+const navigation = siteConfig.navigation;
 
 export function Header() {
   const pathname = usePathname();
@@ -29,8 +22,8 @@ export function Header() {
           </div>
 
           <div className="leading-tight">
-            <p className="text-lg font-bold text-[#0b2341]">
-              Reformbewegung
+           <p className="text-lg font-bold text-[#0b2341]">
+            STA Reformationsbewegung
             </p>
             <p className="text-sm font-semibold text-[#496b3f]">Schweiz</p>
           </div>

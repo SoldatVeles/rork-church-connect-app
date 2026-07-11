@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { churches } from "@/data/churches";
 import { publicEvents } from "@/data/events";
+import { siteConfig } from "@/config/site";
 
 export default function Home() {
   return (
@@ -27,7 +28,7 @@ export default function Home() {
             </p>
 
             <h1 className="max-w-4xl text-4xl font-bold leading-tight tracking-tight md:text-6xl">
-              Siebenten-Tags-Adventisten Reformbewegung Schweiz
+              {siteConfig.name}
             </h1>
 
             <p className="mt-6 max-w-2xl text-lg leading-8 text-white/80">
