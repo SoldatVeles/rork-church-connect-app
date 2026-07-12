@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, Smartphone, X } from "lucide-react";
@@ -17,9 +18,14 @@ export function Header() {
     <header className="sticky top-0 z-50 border-b border-[#e8e0d0] bg-white/95 backdrop-blur">
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 lg:px-8">
         <Link href="/" className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-md border-2 border-[#0b2341] text-[#0b2341]">
-            ✝
-          </div>
+          <Image
+            src="/images/sdarm-logo-navy-transparent.png"
+            alt="Logo der Siebenten Tags Adventisten Reformationsbewegung"
+            width={52}
+            height={42}
+            priority
+            className="h-11 w-auto"
+          />
 
           <div className="leading-tight">
             <p className="text-lg font-bold text-[#0b2341]">

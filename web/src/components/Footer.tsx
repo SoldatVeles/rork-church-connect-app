@@ -1,6 +1,7 @@
 import { siteConfig } from "@/config/site";
 import Link from "next/link";
 import { Mail, MapPin, Globe } from "lucide-react";
+import Image from "next/image";
 
 export function Footer() {
   return (
@@ -8,15 +9,20 @@ export function Footer() {
       <div className="mx-auto grid max-w-7xl gap-10 px-6 py-12 md:grid-cols-4 lg:px-8">
         <div>
           <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-md border border-white/70">
-              ✝
-            </div>
+            <Image
+              src="/images/sdarm-logo-white-transparent.png"
+              alt="Logo der Siebenten Tags Adventisten Reformationsbewegung"
+              width={48}
+              height={38}
+              className="h-10 w-auto"
+            />
+
             <div>
-              <p className="font-bold">Reformbewegung</p>
+              <p className="font-bold">STA Reformationsbewegung</p>
               <p className="text-sm text-white/70">Schweiz</p>
             </div>
           </div>
-
+      
           <p className="text-sm leading-6 text-white/75">
             {siteConfig.name}. Verbunden im Glauben, im Gebet und in der
             Mission.
