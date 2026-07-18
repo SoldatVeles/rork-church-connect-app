@@ -1,0 +1,16 @@
+{
+  "Header": {
+    "churchConnectApp": "Church Connect App",
+    "languageShort": "DE",
+    "openMenu": "Menü öffnen"
+  },
+  "Common": {
+    "freeBooks": "Kostenlose Bücher",
+    "contact": "Kontakt",
+    "learnMore": "Mehr erfahren"
+  },
+  "HomePage": {
+    "officialWebsite": "Offizielle Website",
+    "intro": "Eine Glaubensgemeinschaft in der Schweiz, verbunden durch Gottes Wort, den Sabbat, Gebet, Gemeinschaft und Mission."
+  }
+}

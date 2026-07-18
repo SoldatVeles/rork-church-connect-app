@@ -10,9 +10,11 @@ import {
   Smartphone,
   Users,
 } from "lucide-react";
+
+import { FreeBooksSection } from "@/components/FreeBooksSection";
+import { siteConfig } from "@/config/site";
 import { churches } from "@/data/churches";
 import { publicEvents } from "@/data/events";
-import { siteConfig } from "@/config/site";
 
 export default function Home() {
   return (
@@ -51,6 +53,7 @@ export default function Home() {
               >
                 Veranstaltungen ansehen
               </Link>
+
               <Link
                 href={siteConfig.freeBooks.href}
                 className="inline-flex items-center justify-center gap-2 rounded-md border border-white/20 bg-white/10 px-6 py-3 font-semibold text-white backdrop-blur transition hover:bg-white/20"
@@ -58,16 +61,18 @@ export default function Home() {
                 Kostenlose Bücher
               </Link>
             </div>
-            
+
             <div className="mt-10 grid max-w-xl grid-cols-3 gap-4 border-t border-white/10 pt-8">
               <div>
                 <p className="text-3xl font-bold text-[#f0d28a]">3</p>
                 <p className="mt-1 text-sm text-white/65">Gemeinden</p>
               </div>
+
               <div>
                 <p className="text-3xl font-bold text-[#f0d28a]">DE/FR</p>
                 <p className="mt-1 text-sm text-white/65">Sprachen</p>
               </div>
+
               <div>
                 <p className="text-3xl font-bold text-[#f0d28a]">CH</p>
                 <p className="mt-1 text-sm text-white/65">Schweiz</p>
@@ -83,10 +88,12 @@ export default function Home() {
                     <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#496b3f]">
                       Church Connect
                     </p>
+
                     <h2 className="mt-1 text-2xl font-bold">
                       Nächster Sabbat
                     </h2>
                   </div>
+
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#0b2341] text-white">
                     <Church size={24} />
                   </div>
@@ -96,6 +103,7 @@ export default function Home() {
                   <div className="rounded-2xl bg-white p-5 shadow-sm">
                     <div className="flex items-start gap-4">
                       <CalendarDays className="mt-1 text-[#d6a63f]" />
+
                       <div>
                         <h3 className="font-bold">Sabbatgottesdienst</h3>
                         <p className="mt-1 text-sm text-[#475569]">
@@ -108,6 +116,7 @@ export default function Home() {
                   <div className="rounded-2xl bg-white p-5 shadow-sm">
                     <div className="flex items-start gap-4">
                       <MessageCircleHeart className="mt-1 text-[#496b3f]" />
+
                       <div>
                         <h3 className="font-bold">Gebetsfokus</h3>
                         <p className="mt-1 text-sm text-[#475569]">
@@ -123,6 +132,7 @@ export default function Home() {
                       „Dieses Volk habe ich mir bereitet; es soll meinen Ruhm
                       verkündigen.“
                     </p>
+
                     <p className="mt-3 font-semibold text-[#f0d28a]">
                       Jesaja 43,21
                     </p>
@@ -133,7 +143,9 @@ export default function Home() {
 
             <div className="absolute -bottom-6 -left-6 hidden rounded-2xl bg-[#d6a63f] p-5 text-[#071d35] shadow-xl md:block">
               <p className="text-sm font-semibold">Verbunden in Christus</p>
-              <p className="mt-1 text-2xl font-bold">Bibel · Sabbat · Mission</p>
+              <p className="mt-1 text-2xl font-bold">
+                Bibel · Sabbat · Mission
+              </p>
             </div>
           </div>
         </div>
@@ -146,9 +158,11 @@ export default function Home() {
             <p className="text-sm font-semibold uppercase tracking-[0.25em] text-[#d6a63f]">
               Gemeinden
             </p>
+
             <h2 className="mt-3 text-3xl font-bold md:text-4xl">
               Unsere Gemeinden in der Schweiz
             </h2>
+
             <p className="mt-4 max-w-2xl text-[#475569]">
               Besuchen Sie eine unserer Gemeinden. Jeder Besucher ist herzlich
               willkommen.
@@ -220,9 +234,11 @@ export default function Home() {
             <p className="text-sm font-semibold uppercase tracking-[0.25em] text-[#d6a63f]">
               Veranstaltungen
             </p>
+
             <h2 className="mt-3 text-3xl font-bold md:text-4xl">
               Öffentlich sichtbare Termine
             </h2>
+
             <p className="mx-auto mt-4 max-w-2xl text-[#475569]">
               Veranstaltungen können später direkt aus Church Connect
               veröffentlicht werden.
@@ -246,6 +262,7 @@ export default function Home() {
                     <CalendarDays size={16} className="text-[#d6a63f]" />
                     {event.date} · {event.time}
                   </p>
+
                   <p className="flex gap-2">
                     <MapPin size={16} className="text-[#496b3f]" />
                     {event.location}
@@ -273,7 +290,9 @@ export default function Home() {
       <section className="mx-auto grid max-w-7xl gap-8 px-6 py-20 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
         <div className="rounded-3xl bg-[#496b3f] p-8 text-white">
           <HeartHandshake size={42} className="text-[#f0d28a]" />
+
           <h2 className="mt-6 text-3xl font-bold">Gebet verbindet</h2>
+
           <p className="mt-4 leading-7 text-white/80">
             Gebetsanliegen bleiben standardmässig privat. Öffentlich sichtbar
             werden nur allgemeine oder ausdrücklich freigegebene Anliegen.
@@ -331,9 +350,11 @@ export default function Home() {
             <p className="text-sm font-semibold uppercase tracking-[0.25em] text-[#d6a63f]">
               Grundlage
             </p>
+
             <h2 className="mt-3 text-3xl font-bold md:text-4xl">
               Bibel, Sabbat und Mission
             </h2>
+
             <p className="mt-4 text-white/75">
               Unser Glaube gründet sich auf die Heilige Schrift und auf Jesus
               Christus als unseren Erlöser.
@@ -361,7 +382,9 @@ export default function Home() {
 
             <div className="rounded-3xl border border-white/10 bg-white/10 p-6">
               <HeartHandshake className="text-[#d6a63f]" />
-              <h3 className="mt-5 text-xl font-bold">Dienst am Menschen</h3>
+              <h3 className="mt-5 text-xl font-bold">
+                Dienst am Menschen
+              </h3>
               <p className="mt-3 text-white/75">
                 Wir möchten Menschen praktisch helfen und sie mit Christus
                 verbinden.
@@ -371,6 +394,8 @@ export default function Home() {
         </div>
       </section>
 
+      <FreeBooksSection />
+
       {/* App CTA */}
       <section className="mx-auto max-w-7xl px-6 py-20 lg:px-8">
         <div className="overflow-hidden rounded-[2rem] bg-[#d6a63f]">
@@ -379,9 +404,11 @@ export default function Home() {
               <p className="text-sm font-semibold uppercase tracking-[0.25em] text-[#0b2341]/70">
                 Church Connect
               </p>
+
               <h2 className="mt-3 text-3xl font-bold text-[#071d35] md:text-4xl">
                 Eine Plattform für Website und App
               </h2>
+
               <p className="mt-4 max-w-2xl text-[#071d35]/75">
                 Öffentliche Veranstaltungen und freigegebene Informationen
                 können später direkt aus Church Connect auf sdarm.ch angezeigt
@@ -400,6 +427,7 @@ export default function Home() {
             <div className="rounded-[1.5rem] bg-[#071d35] p-6 text-white shadow-xl">
               <div className="mb-5 flex items-center justify-between">
                 <p className="font-bold">Öffentlich sichtbar</p>
+
                 <span className="rounded-full bg-[#496b3f] px-3 py-1 text-xs font-bold">
                   Sicher
                 </span>
@@ -409,9 +437,11 @@ export default function Home() {
                 <p className="rounded-xl bg-white/10 p-3">
                   Veranstaltungen: nur wenn freigegeben
                 </p>
+
                 <p className="rounded-xl bg-white/10 p-3">
                   Gebetsanliegen: privat standardmässig
                 </p>
+
                 <p className="rounded-xl bg-white/10 p-3">
                   Mitglieder: nicht öffentlich sichtbar
                 </p>

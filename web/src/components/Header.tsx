@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Menu, Smartphone, X } from "lucide-react";
 
 import { siteConfig } from "@/config/site";
@@ -12,6 +13,7 @@ const navigation = siteConfig.navigation;
 
 export function Header() {
   const pathname = usePathname();
+  const t = useTranslations("Header");
   const [open, setOpen] = useState(false);
 
   return (
@@ -20,7 +22,7 @@ export function Header() {
         <Link href="/" className="flex items-center gap-3">
           <Image
             src="/images/sdarm-logo-navy-transparent.png"
-            alt="Logo der Siebenten Tags Adventisten Reformationsbewegung"
+            alt="Logo der Siebenten Tags Adventisten der Reformationbewegung"
             width={52}
             height={42}
             priority
@@ -29,9 +31,12 @@ export function Header() {
 
           <div className="leading-tight">
             <p className="text-lg font-bold text-[#0b2341]">
-              STA Reformationsbewegung
+              STA Reformationbewegung
             </p>
-            <p className="text-sm font-semibold text-[#496b3f]">Schweiz</p>
+
+            <p className="text-sm font-semibold text-[#496b3f]">
+              Schweiz
+            </p>
           </div>
         </Link>
 
@@ -70,16 +75,24 @@ export function Header() {
             className="inline-flex items-center gap-2 rounded-md bg-[#0b2341] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#12365f]"
           >
             <Smartphone size={16} />
-            Church Connect App
+            {t("churchConnectApp")}
           </Link>
 
-          <button className="text-sm font-bold text-[#0b2341]">DE ▾</button>
+          <button
+            type="button"
+            className="text-sm font-bold text-[#0b2341]"
+            aria-label="Sprache auswählen"
+          >
+            {t("languageShort")} ▾
+          </button>
         </div>
 
         <button
-          onClick={() => setOpen(!open)}
+          type="button"
+          onClick={() => setOpen((current) => !current)}
           className="rounded-md border border-[#e8e0d0] p-2 text-[#0b2341] lg:hidden"
-          aria-label="Menü öffnen"
+          aria-label={t("openMenu")}
+          aria-expanded={open}
         >
           {open ? <X size={24} /> : <Menu size={24} />}
         </button>
@@ -112,7 +125,7 @@ export function Header() {
               onClick={() => setOpen(false)}
               className="rounded-md bg-[#0b2341] px-4 py-3 text-center text-sm font-semibold text-white"
             >
-              Church Connect App
+              {t("churchConnectApp")}
             </Link>
           </nav>
         </div>
