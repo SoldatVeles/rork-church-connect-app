@@ -13,10 +13,14 @@ import {
 
 import { FreeBooksSection } from "@/components/FreeBooksSection";
 import { siteConfig } from "@/config/site";
-import { churches } from "@/data/churches";
+import { getWebsiteChurches } from "@/lib/website-churches";
 import { publicEvents } from "@/data/events";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const churches = await getWebsiteChurches();
+
   return (
     <main className="min-h-screen bg-[#f8f6f1] text-[#0b2341]">
       {/* Hero */}
