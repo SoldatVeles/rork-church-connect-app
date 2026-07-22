@@ -27,6 +27,7 @@ import type { Event, EventType } from '@/types/event';
 import { supabase } from '@/lib/supabase';
 import { addEventToCalendar } from '@/utils/calendar-sync';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { EventPublicationModal } from '@/components/EventPublicationModal';
 
 const allowedEventTypes: EventType[] = ['bible_study', 'youth', 'special', 'conference'];
 
@@ -74,6 +75,7 @@ export default function EventsScreen() {
   const [selectedFilter, setSelectedFilter] = useState<EventType | 'all'>('all');
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [showDetailsModal, setShowDetailsModal] = useState<boolean>(false);
+  const [showPublicationModal, setShowPublicationModal] = useState<boolean>(false);
   const [registeringEventId, setRegisteringEventId] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [form, setForm] = useState<{
@@ -166,6 +168,40 @@ const filterOptions = useMemo<{ key: EventType | 'all'; label: string; accent: s
   // For display/labels we can still fall back to the church picker name.
   const effectiveChurchName = userHomeChurch?.name ?? currentChurch?.name ?? null;
 
+  const manageableGroupsQuery = useQuery({
+    queryKey: ['website-event-manageable-groups', user?.id, user?.role],
+    enabled: !!user?.id,
+    queryFn: async (): Promise<string[]> => {
+      if (!user?.id || user.role === 'admin') return [];
+      if (user.role !== 'pastor' && user.role !== 'church_leader') return [];
+
+      const groupIds = new Set<string>();
+      const { data: pastorGroups, error: pastorGroupsError } = await supabase
+        .from('group_pastors')
+        .select('group_id')
+        .eq('user_id', user.id);
+
+      if (pastorGroupsError) throw new Error(pastorGroupsError.message);
+      (pastorGroups ?? []).forEach((assignment: any) => {
+        if (assignment.group_id) groupIds.add(assignment.group_id as string);
+      });
+
+      if (user.role === 'church_leader') {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('home_group_id')
+          .eq('id', user.id)
+          .single();
+
+        if (profileError) throw new Error(profileError.message);
+        const homeGroupId = (profile as any)?.home_group_id as string | null;
+        if (homeGroupId) groupIds.add(homeGroupId);
+      }
+
+      return Array.from(groupIds);
+    },
+  });
+
   const listQuery = useQuery({
     queryKey: ['events', userHomeGroupId, userIsAdmin, homeChurchQuery.isFetched],
     enabled: userIsAdmin || homeChurchQuery.isFetched,
@@ -223,6 +259,7 @@ const filterOptions = useMemo<{ key: EventType | 'all'; label: string; accent: s
             registeredUsers: registeredUsersSafe,
             isRegistrationOpen: event.is_registration_open ?? true,
             createdBy: event.created_by,
+            groupId: event.group_id ?? undefined,
             imageUrl: event.image_url ?? undefined,
             createdAt: new Date(event.created_at ?? new Date().toISOString()),
           } as Event;
@@ -433,12 +470,19 @@ return data;
     return match ?? selectedEvent;
   }, [allEvents, selectedEvent]);
 
+  const canManageActiveEvent = useMemo(() => {
+    if (!activeEvent?.groupId || !user) return false;
+    if (user.role === 'admin') return true;
+    return (manageableGroupsQuery.data ?? []).includes(activeEvent.groupId);
+  }, [activeEvent, manageableGroupsQuery.data, user]);
+
   useEffect(() => {
     if (!selectedEvent) {
       return;
     }
     const exists = allEvents.some(item => item.id === selectedEvent.id);
     if (!exists) {
+      setShowPublicationModal(false);
       setShowDetailsModal(false);
       setSelectedEvent(null);
     }
@@ -474,9 +518,20 @@ return data;
   }, [eventIdParam, notificationIdParam, allEvents, listQuery.isLoading]);
 
   const handleCloseDetails = useCallback(() => {
+    setShowPublicationModal(false);
     setShowDetailsModal(false);
     setSelectedEvent(null);
   }, []);
+
+  const handleOpenPublication = useCallback(() => {
+    setShowDetailsModal(false);
+    setShowPublicationModal(true);
+  }, []);
+
+  const handleClosePublication = useCallback(() => {
+    setShowPublicationModal(false);
+    if (selectedEvent) setShowDetailsModal(true);
+  }, [selectedEvent]);
 
 const registerMutation = useMutation({
   mutationFn: async ({ eventId }: { eventId: string }) => {
@@ -935,6 +990,31 @@ return data;
                       <Text style={styles.calendarSyncButtonText}>{t('events.addToCalendar')}</Text>
                     </TouchableOpacity>
 
+                    {canManageActiveEvent ? (
+                      <View style={styles.publicationManagerCard}>
+                        <View style={styles.publicationManagerHeader}>
+                          <Globe size={20} color="#f0d28a" />
+                          <View style={styles.publicationManagerText}>
+                            <Text style={styles.publicationManagerTitle}>
+                              {t('events.publication.manageTitle')}
+                            </Text>
+                            <Text style={styles.publicationManagerDescription}>
+                              {t('events.publication.manageDescription')}
+                            </Text>
+                          </View>
+                        </View>
+                        <TouchableOpacity
+                          testID={`manage-publication-button-${activeEvent.id}`}
+                          style={styles.publicationManagerButton}
+                          onPress={handleOpenPublication}
+                        >
+                          <Text style={styles.publicationManagerButtonText}>
+                            {t('events.publication.openManager')}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : null}
+
                     {activeEvent.isRegistrationOpen ? (
                       <TouchableOpacity
                         testID={`details-register-button-${activeEvent.id}`}
@@ -990,6 +1070,13 @@ return data;
           </View>
         </View>
       </Modal>
+
+      <EventPublicationModal
+        event={activeEvent}
+        eventTypeLabel={activeEvent ? getEventTypeLabel(activeEvent.type) : ''}
+        visible={showPublicationModal && !!activeEvent}
+        onClose={handleClosePublication}
+      />
 
       <Modal
         visible={showAddModal}
@@ -1608,6 +1695,45 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#1e3a8a',
+  },
+  publicationManagerCard: {
+    gap: 14,
+    padding: 18,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(240, 210, 138, 0.35)',
+    backgroundColor: '#172554',
+  },
+  publicationManagerHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  publicationManagerText: {
+    flex: 1,
+    gap: 4,
+  },
+  publicationManagerTitle: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  publicationManagerDescription: {
+    color: '#cbd5e1',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  publicationManagerButton: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    backgroundColor: '#f0d28a',
+  },
+  publicationManagerButtonText: {
+    color: '#0f172a',
+    fontSize: 14,
+    fontWeight: '700',
   },
   detailsRegisterButton: {
     backgroundColor: '#1e3a8a',

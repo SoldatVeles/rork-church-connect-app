@@ -9,6 +9,7 @@ export interface Event {
   maxAttendees?: number;
   currentAttendees: number;
   createdBy: string;
+  groupId?: string;
   imageUrl?: string;
   isRegistrationOpen: boolean;
   registeredUsers: string[];

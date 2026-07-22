@@ -8,10 +8,16 @@ import {
   MapPin,
   ShieldCheck,
 } from "lucide-react";
-import { publicEvents } from "@/data/events";
-import { churches } from "@/data/churches";
+import { getWebsiteChurches } from "@/lib/website-churches";
+import { getWebsiteEvents } from "@/lib/website-events";
 
-export default function VeranstaltungenPage() {
+export const dynamic = "force-dynamic";
+
+export default async function VeranstaltungenPage() {
+  const [events, churches] = await Promise.all([
+    getWebsiteEvents(),
+    getWebsiteChurches(),
+  ]);
   return (
     <main className="min-h-screen bg-[#f8f6f1] text-[#0b2341]">
       <section className="relative overflow-hidden bg-[#071d35] px-6 py-20 text-white">
@@ -61,8 +67,8 @@ export default function VeranstaltungenPage() {
               Nächste öffentliche Termine
             </h2>
             <p className="mt-4 max-w-2xl text-[#475569]">
-              In der ersten Version sind diese Termine noch statisch. Später
-              werden sie direkt aus Church Connect und Supabase geladen.
+              Diese Termine werden direkt aus Church Connect geladen und nur
+              nach ausdrücklicher Freigabe öffentlich angezeigt.
             </p>
           </div>
 
@@ -77,10 +83,11 @@ export default function VeranstaltungenPage() {
           </div>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
-          {publicEvents.map((event) => (
+        {events.length > 0 ? (
+          <div className="grid gap-6 md:grid-cols-3">
+            {events.map((event) => (
             <article
-              key={event.title}
+              key={event.slug}
               className="overflow-hidden rounded-3xl border border-[#e5dfd0] bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-md"
             >
               <div className="bg-[linear-gradient(135deg,#0b2341,#496b3f)] p-6 text-white">
@@ -113,17 +120,32 @@ export default function VeranstaltungenPage() {
                   {event.description}
                 </p>
 
+                {event.registrationInformation && (
+                  <p className="mt-4 rounded-xl bg-[#eef3ea] p-3 text-sm text-[#496b3f]">
+                    {event.registrationInformation}
+                  </p>
+                )}
+
                 <Link
-                  href="/kontakt"
+                  href={
+                    event.churchSlug
+                      ? `/gemeinden#${event.churchSlug}`
+                      : "/kontakt"
+                  }
                   className="mt-6 inline-flex items-center gap-2 font-semibold text-[#0b2341] hover:underline"
                 >
-                  Mehr Informationen
+                  {event.churchName ?? "Mehr Informationen"}
                   <ArrowRight size={16} />
                 </Link>
               </div>
             </article>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-3xl border border-[#e5dfd0] bg-white p-10 text-center text-[#475569] shadow-sm">
+            Zurzeit sind keine öffentlichen Veranstaltungen geplant.
+          </p>
+        )}
       </section>
 
       <section className="bg-white py-16">
@@ -136,8 +158,8 @@ export default function VeranstaltungenPage() {
               Veranstaltungen pro Standort
             </h2>
             <p className="mx-auto mt-4 max-w-2xl text-[#475569]">
-              Besucher können später nach Standort, Sprache und Art der
-              Veranstaltung filtern.
+              Entdecken Sie die Gemeinde hinter einer Veranstaltung und
+              planen Sie Ihren Besuch.
             </p>
           </div>
 
@@ -194,15 +216,15 @@ export default function VeranstaltungenPage() {
               </h2>
 
               <p className="mt-4 max-w-2xl leading-7 text-white/75">
-                Später können Verantwortliche in Church Connect entscheiden, ob
-                ein Anlass privat bleibt, nur für Mitglieder sichtbar ist oder
-                öffentlich auf sdarm.ch erscheinen soll.
+                Verantwortliche können in Church Connect eine bereinigte
+                öffentliche Version prüfen, veröffentlichen, aktualisieren oder
+                wieder von sdarm.ch zurückziehen.
               </p>
             </div>
 
             <div className="rounded-3xl bg-white/10 p-6">
               <p className="font-bold text-[#f0d28a]">
-                Geplante Sichtbarkeiten
+                Verfügbare Sichtbarkeiten
               </p>
 
               <ul className="mt-4 space-y-3 text-sm text-white/80">

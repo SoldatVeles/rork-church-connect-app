@@ -14,12 +14,15 @@ import {
 import { FreeBooksSection } from "@/components/FreeBooksSection";
 import { siteConfig } from "@/config/site";
 import { getWebsiteChurches } from "@/lib/website-churches";
-import { publicEvents } from "@/data/events";
+import { getWebsiteEvents } from "@/lib/website-events";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const churches = await getWebsiteChurches();
+  const [churches, events] = await Promise.all([
+    getWebsiteChurches(),
+    getWebsiteEvents(),
+  ]);
 
   return (
     <main className="min-h-screen bg-[#f8f6f1] text-[#0b2341]">
@@ -244,15 +247,16 @@ export default async function Home() {
             </h2>
 
             <p className="mx-auto mt-4 max-w-2xl text-[#475569]">
-              Veranstaltungen können später direkt aus Church Connect
-              veröffentlicht werden.
+              Freigegebene Veranstaltungen werden direkt aus Church Connect
+              veröffentlicht.
             </p>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-3">
-            {publicEvents.map((event) => (
+          {events.length > 0 ? (
+            <div className="grid gap-6 md:grid-cols-3">
+              {events.slice(0, 3).map((event) => (
               <article
-                key={event.title}
+                key={event.slug}
                 className="rounded-3xl border border-[#e5dfd0] bg-[#f8f6f1] p-6"
               >
                 <span className="rounded-full bg-[#0b2341] px-3 py-1 text-xs font-semibold text-white">
@@ -275,8 +279,13 @@ export default async function Home() {
 
                 <p className="mt-4 text-[#475569]">{event.description}</p>
               </article>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-3xl border border-[#e5dfd0] bg-[#f8f6f1] p-8 text-center text-[#475569]">
+              Zurzeit sind keine öffentlichen Veranstaltungen geplant.
+            </p>
+          )}
 
           <div className="mt-10 text-center">
             <Link
@@ -415,8 +424,8 @@ export default async function Home() {
 
               <p className="mt-4 max-w-2xl text-[#071d35]/75">
                 Öffentliche Veranstaltungen und freigegebene Informationen
-                können später direkt aus Church Connect auf sdarm.ch angezeigt
-                werden.
+                werden nach ausdrücklicher Freigabe direkt aus Church Connect
+                auf sdarm.ch angezeigt.
               </p>
 
               <Link
