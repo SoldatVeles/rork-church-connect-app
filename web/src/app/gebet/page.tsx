@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   ArrowRight,
   CalendarDays,
+  CheckCircle2,
   Church,
   Clock,
   HeartHandshake,
@@ -11,43 +12,18 @@ import {
   ShieldCheck,
   Users,
 } from "lucide-react";
+import { getWebsiteEvents } from "@/lib/website-events";
+import { getWebsitePrayers } from "@/lib/website-prayers";
 
-const prayerFocus = [
-  {
-    title: "Familien & Jugend",
-    description:
-      "Wir beten für starke Familien, Kinder, Jugendliche und geistliches Wachstum.",
-  },
-  {
-    title: "Gemeinden in der Schweiz",
-    description:
-      "Wir beten für unsere Gemeinden in Zürich, Genève und Bern und für ihre Aufgaben.",
-  },
-  {
-    title: "Mission & Bibelstudien",
-    description:
-      "Wir beten für Menschen, die Gottes Wort kennenlernen und Jesus Christus begegnen möchten.",
-  },
-];
+export const dynamic = "force-dynamic";
 
-const prayerMeetings = [
-  {
-    title: "Gemeinsames Gebet",
-    church: "Gemeinden in der Schweiz",
-    date: "Regelmässig",
-    time: "Nach lokaler Absprache",
-    location: "Zürich, Genève und Bern",
-  },
-  {
-    title: "Gebet für Familien",
-    church: "Schweizweit",
-    date: "Aktuell",
-    time: "Privat und gemeinsam",
-    location: "In den Gemeinden und Familien",
-  },
-];
+export default async function GebetPage() {
+  const [publicPrayers, events] = await Promise.all([
+    getWebsitePrayers(),
+    getWebsiteEvents(),
+  ]);
+  const prayerMeetings = events.filter((event) => event.type === "Gebet");
 
-export default function GebetPage() {
   return (
     <main className="min-h-screen bg-[#f8f6f1] text-[#0b2341]">
       <section className="relative overflow-hidden bg-[#071d35] px-6 py-20 text-white">
@@ -101,23 +77,47 @@ export default function GebetPage() {
           </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
-          {prayerFocus.map((item) => (
-            <article
-              key={item.title}
-              className="rounded-3xl border border-[#e5dfd0] bg-white p-7 shadow-sm"
-            >
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#eef3ea] text-[#496b3f]">
-                <HeartHandshake size={28} />
-              </div>
+        {publicPrayers.length > 0 ? (
+          <div className="grid gap-6 md:grid-cols-3">
+            {publicPrayers.map((prayer) => (
+              <article
+                key={prayer.id}
+                className="rounded-3xl border border-[#e5dfd0] bg-white p-7 shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#eef3ea] text-[#496b3f]">
+                    <HeartHandshake size={28} />
+                  </div>
+                  {prayer.isAnswered ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#dcfce7] px-3 py-1 text-xs font-semibold text-[#166534]">
+                      <CheckCircle2 size={14} />
+                      Erhört
+                    </span>
+                  ) : null}
+                </div>
 
-              <h3 className="mt-5 text-xl font-bold">{item.title}</h3>
-              <p className="mt-3 leading-7 text-[#475569]">
-                {item.description}
-              </p>
-            </article>
-          ))}
-        </div>
+                <p className="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-[#d6a63f]">
+                  {prayer.category}
+                </p>
+                <h3 className="mt-2 text-xl font-bold">{prayer.title}</h3>
+                <p className="mt-3 leading-7 text-[#475569]">
+                  {prayer.details}
+                </p>
+                <Link
+                  href={`/gemeinden#${prayer.churchSlug}`}
+                  className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-[#496b3f] hover:underline"
+                >
+                  {prayer.churchName}
+                  <ArrowRight size={15} />
+                </Link>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-3xl border border-[#e5dfd0] bg-white p-10 text-center text-[#475569] shadow-sm">
+            Zurzeit sind keine öffentlichen Gebetsschwerpunkte veröffentlicht.
+          </p>
+        )}
       </section>
 
       <section id="gebetstreffen" className="bg-white py-16">
@@ -131,8 +131,8 @@ export default function GebetPage() {
                 Gemeinsam beten
               </h2>
               <p className="mt-4 max-w-2xl text-[#475569]">
-                Öffentliche Gebetstreffen können später direkt aus Church
-                Connect veröffentlicht werden.
+                Freigegebene Gebetstreffen werden direkt aus Church Connect
+                veröffentlicht.
               </p>
             </div>
 
@@ -145,38 +145,44 @@ export default function GebetPage() {
             </Link>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2">
-            {prayerMeetings.map((meeting) => (
-              <article
-                key={meeting.title}
-                className="rounded-3xl border border-[#e5dfd0] bg-[#f8f6f1] p-7"
-              >
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#0b2341] text-white">
-                  <Church size={28} />
-                </div>
+          {prayerMeetings.length > 0 ? (
+            <div className="grid gap-6 md:grid-cols-2">
+              {prayerMeetings.map((meeting) => (
+                <article
+                  key={meeting.slug}
+                  className="rounded-3xl border border-[#e5dfd0] bg-[#f8f6f1] p-7"
+                >
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#0b2341] text-white">
+                    <Church size={28} />
+                  </div>
 
-                <h3 className="mt-5 text-2xl font-bold">{meeting.title}</h3>
-                <p className="mt-2 text-[#496b3f]">{meeting.church}</p>
-
-                <div className="mt-5 space-y-3 text-sm text-[#475569]">
-                  <p className="flex gap-3">
-                    <CalendarDays size={18} className="text-[#d6a63f]" />
-                    {meeting.date}
+                  <h3 className="mt-5 text-2xl font-bold">{meeting.title}</h3>
+                  <p className="mt-2 text-[#496b3f]">
+                    {meeting.churchName ?? "Schweiz"}
                   </p>
 
-                  <p className="flex gap-3">
-                    <Clock size={18} className="text-[#d6a63f]" />
-                    {meeting.time}
-                  </p>
-
-                  <p className="flex gap-3">
-                    <MapPin size={18} className="text-[#496b3f]" />
-                    {meeting.location}
-                  </p>
-                </div>
-              </article>
-            ))}
-          </div>
+                  <div className="mt-5 space-y-3 text-sm text-[#475569]">
+                    <p className="flex gap-3">
+                      <CalendarDays size={18} className="text-[#d6a63f]" />
+                      {meeting.date}
+                    </p>
+                    <p className="flex gap-3">
+                      <Clock size={18} className="text-[#d6a63f]" />
+                      {meeting.time}
+                    </p>
+                    <p className="flex gap-3">
+                      <MapPin size={18} className="text-[#496b3f]" />
+                      {meeting.location}
+                    </p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-3xl border border-[#e5dfd0] bg-[#f8f6f1] p-8 text-center text-[#475569]">
+              Aktuell sind keine öffentlichen Gebetstreffen geplant.
+            </p>
+          )}
         </div>
       </section>
 
@@ -297,8 +303,9 @@ export default function GebetPage() {
                 Gebet in Church Connect
               </h3>
               <p className="mt-4 leading-7 text-white/80">
-                Später können Gebetsanliegen in der App einer Gemeinde
-                zugeordnet und sicher verwaltet werden.
+                Gebetsanliegen werden in der App einer Gemeinde zugeordnet und
+                sicher verwaltet. Nur eine ausdrücklich geprüfte, anonyme Kopie
+                kann auf der Website erscheinen.
               </p>
             </div>
           </div>

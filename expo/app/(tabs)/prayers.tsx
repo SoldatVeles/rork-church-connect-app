@@ -22,6 +22,7 @@ import { isAdmin } from '@/utils/permissions';
 import type { PrayerRequest, PrayerStatus, PrayerUpdate } from '@/types/prayer';
 import { supabase } from '@/lib/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { PrayerPublicationModal } from '@/components/PrayerPublicationModal';
 
 const PRAYER_UPDATES_NOT_CONFIGURED = 'PRAYER_UPDATES_NOT_CONFIGURED';
 const PRAYER_TRACKING_NOT_CONFIGURED = 'PRAYER_TRACKING_NOT_CONFIGURED';
@@ -57,6 +58,7 @@ export default function PrayersScreen() {
   const [isAnsweredUpdate, setIsAnsweredUpdate] = useState(false);
   const [expandedPrayers, setExpandedPrayers] = useState<Set<string>>(new Set());
   const [highlightedPrayerId, setHighlightedPrayerId] = useState<string | null>(null);
+  const [selectedPrayerForPublication, setSelectedPrayerForPublication] = useState<PrayerRequest | null>(null);
 
   const queryClient = useQueryClient();
   const userIsAdmin = isAdmin(user);
@@ -119,6 +121,40 @@ export default function PrayersScreen() {
   const effectiveChurchId = userHomeGroupId ?? currentChurch?.id ?? null;
   const effectiveChurchName = userHomeChurch?.name ?? currentChurch?.name ?? null;
 
+  const manageableGroupsQuery = useQuery({
+    queryKey: ['website-prayer-manageable-groups', user?.id, user?.role],
+    enabled: !!user?.id,
+    queryFn: async (): Promise<string[]> => {
+      if (!user?.id || user.role === 'admin') return [];
+      if (user.role !== 'pastor' && user.role !== 'church_leader') return [];
+
+      const groupIds = new Set<string>();
+      const { data: assignments, error: assignmentsError } = await supabase
+        .from('group_pastors')
+        .select('group_id')
+        .eq('user_id', user.id);
+
+      if (assignmentsError) throw new Error(assignmentsError.message);
+      (assignments ?? []).forEach((assignment: any) => {
+        if (assignment.group_id) groupIds.add(assignment.group_id as string);
+      });
+
+      if (user.role === 'church_leader') {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('home_group_id')
+          .eq('id', user.id)
+          .single();
+
+        if (profileError) throw new Error(profileError.message);
+        const homeGroupId = (profile as any)?.home_group_id as string | null;
+        if (homeGroupId) groupIds.add(homeGroupId);
+      }
+
+      return Array.from(groupIds);
+    },
+  });
+
   const allPrayersQuery = useQuery({
     queryKey: ['prayers', userHomeGroupId, userIsAdmin, homeChurchQuery.isFetched],
     enabled: userIsAdmin || homeChurchQuery.isFetched,
@@ -168,6 +204,7 @@ export default function PrayersScreen() {
           id: prayer.id,
           title: prayer.title,
           description: prayer.description || '',
+          category: prayer.category ?? undefined,
           requestedBy: prayer.created_by || '',
           requestedByName: prayer.profiles?.full_name || 'Anonymous',
           status: prayer.is_answered
@@ -407,7 +444,18 @@ export default function PrayersScreen() {
         error = retry.error;
       }
 
-      if (error) throw new Error(t('prayers.createFailed'));
+      if (error) {
+        const diagnosticCode = String((error as any)?.code ?? 'UNKNOWN')
+          .replace(/[^A-Za-z0-9_-]/g, '')
+          .slice(0, 32);
+        if (__DEV__) {
+          console.warn('[Prayers] Create failed', {
+            code: diagnosticCode,
+            message: String((error as any)?.message ?? ''),
+          });
+        }
+        throw new Error(`${t('prayers.createFailed')}\nCode: ${diagnosticCode}`);
+      }
 
       try {
         const createdPrayerId = (data as any).id as string;
@@ -492,8 +540,8 @@ export default function PrayersScreen() {
       setShowAddModal(false);
       Alert.alert(t('prayers.successTitle'), t('prayers.submitSuccess'));
     },
-    onError: () => {
-      Alert.alert(t('prayers.errorTitle'), t('prayers.createFailed'));
+    onError: (error: Error) => {
+      Alert.alert(t('prayers.errorTitle'), error.message || t('prayers.createFailed'));
     },
   });
 
@@ -916,6 +964,12 @@ export default function PrayersScreen() {
     return 'local';
   };
 
+  const canManagePublication = (prayer: PrayerRequest) => {
+    if (!user || !prayer.groupId) return false;
+    if (user.role === 'admin') return true;
+    return (manageableGroupsQuery.data ?? []).includes(prayer.groupId);
+  };
+
   const renderPrayerCard = (prayer: PrayerRequest, isHighlighted = false) => {
     const scopeBadge = getScopeBadge(prayer);
 
@@ -998,6 +1052,21 @@ export default function PrayersScreen() {
 
           {!isHighlighted && (
             <View style={styles.actionButtons}>
+              {canManagePublication(prayer) ? (
+                <TouchableOpacity
+                  testID={`manage-prayer-publication-button-${prayer.id}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('prayers.publication.openManager')}
+                  onPress={() => setSelectedPrayerForPublication(prayer)}
+                  style={styles.publicationButton}
+                >
+                  <Globe size={14} color="white" />
+                  <Text style={styles.publicationButtonText}>
+                    {t('prayers.publication.websiteButton')}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+
               {canUpdateStatus(prayer) && (
                 <TouchableOpacity
                   testID={`status-button-${prayer.id}`}
@@ -1204,6 +1273,12 @@ export default function PrayersScreen() {
 
         <View style={styles.spacer} />
       </ScrollView>
+
+      <PrayerPublicationModal
+        prayer={selectedPrayerForPublication}
+        visible={!!selectedPrayerForPublication}
+        onClose={() => setSelectedPrayerForPublication(null)}
+      />
 
       <Modal
         visible={showAddModal}
@@ -1613,6 +1688,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
+  },
+  publicationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#1e3a8a',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  publicationButtonText: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: 'white',
   },
   prayedButton: {
     backgroundColor: '#16a34a',

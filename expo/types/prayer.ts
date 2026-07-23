@@ -12,6 +12,7 @@ export interface PrayerRequest {
   id: string;
   title: string;
   description: string;
+  category?: string;
   requestedBy: string;
   requestedByName: string;
   isAnonymous: boolean;
