@@ -18,6 +18,11 @@ export type WebsiteChurch = {
   mapUrl: string;
 };
 
+export type PrayerSubmissionChurch = {
+  groupId: string;
+  name: string;
+};
+
 type WebsiteChurchRow = {
   slug: string;
   display_name: string;
@@ -190,5 +195,40 @@ export async function getWebsiteChurches(): Promise<WebsiteChurch[]> {
     );
 
     return getFallbackChurches();
+  }
+}
+export async function getPrayerSubmissionChurches(): Promise<
+  PrayerSubmissionChurch[]
+> {
+  try {
+    const supabase = createSupabaseClient();
+    const { data, error } = await supabase
+      .from("website_churches")
+      .select("group_id, display_name, sort_order")
+      .eq("country_code", SWISS_COUNTRY_CODE)
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true });
+
+    if (error) {
+      console.error(
+        "Could not load churches for the prayer submission form:",
+        error.message,
+      );
+      return [];
+    }
+
+    return ((data as {
+      group_id: string;
+      display_name: string;
+    }[] | null) ?? []).map((church) => ({
+      groupId: church.group_id,
+      name: church.display_name,
+    }));
+  } catch (error) {
+    console.error(
+      "Unexpected error while loading prayer submission churches:",
+      error,
+    );
+    return [];
   }
 }

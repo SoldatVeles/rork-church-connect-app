@@ -21,7 +21,7 @@ const privacyItems = [
   {
     title: "Gebetsanliegen",
     description:
-      "Gebetsanliegen werden vertraulich behandelt und nicht automatisch öffentlich veröffentlicht.",
+      "Gebetsanliegen werden verschlüsselt übermittelt, nur von zuständigen Leitern geprüft und niemals automatisch in der App oder auf der Website veröffentlicht.",
     icon: Lock,
   },
   {
@@ -33,7 +33,7 @@ const privacyItems = [
   {
     title: "Technische Daten",
     description:
-      "Beim Besuch einer Website können technische Daten wie IP-Adresse, Browser oder Zeitpunkt des Zugriffs verarbeitet werden.",
+      "Zum Schutz des Gebetsformulars vor Missbrauch wird aus technischen Zugriffsdaten ein täglich wechselnder Prüfwert gebildet. Eine rohe IP-Adresse wird dafür nicht in der Gebetsdatenbank gespeichert.",
     icon: Database,
   },
 ];

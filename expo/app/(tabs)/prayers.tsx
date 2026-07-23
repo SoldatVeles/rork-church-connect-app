@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { StatusBar } from 'expo-status-bar';
-import { Heart, Plus, Clock, User, AlertCircle, CheckCircle, MessageSquarePlus, ChevronDown, ChevronUp, Sparkles, Globe, Church } from 'lucide-react-native';
+import { Heart, Plus, Clock, User, AlertCircle, CheckCircle, MessageSquarePlus, ChevronDown, ChevronUp, Sparkles, Globe, Church, Inbox } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import {
@@ -23,6 +23,7 @@ import type { PrayerRequest, PrayerStatus, PrayerUpdate } from '@/types/prayer';
 import { supabase } from '@/lib/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PrayerPublicationModal } from '@/components/PrayerPublicationModal';
+import { WebsitePrayerInboxModal } from '@/components/WebsitePrayerInboxModal';
 
 const PRAYER_UPDATES_NOT_CONFIGURED = 'PRAYER_UPDATES_NOT_CONFIGURED';
 const PRAYER_TRACKING_NOT_CONFIGURED = 'PRAYER_TRACKING_NOT_CONFIGURED';
@@ -59,6 +60,7 @@ export default function PrayersScreen() {
   const [expandedPrayers, setExpandedPrayers] = useState<Set<string>>(new Set());
   const [highlightedPrayerId, setHighlightedPrayerId] = useState<string | null>(null);
   const [selectedPrayerForPublication, setSelectedPrayerForPublication] = useState<PrayerRequest | null>(null);
+  const [showWebsitePrayerInbox, setShowWebsitePrayerInbox] = useState(false);
 
   const queryClient = useQueryClient();
   const userIsAdmin = isAdmin(user);
@@ -152,6 +154,25 @@ export default function PrayersScreen() {
       }
 
       return Array.from(groupIds);
+    },
+  });
+
+  const canReviewWebsiteSubmissions =
+    user?.role === 'admin' ||
+    user?.role === 'pastor' ||
+    user?.role === 'church_leader';
+
+  const websitePrayerSubmissionCountQuery = useQuery({
+    queryKey: ['website-prayer-submissions-count', user?.id],
+    enabled: Boolean(user?.id && canReviewWebsiteSubmissions),
+    queryFn: async (): Promise<number> => {
+      const { count, error } = await supabase
+        .from('website_prayer_submissions')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'pending');
+
+      if (error) throw new Error(error.message);
+      return count ?? 0;
     },
   });
 
@@ -1202,15 +1223,34 @@ export default function PrayersScreen() {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <Text style={styles.title}>{t('prayers.title')}</Text>
-          <TouchableOpacity
-            testID="add-prayer-button"
-            style={styles.addButton}
-            onPress={() => {
-              setShowAddModal(true);
-            }}
-          >
-            <Plus size={20} color="white" />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            {canReviewWebsiteSubmissions ? (
+              <TouchableOpacity
+                testID="open-website-prayer-inbox-button"
+                style={styles.inboxButton}
+                onPress={() => setShowWebsitePrayerInbox(true)}
+              >
+                <Inbox size={18} color="#1e3a8a" />
+                <Text style={styles.inboxButtonText}>
+                  {t('prayers.websiteInbox.button')}
+                </Text>
+                {(websitePrayerSubmissionCountQuery.data ?? 0) > 0 ? (
+                  <Text style={styles.inboxCount}>
+                    {websitePrayerSubmissionCountQuery.data}
+                  </Text>
+                ) : null}
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity
+              testID="add-prayer-button"
+              style={styles.addButton}
+              onPress={() => {
+                setShowAddModal(true);
+              }}
+            >
+              <Plus size={20} color="white" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ScrollView
@@ -1278,6 +1318,12 @@ export default function PrayersScreen() {
         prayer={selectedPrayerForPublication}
         visible={!!selectedPrayerForPublication}
         onClose={() => setSelectedPrayerForPublication(null)}
+      />
+
+      <WebsitePrayerInboxModal
+        visible={showWebsitePrayerInbox}
+        userId={user?.id ?? null}
+        onClose={() => setShowWebsitePrayerInbox(false)}
       />
 
       <Modal
@@ -1488,6 +1534,39 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold' as const,
     color: '#1e293b',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  inboxButton: {
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 12,
+  },
+  inboxButtonText: {
+    color: '#1e3a8a',
+    fontSize: 12,
+    fontWeight: '700' as const,
+  },
+  inboxCount: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#1e3a8a',
+    color: 'white',
+    fontSize: 11,
+    fontWeight: '700' as const,
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: 5,
   },
   addButton: {
     backgroundColor: '#ef4444',

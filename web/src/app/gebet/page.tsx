@@ -12,15 +12,18 @@ import {
   ShieldCheck,
   Users,
 } from "lucide-react";
+import { PrayerRequestForm } from "@/components/PrayerRequestForm";
 import { getWebsiteEvents } from "@/lib/website-events";
+import { getPrayerSubmissionChurches } from "@/lib/website-churches";
 import { getWebsitePrayers } from "@/lib/website-prayers";
 
 export const dynamic = "force-dynamic";
 
 export default async function GebetPage() {
-  const [publicPrayers, events] = await Promise.all([
+  const [publicPrayers, events, submissionChurches] = await Promise.all([
     getWebsitePrayers(),
     getWebsiteEvents(),
+    getPrayerSubmissionChurches(),
   ]);
   const prayerMeetings = events.filter((event) => event.type === "Gebet");
 
@@ -204,7 +207,8 @@ export default async function GebetPage() {
               </div>
             </div>
 
-            <form className="space-y-5">
+            <PrayerRequestForm churches={submissionChurches} />
+            <form className="hidden" aria-hidden="true">
               <div>
                 <label className="mb-2 block text-sm font-semibold">
                   Ihr Name, optional
