@@ -1223,35 +1223,38 @@ export default function PrayersScreen() {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <Text style={styles.title}>{t('prayers.title')}</Text>
-          <View style={styles.headerActions}>
-            {canReviewWebsiteSubmissions ? (
-              <TouchableOpacity
-                testID="open-website-prayer-inbox-button"
-                style={styles.inboxButton}
-                onPress={() => setShowWebsitePrayerInbox(true)}
-              >
-                <Inbox size={18} color="#1e3a8a" />
-                <Text style={styles.inboxButtonText}>
-                  {t('prayers.websiteInbox.button')}
-                </Text>
-                {(websitePrayerSubmissionCountQuery.data ?? 0) > 0 ? (
-                  <Text style={styles.inboxCount}>
-                    {websitePrayerSubmissionCountQuery.data}
-                  </Text>
-                ) : null}
-              </TouchableOpacity>
-            ) : null}
-            <TouchableOpacity
-              testID="add-prayer-button"
-              style={styles.addButton}
-              onPress={() => {
-                setShowAddModal(true);
-              }}
-            >
-              <Plus size={20} color="white" />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            testID="add-prayer-button"
+            accessibilityRole="button"
+            accessibilityLabel={t('prayers.newPrayerRequest')}
+            style={styles.addButton}
+            onPress={() => {
+              setShowAddModal(true);
+            }}
+          >
+            <Plus size={20} color="white" />
+          </TouchableOpacity>
         </View>
+
+        {canReviewWebsiteSubmissions ? (
+          <TouchableOpacity
+            testID="open-website-prayer-inbox-button"
+            accessibilityRole="button"
+            accessibilityLabel={t('prayers.websiteInbox.button')}
+            style={styles.inboxButton}
+            onPress={() => setShowWebsitePrayerInbox(true)}
+          >
+            <Inbox size={18} color="#1e3a8a" />
+            <Text numberOfLines={1} style={styles.inboxButtonText}>
+              {t('prayers.websiteInbox.button')}
+            </Text>
+            {(websitePrayerSubmissionCountQuery.data ?? 0) > 0 ? (
+              <Text style={styles.inboxCount}>
+                {websitePrayerSubmissionCountQuery.data}
+              </Text>
+            ) : null}
+          </TouchableOpacity>
+        ) : null}
 
         <ScrollView
           horizontal
@@ -1528,32 +1531,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   title: {
+    flexShrink: 1,
+    paddingRight: 12,
     fontSize: 28,
     fontWeight: 'bold' as const,
     color: '#1e293b',
   },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
   inboxButton: {
-    minHeight: 40,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderRadius: 20,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#bfdbfe',
     backgroundColor: '#eff6ff',
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
+    marginBottom: 16,
   },
   inboxButtonText: {
+    flex: 1,
     color: '#1e3a8a',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700' as const,
   },
   inboxCount: {
@@ -1569,6 +1571,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
   },
   addButton: {
+    flexShrink: 0,
     backgroundColor: '#ef4444',
     width: 40,
     height: 40,
