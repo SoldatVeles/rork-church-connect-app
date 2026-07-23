@@ -810,7 +810,11 @@ export default function PrayersScreen() {
     if (!user) return false;
 
     const isRequester = prayer.requestedBy === user.id;
-    return isRequester || userIsAdmin;
+    const managesPrayerChurch =
+      !!prayer.groupId &&
+      (manageableGroupsQuery.data ?? []).includes(prayer.groupId);
+
+    return isRequester || userIsAdmin || managesPrayerChurch;
   };
 
   const togglePrayMutation = useMutation({
@@ -1071,8 +1075,7 @@ export default function PrayersScreen() {
             </Text>
           </View>
 
-          {!isHighlighted && (
-            <View style={styles.actionButtons}>
+          <View style={styles.actionButtons}>
               {canManagePublication(prayer) ? (
                 <TouchableOpacity
                   testID={`manage-prayer-publication-button-${prayer.id}`}
@@ -1144,11 +1147,10 @@ export default function PrayersScreen() {
                   {hasUserPrayed(prayer) ? t('prayers.praying') : t('prayers.pray')}
                 </Text>
               </TouchableOpacity>
-            </View>
-          )}
+          </View>
         </View>
 
-        {((prayer.updates && prayer.updates.length > 0) || (!isHighlighted && canUpdateStatus(prayer))) && (
+        {((prayer.updates && prayer.updates.length > 0) || canUpdateStatus(prayer)) && (
           <View style={styles.updatesSection}>
             {prayer.updates && prayer.updates.length > 0 && !isHighlighted && (
               <TouchableOpacity
@@ -1201,7 +1203,7 @@ export default function PrayersScreen() {
               </View>
             ))}
 
-            {!isHighlighted && canUpdateStatus(prayer) && (
+            {canUpdateStatus(prayer) && (
               <TouchableOpacity
                 style={styles.addUpdateButton}
                 onPress={() => handleOpenUpdateModal(prayer)}
@@ -1269,7 +1271,10 @@ export default function PrayersScreen() {
                 styles.filterButton,
                 selectedFilter === filter.key && styles.filterButtonActive,
               ]}
-              onPress={() => setSelectedFilter(filter.key)}
+              onPress={() => {
+                setHighlightedPrayerId(null);
+                setSelectedFilter(filter.key);
+              }}
             >
               <Text
                 style={[
