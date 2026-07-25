@@ -5,13 +5,13 @@ import { siteConfig } from "@/config/site";
 export default function ImpressumPage() {
   return (
     <main className="min-h-screen bg-[#f8f6f1] text-[#0b2341]">
-      <section className="bg-[#071d35] px-6 py-20 text-white">
-        <div className="mx-auto max-w-7xl">
+      <section className="bg-[#071d35] px-4 py-16 text-white sm:px-6 sm:py-20">
+        <div className="mx-auto max-w-6xl">
           <p className="mb-4 inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-[#f0d28a]">
             Impressum
           </p>
 
-          <h1 className="max-w-4xl text-4xl font-bold md:text-6xl">
+          <h1 className="max-w-4xl text-[clamp(2.35rem,7vw,5rem)] font-extrabold leading-[1.03] tracking-[-0.04em]">
             Rechtliche Angaben
           </h1>
 
@@ -22,7 +22,7 @@ export default function ImpressumPage() {
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-7xl gap-8 px-6 py-16 lg:grid-cols-[1fr_0.8fr] lg:px-8">
+      <section className="mx-auto grid max-w-6xl gap-8 px-6 py-16 lg:grid-cols-[1fr_0.8fr] lg:px-8">
         <div className="rounded-3xl border border-[#e5dfd0] bg-white p-8 shadow-sm">
           <h2 className="text-2xl font-bold">Website-Betreiber</h2>
 
@@ -88,7 +88,7 @@ export default function ImpressumPage() {
 
             <a
               href={`mailto:${siteConfig.email}`}
-              className="mt-6 inline-flex items-center gap-2 rounded-md bg-[#0b2341] px-5 py-3 font-semibold text-white"
+              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#0b2341] px-5 py-3 font-semibold text-white"
             >
               <Mail size={18} />
               {siteConfig.email}
@@ -104,7 +104,7 @@ export default function ImpressumPage() {
 
             <Link
               href="/gemeinden"
-              className="mt-6 inline-flex rounded-md bg-white px-5 py-3 font-semibold text-[#496b3f]"
+              className="mt-6 inline-flex rounded-xl bg-white px-5 py-3 font-semibold text-[#496b3f]"
             >
               Gemeinden ansehen
             </Link>

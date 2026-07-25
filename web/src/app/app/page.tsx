@@ -40,16 +40,16 @@ const appFeatures = [
 export default function AppPage() {
   return (
     <main className="min-h-screen bg-[#f8f6f1] text-[#0b2341]">
-      <section className="relative overflow-hidden bg-[#071d35] px-6 py-20 text-white">
+      <section className="relative overflow-hidden bg-[#071d35] px-4 py-16 text-white sm:px-6 sm:py-20">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(214,166,63,0.25),_transparent_35%),radial-gradient(circle_at_bottom_left,_rgba(73,107,63,0.35),_transparent_35%)]" />
 
-        <div className="relative mx-auto grid max-w-7xl gap-10 lg:grid-cols-[1fr_0.8fr] lg:items-center">
+        <div className="relative mx-auto grid max-w-6xl gap-10 lg:grid-cols-[1fr_0.8fr] lg:items-center">
           <div>
             <p className="mb-4 inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-[#f0d28a]">
               Church Connect App
             </p>
 
-            <h1 className="max-w-4xl text-4xl font-bold md:text-6xl">
+            <h1 className="max-w-4xl text-[clamp(2.35rem,7vw,5rem)] font-extrabold leading-[1.03] tracking-[-0.04em]">
               Die interne Plattform für unsere Gemeinden
             </h1>
 
@@ -59,10 +59,10 @@ export default function AppPage() {
               sicherer Kommunikation.
             </p>
 
-            <div className="mt-10 flex flex-col gap-4 sm:flex-row">
+            <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:flex-wrap">
               <Link
                 href="/kontakt"
-                className="inline-flex items-center justify-center gap-2 rounded-md bg-[#d6a63f] px-6 py-3 font-semibold text-[#071d35] shadow-sm hover:bg-[#c99631]"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#d6a63f] px-6 py-3 font-semibold text-[#071d35] shadow-sm hover:bg-[#c99631]"
               >
                 Zugang anfragen
                 <ArrowRight size={18} />
@@ -70,7 +70,7 @@ export default function AppPage() {
 
               <Link
                 href="/ueber-uns"
-                className="inline-flex items-center justify-center gap-2 rounded-md bg-white px-6 py-3 font-semibold text-[#071d35] shadow-sm hover:bg-white/90"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-6 py-3 font-semibold text-[#071d35] shadow-sm hover:bg-white/90"
               >
                 Mehr über uns
               </Link>
@@ -127,7 +127,7 @@ export default function AppPage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
+      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16 lg:px-8">
         <div className="mb-10 text-center">
           <p className="text-sm font-semibold uppercase tracking-[0.25em] text-[#d6a63f]">
             Funktionen
@@ -165,7 +165,7 @@ export default function AppPage() {
       </section>
 
       <section className="bg-white py-16">
-        <div className="mx-auto grid max-w-7xl gap-8 px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
+        <div className="mx-auto grid max-w-6xl gap-8 px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
           <div className="rounded-3xl bg-[#496b3f] p-8 text-white">
             <ShieldCheck className="text-[#f0d28a]" size={42} />
             <h2 className="mt-6 text-3xl font-bold">
@@ -215,9 +215,9 @@ export default function AppPage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
-        <div className="rounded-[2rem] bg-[#d6a63f] p-8 md:p-12">
-          <div className="grid gap-8 md:grid-cols-[1fr_0.8fr] md:items-center">
+      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16 lg:px-8">
+        <div className="rounded-[2rem] bg-[#d6a63f] p-6 sm:p-8 md:p-12">
+          <div className="grid gap-8 lg:grid-cols-[1fr_0.8fr] md:items-center">
             <div>
               <h2 className="text-3xl font-bold text-[#071d35]">
                 App-Zugang für Mitglieder
@@ -229,17 +229,17 @@ export default function AppPage() {
               </p>
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row md:justify-end">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap md:justify-end">
               <Link
                 href="/kontakt"
-                className="inline-flex items-center justify-center rounded-md bg-[#071d35] px-6 py-3 font-semibold text-white hover:bg-[#12365f]"
+                className="inline-flex items-center justify-center rounded-xl bg-[#071d35] px-6 py-3 font-semibold text-white hover:bg-[#12365f]"
               >
                 Zugang anfragen
               </Link>
 
               <Link
                 href="/gemeinden"
-                className="inline-flex items-center justify-center rounded-md bg-white px-6 py-3 font-semibold text-[#071d35] hover:bg-white/90"
+                className="inline-flex items-center justify-center rounded-xl bg-white px-6 py-3 font-semibold text-[#071d35] hover:bg-white/90"
               >
                 Gemeinde finden
               </Link>

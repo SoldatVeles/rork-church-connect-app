@@ -13,15 +13,15 @@ import { siteConfig } from "@/config/site";
 export default function KostenloseBuecherPage() {
   return (
     <main className="min-h-screen bg-[#f8f6f1] text-[#0b2341]">
-      <section className="relative overflow-hidden bg-[#071d35] px-6 py-20 text-white">
+      <section className="relative overflow-hidden bg-[#071d35] px-4 py-16 text-white sm:px-6 sm:py-20">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(214,166,63,0.25),_transparent_35%)]" />
 
-        <div className="relative mx-auto max-w-7xl">
+        <div className="relative mx-auto max-w-6xl">
           <p className="mb-4 inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-[#f0d28a]">
             Kostenloses Studienmaterial
           </p>
 
-          <h1 className="max-w-4xl text-4xl font-bold md:text-6xl">
+          <h1 className="max-w-4xl text-[clamp(2.35rem,7vw,5rem)] font-extrabold leading-[1.03] tracking-[-0.04em]">
             Kostenlose Bücher bestellen
           </h1>
 
@@ -32,7 +32,7 @@ export default function KostenloseBuecherPage() {
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-7xl gap-8 px-6 py-16 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
+      <section className="mx-auto grid max-w-6xl gap-8 px-6 py-16 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
         <div className="space-y-6">
           <div className="rounded-3xl bg-white p-7 shadow-sm">
             <Gift className="text-[#d6a63f]" size={36} />
@@ -149,7 +149,7 @@ export default function KostenloseBuecherPage() {
 
             <button
               type="button"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#0b2341] px-6 py-3 font-semibold text-white hover:bg-[#12365f]"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#0b2341] px-6 py-3 font-semibold text-white hover:bg-[#12365f]"
             >
               Anfrage vorbereiten
               <ArrowRight size={18} />

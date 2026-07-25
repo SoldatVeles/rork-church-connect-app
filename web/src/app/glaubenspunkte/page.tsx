@@ -35,15 +35,15 @@ const icons = [
 export default function GlaubenspunktePage() {
   return (
     <main className="min-h-screen bg-[#f8f6f1] text-[#0b2341]">
-      <section className="relative overflow-hidden bg-[#071d35] px-6 py-20 text-white">
+      <section className="relative overflow-hidden bg-[#071d35] px-4 py-16 text-white sm:px-6 sm:py-20">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(214,166,63,0.25),_transparent_35%),radial-gradient(circle_at_bottom_left,_rgba(73,107,63,0.35),_transparent_35%)]" />
 
-        <div className="relative mx-auto max-w-7xl">
+        <div className="relative mx-auto max-w-6xl">
           <p className="mb-4 inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-[#f0d28a]">
             Glaubenspunkte
           </p>
 
-          <h1 className="max-w-4xl text-4xl font-bold md:text-6xl">
+          <h1 className="max-w-4xl text-[clamp(2.35rem,7vw,5rem)] font-extrabold leading-[1.03] tracking-[-0.04em]">
             Was wir glauben
           </h1>
 
@@ -52,10 +52,10 @@ export default function GlaubenspunktePage() {
             Christus und auf die Hoffnung seiner baldigen Wiederkunft.
           </p>
 
-          <div className="mt-10 flex flex-col gap-4 sm:flex-row">
+          <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:flex-wrap">
             <Link
               href="/kontakt"
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-[#d6a63f] px-6 py-3 font-semibold text-[#071d35] shadow-sm hover:bg-[#c99631]"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#d6a63f] px-6 py-3 font-semibold text-[#071d35] shadow-sm hover:bg-[#c99631]"
             >
               Fragen stellen
               <ArrowRight size={18} />
@@ -63,7 +63,7 @@ export default function GlaubenspunktePage() {
 
             <Link
               href={siteConfig.freeBooks.href}
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-white px-6 py-3 font-semibold text-[#071d35] shadow-sm hover:bg-white/90"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-6 py-3 font-semibold text-[#071d35] shadow-sm hover:bg-white/90"
             >
               Kostenlose Bücher bestellen
             </Link>
@@ -71,7 +71,7 @@ export default function GlaubenspunktePage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
+      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16 lg:px-8">
         <div className="mb-10 text-center">
           <p className="text-sm font-semibold uppercase tracking-[0.25em] text-[#d6a63f]">
             Grundlage unseres Glaubens
@@ -115,7 +115,7 @@ export default function GlaubenspunktePage() {
       </section>
 
       <section className="bg-white py-16">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
           <div className="mb-10 text-center">
             <p className="text-sm font-semibold uppercase tracking-[0.25em] text-[#d6a63f]">
               Praktischer Glaube
@@ -125,7 +125,7 @@ export default function GlaubenspunktePage() {
             </h2>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {beliefHighlights.map((item, index) => (
               <article
                 key={item.title}
@@ -151,7 +151,7 @@ export default function GlaubenspunktePage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
+      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16 lg:px-8">
         <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="rounded-3xl bg-[#496b3f] p-8 text-white">
             <BookOpenText className="text-[#f0d28a]" size={42} />
@@ -164,10 +164,10 @@ export default function GlaubenspunktePage() {
               Studienmaterial.
             </p>
 
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <Link
                 href="/kontakt"
-                className="inline-flex items-center justify-center gap-2 rounded-md bg-white px-5 py-3 font-semibold text-[#496b3f]"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-semibold text-[#496b3f]"
               >
                 Kontakt aufnehmen
                 <ArrowRight size={18} />
@@ -175,7 +175,7 @@ export default function GlaubenspunktePage() {
 
               <Link
                 href={siteConfig.freeBooks.href}
-                className="inline-flex items-center justify-center rounded-md bg-[#d6a63f] px-5 py-3 font-semibold text-[#071d35]"
+                className="inline-flex items-center justify-center rounded-xl bg-[#d6a63f] px-5 py-3 font-semibold text-[#071d35]"
               >
                 Kostenlose Bücher
               </Link>
@@ -222,9 +222,9 @@ export default function GlaubenspunktePage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-6 pb-16 lg:px-8">
+      <section className="mx-auto max-w-6xl px-4 pb-14 sm:px-6 sm:pb-16 lg:px-8">
         <div className="rounded-[2rem] bg-[#0b2341] p-8 text-white md:p-12">
-          <div className="grid gap-8 md:grid-cols-[1fr_0.7fr] md:items-center">
+          <div className="grid gap-8 lg:grid-cols-[1fr_0.7fr] md:items-center">
             <div>
               <Users className="text-[#d6a63f]" size={40} />
               <h2 className="mt-5 text-3xl font-bold">
@@ -237,17 +237,17 @@ export default function GlaubenspunktePage() {
               </p>
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row md:justify-end">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap md:justify-end">
               <Link
                 href="/gemeinden"
-                className="inline-flex items-center justify-center rounded-md bg-[#d6a63f] px-6 py-3 font-semibold text-[#071d35] hover:bg-[#c99631]"
+                className="inline-flex items-center justify-center rounded-xl bg-[#d6a63f] px-6 py-3 font-semibold text-[#071d35] hover:bg-[#c99631]"
               >
                 Gemeinde finden
               </Link>
 
               <Link
                 href="/kontakt"
-                className="inline-flex items-center justify-center rounded-md bg-white px-6 py-3 font-semibold text-[#071d35] hover:bg-white/90"
+                className="inline-flex items-center justify-center rounded-xl bg-white px-6 py-3 font-semibold text-[#071d35] hover:bg-white/90"
               >
                 Kontakt aufnehmen
               </Link>

@@ -12,7 +12,7 @@ import { siteConfig } from "@/config/site";
 export function FreeBooksSection() {
   return (
     <section className="bg-white py-20">
-      <div className="mx-auto max-w-7xl px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
         <div className="overflow-hidden rounded-[2rem] border border-[#e5dfd0] bg-[#f8f6f1] shadow-sm">
           <div className="grid lg:grid-cols-[0.9fr_1.1fr]">
             <div className="relative overflow-hidden bg-[linear-gradient(135deg,#0b2341,#496b3f)] p-8 text-white md:p-12">
@@ -39,7 +39,7 @@ export function FreeBooksSection() {
 
                 <Link
                   href={siteConfig.freeBooks.href}
-                  className="mt-8 inline-flex items-center gap-2 rounded-md bg-[#d6a63f] px-6 py-3 font-semibold text-[#071d35] shadow-sm transition hover:bg-[#c99631]"
+                  className="mt-8 inline-flex items-center gap-2 rounded-xl bg-[#d6a63f] px-6 py-3 font-semibold text-[#071d35] shadow-sm transition hover:bg-[#c99631]"
                 >
                   Jetzt Bücher bestellen
                   <ArrowRight size={18} />
@@ -47,7 +47,7 @@ export function FreeBooksSection() {
               </div>
             </div>
 
-            <div className="p-8 md:p-12">
+            <div className="p-6 sm:p-8 md:p-12">
               <p className="text-sm font-semibold uppercase tracking-[0.25em] text-[#d6a63f]">
                 Glauben entdecken
               </p>
@@ -62,7 +62,7 @@ export function FreeBooksSection() {
                 mit der Gemeinde zu finden.
               </p>
 
-              <div className="mt-8 grid gap-5 sm:grid-cols-3">
+              <div className="mt-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
                 <div className="rounded-2xl border border-[#e5dfd0] bg-white p-5">
                   <BookOpenText className="text-[#496b3f]" size={28} />
                   <h4 className="mt-4 font-bold">Bibelstudium</h4>
@@ -88,10 +88,10 @@ export function FreeBooksSection() {
                 </div>
               </div>
 
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <Link
                   href={siteConfig.freeBooks.href}
-                  className="inline-flex items-center justify-center gap-2 rounded-md bg-[#0b2341] px-6 py-3 font-semibold text-white hover:bg-[#12365f]"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0b2341] px-6 py-3 font-semibold text-white hover:bg-[#12365f]"
                 >
                   Zur Buchbestellung
                   <ArrowRight size={18} />
@@ -99,7 +99,7 @@ export function FreeBooksSection() {
 
                 <Link
                   href="/kontakt"
-                  className="inline-flex items-center justify-center rounded-md border border-[#e5dfd0] bg-white px-6 py-3 font-semibold text-[#0b2341] hover:bg-[#f8f6f1]"
+                  className="inline-flex items-center justify-center rounded-xl border border-[#e5dfd0] bg-white px-6 py-3 font-semibold text-[#0b2341] hover:bg-[#f8f6f1]"
                 >
                   Frage stellen
                 </Link>

@@ -29,15 +29,15 @@ export default async function GebetPage() {
 
   return (
     <main className="min-h-screen bg-[#f8f6f1] text-[#0b2341]">
-      <section className="relative overflow-hidden bg-[#071d35] px-6 py-20 text-white">
+      <section className="relative overflow-hidden bg-[#071d35] px-4 py-16 text-white sm:px-6 sm:py-20">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(214,166,63,0.25),_transparent_35%),radial-gradient(circle_at_bottom_left,_rgba(73,107,63,0.35),_transparent_35%)]" />
 
-        <div className="relative mx-auto max-w-7xl">
+        <div className="relative mx-auto max-w-6xl">
           <p className="mb-4 inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-[#f0d28a]">
             Gebet
           </p>
 
-          <h1 className="max-w-4xl text-4xl font-bold md:text-6xl">
+          <h1 className="max-w-4xl text-[clamp(2.35rem,7vw,5rem)] font-extrabold leading-[1.03] tracking-[-0.04em]">
             Gebet verbindet
           </h1>
 
@@ -47,10 +47,10 @@ export default async function GebetPage() {
             öffentlich sichtbar.
           </p>
 
-          <div className="mt-10 flex flex-col gap-4 sm:flex-row">
+          <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:flex-wrap">
             <a
               href="#gebetsanliegen"
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-[#d6a63f] px-6 py-3 font-semibold text-[#071d35] shadow-sm hover:bg-[#c99631]"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#d6a63f] px-6 py-3 font-semibold text-[#071d35] shadow-sm hover:bg-[#c99631]"
             >
               Gebetsanliegen senden
               <ArrowRight size={18} />
@@ -58,7 +58,7 @@ export default async function GebetPage() {
 
             <a
               href="#gebetstreffen"
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-white px-6 py-3 font-semibold text-[#071d35] shadow-sm hover:bg-white/90"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-6 py-3 font-semibold text-[#071d35] shadow-sm hover:bg-white/90"
             >
               Gebetstreffen ansehen
             </a>
@@ -66,7 +66,7 @@ export default async function GebetPage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
+      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16 lg:px-8">
         <div className="mb-10 text-center">
           <p className="text-sm font-semibold uppercase tracking-[0.25em] text-[#d6a63f]">
             Aktuelle Schwerpunkte
@@ -81,13 +81,13 @@ export default async function GebetPage() {
         </div>
 
         {publicPrayers.length > 0 ? (
-          <div className="grid gap-6 md:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {publicPrayers.map((prayer) => (
               <article
                 key={prayer.id}
                 className="rounded-3xl border border-[#e5dfd0] bg-white p-7 shadow-sm"
               >
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#eef3ea] text-[#496b3f]">
                     <HeartHandshake size={28} />
                   </div>
@@ -124,7 +124,7 @@ export default async function GebetPage() {
       </section>
 
       <section id="gebetstreffen" className="bg-white py-16">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
           <div className="mb-10 flex flex-col justify-between gap-6 md:flex-row md:items-end">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.25em] text-[#d6a63f]">
@@ -189,7 +189,7 @@ export default async function GebetPage() {
         </div>
       </section>
 
-      <section id="gebetsanliegen" className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
+      <section id="gebetsanliegen" className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16 lg:px-8">
         <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-3xl border border-[#e5dfd0] bg-white p-7 shadow-sm">
             <div className="mb-6 flex items-center gap-3">
@@ -261,7 +261,7 @@ export default async function GebetPage() {
 
               <button
                 type="button"
-                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#0b2341] px-6 py-3 font-semibold text-white hover:bg-[#12365f]"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#0b2341] px-6 py-3 font-semibold text-white hover:bg-[#12365f]"
               >
                 Anliegen vorbereiten
                 <ArrowRight size={18} />
@@ -316,9 +316,9 @@ export default async function GebetPage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-6 pb-16 lg:px-8">
-        <div className="rounded-[2rem] bg-[#d6a63f] p-8 md:p-12">
-          <div className="grid gap-8 md:grid-cols-[1fr_0.7fr] md:items-center">
+      <section className="mx-auto max-w-6xl px-4 pb-14 sm:px-6 sm:pb-16 lg:px-8">
+        <div className="rounded-[2rem] bg-[#d6a63f] p-6 sm:p-8 md:p-12">
+          <div className="grid gap-8 lg:grid-cols-[1fr_0.7fr] md:items-center">
             <div>
               <h2 className="text-3xl font-bold text-[#071d35]">
                 Wir beten gerne für Sie
@@ -329,10 +329,10 @@ export default async function GebetPage() {
               </p>
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row md:justify-end">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap md:justify-end">
               <Link
                 href="/kontakt"
-                className="inline-flex items-center justify-center gap-2 rounded-md bg-[#071d35] px-6 py-3 font-semibold text-white hover:bg-[#12365f]"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#071d35] px-6 py-3 font-semibold text-white hover:bg-[#12365f]"
               >
                 Kontakt aufnehmen
                 <ArrowRight size={18} />
@@ -340,7 +340,7 @@ export default async function GebetPage() {
 
               <Link
                 href="/gemeinden"
-                className="inline-flex items-center justify-center rounded-md bg-white px-6 py-3 font-semibold text-[#071d35] hover:bg-white/90"
+                className="inline-flex items-center justify-center rounded-xl bg-white px-6 py-3 font-semibold text-[#071d35] hover:bg-white/90"
               >
                 Gemeinde finden
               </Link>

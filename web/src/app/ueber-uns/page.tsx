@@ -65,15 +65,15 @@ const missionItems = [
 export default function UeberUnsPage() {
   return (
     <main className="min-h-screen bg-[#f8f6f1] text-[#0b2341]">
-      <section className="relative overflow-hidden bg-[#071d35] px-6 py-20 text-white">
+      <section className="relative overflow-hidden bg-[#071d35] px-4 py-16 text-white sm:px-6 sm:py-20">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(214,166,63,0.25),_transparent_35%),radial-gradient(circle_at_bottom_left,_rgba(73,107,63,0.35),_transparent_35%)]" />
 
-        <div className="relative mx-auto max-w-7xl">
+        <div className="relative mx-auto max-w-6xl">
           <p className="mb-4 inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-[#f0d28a]">
             Über uns
           </p>
 
-          <h1 className="max-w-4xl text-4xl font-bold md:text-6xl">
+          <h1 className="max-w-4xl text-[clamp(2.35rem,7vw,5rem)] font-extrabold leading-[1.03] tracking-[-0.04em]">
             Eine Glaubensgemeinschaft in der Schweiz
           </h1>
 
@@ -83,10 +83,10 @@ export default function UeberUnsPage() {
             einladen möchte.
           </p>
 
-          <div className="mt-10 flex flex-col gap-4 sm:flex-row">
+          <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:flex-wrap">
             <Link
               href="/gemeinden"
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-[#d6a63f] px-6 py-3 font-semibold text-[#071d35] shadow-sm hover:bg-[#c99631]"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#d6a63f] px-6 py-3 font-semibold text-[#071d35] shadow-sm hover:bg-[#c99631]"
             >
               Gemeinde finden
               <ArrowRight size={18} />
@@ -94,7 +94,7 @@ export default function UeberUnsPage() {
 
             <Link
               href="/glaubenspunkte"
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-white px-6 py-3 font-semibold text-[#071d35] shadow-sm hover:bg-white/90"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-6 py-3 font-semibold text-[#071d35] shadow-sm hover:bg-white/90"
             >
               Was wir glauben
             </Link>
@@ -102,7 +102,7 @@ export default function UeberUnsPage() {
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-7xl gap-8 px-6 py-16 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
+      <section className="mx-auto grid max-w-6xl gap-8 px-6 py-16 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
         <div className="rounded-3xl bg-white p-8 shadow-sm">
           <Church className="text-[#d6a63f]" size={42} />
 
@@ -150,7 +150,7 @@ export default function UeberUnsPage() {
       </section>
 
       <section className="bg-white py-16">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
           <div className="mb-10 text-center">
             <p className="text-sm font-semibold uppercase tracking-[0.25em] text-[#d6a63f]">
               Unser Auftrag
@@ -164,7 +164,7 @@ export default function UeberUnsPage() {
             </p>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {missionItems.map((item, index) => (
               <article
                 key={item.title}
@@ -190,7 +190,7 @@ export default function UeberUnsPage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
+      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16 lg:px-8">
         <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.25em] text-[#d6a63f]">
@@ -204,7 +204,7 @@ export default function UeberUnsPage() {
               vertreten. Besucher sind herzlich willkommen.
             </p>
 
-            <div className="mt-8 grid gap-5 md:grid-cols-3 lg:grid-cols-1">
+            <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
               {churches.map((church) => (
                 <article
                   key={church.slug}
@@ -245,7 +245,7 @@ export default function UeberUnsPage() {
 
               <Link
                 href="/gemeinden"
-                className="mt-7 inline-flex items-center gap-2 rounded-md bg-white px-5 py-3 font-semibold text-[#496b3f]"
+                className="mt-7 inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 font-semibold text-[#496b3f]"
               >
                 Standorte ansehen
                 <ArrowRight size={18} />
@@ -279,8 +279,8 @@ export default function UeberUnsPage() {
       </section>
 
       <section className="bg-[#071d35] py-16 text-white">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <div className="grid gap-8 md:grid-cols-[1fr_0.8fr] md:items-center">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="grid gap-8 lg:grid-cols-[1fr_0.8fr] md:items-center">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.25em] text-[#d6a63f]">
                 Church Connect
@@ -312,9 +312,9 @@ export default function UeberUnsPage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
-        <div className="rounded-[2rem] bg-[#d6a63f] p-8 md:p-12">
-          <div className="grid gap-8 md:grid-cols-[1fr_0.8fr] md:items-center">
+      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16 lg:px-8">
+        <div className="rounded-[2rem] bg-[#d6a63f] p-6 sm:p-8 md:p-12">
+          <div className="grid gap-8 lg:grid-cols-[1fr_0.8fr] md:items-center">
             <div>
               <h2 className="text-3xl font-bold text-[#071d35]">
                 Lernen Sie uns kennen
@@ -325,17 +325,17 @@ export default function UeberUnsPage() {
               </p>
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row md:justify-end">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap md:justify-end">
               <Link
                 href="/gemeinden"
-                className="inline-flex items-center justify-center rounded-md bg-[#071d35] px-6 py-3 font-semibold text-white hover:bg-[#12365f]"
+                className="inline-flex items-center justify-center rounded-xl bg-[#071d35] px-6 py-3 font-semibold text-white hover:bg-[#12365f]"
               >
                 Gemeinde finden
               </Link>
 
               <Link
                 href={siteConfig.freeBooks.href}
-                className="inline-flex items-center justify-center rounded-md bg-white px-6 py-3 font-semibold text-[#071d35] hover:bg-white/90"
+                className="inline-flex items-center justify-center rounded-xl bg-white px-6 py-3 font-semibold text-[#071d35] hover:bg-white/90"
               >
                 Kostenlose Bücher
               </Link>

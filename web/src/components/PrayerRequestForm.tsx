@@ -321,7 +321,7 @@ export function PrayerRequestForm({ churches }: PrayerRequestFormProps) {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#0b2341] px-6 py-3 font-semibold text-white hover:bg-[#12365f] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#0b2341] px-6 py-3 font-semibold text-white hover:bg-[#12365f] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSubmitting ? "Wird sicher gesendet..." : "Anliegen senden"}
             {!isSubmitting ? <ArrowRight size={18} /> : null}

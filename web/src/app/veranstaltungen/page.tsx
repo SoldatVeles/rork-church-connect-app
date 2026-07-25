@@ -1,4 +1,6 @@
 import Link from "next/link";
+
+import { EventCoverImage } from "@/components/EditorialImage";
 import {
   ArrowRight,
   CalendarDays,
@@ -20,15 +22,15 @@ export default async function VeranstaltungenPage() {
   ]);
   return (
     <main className="min-h-screen bg-[#f8f6f1] text-[#0b2341]">
-      <section className="relative overflow-hidden bg-[#071d35] px-6 py-20 text-white">
+      <section className="relative overflow-hidden bg-[#071d35] px-4 py-16 text-white sm:px-6 sm:py-20">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(214,166,63,0.25),_transparent_35%)]" />
 
-        <div className="relative mx-auto max-w-7xl">
+        <div className="relative mx-auto max-w-6xl">
           <p className="mb-4 inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-[#f0d28a]">
             Veranstaltungen
           </p>
 
-          <h1 className="max-w-4xl text-4xl font-bold md:text-6xl">
+          <h1 className="max-w-4xl text-[clamp(2.35rem,7vw,5rem)] font-extrabold leading-[1.03] tracking-[-0.04em]">
             Öffentliche Termine und Veranstaltungen
           </h1>
 
@@ -38,10 +40,10 @@ export default async function VeranstaltungenPage() {
             in der Schweiz.
           </p>
 
-          <div className="mt-10 flex flex-col gap-4 sm:flex-row">
+          <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:flex-wrap">
             <Link
               href="/gemeinden"
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-[#d6a63f] px-6 py-3 font-semibold text-[#071d35] shadow-sm hover:bg-[#c99631]"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#d6a63f] px-6 py-3 font-semibold text-[#071d35] shadow-sm hover:bg-[#c99631]"
             >
               Gemeinde finden
               <ArrowRight size={18} />
@@ -49,7 +51,7 @@ export default async function VeranstaltungenPage() {
 
             <Link
               href="/kontakt"
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-white px-6 py-3 font-semibold text-[#071d35] shadow-sm hover:bg-white/90"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-6 py-3 font-semibold text-[#071d35] shadow-sm hover:bg-white/90"
             >
               Kontakt aufnehmen
             </Link>
@@ -57,7 +59,7 @@ export default async function VeranstaltungenPage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
+      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16 lg:px-8">
         <div className="mb-10 flex flex-col justify-between gap-6 md:flex-row md:items-end">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.25em] text-[#d6a63f]">
@@ -84,18 +86,18 @@ export default async function VeranstaltungenPage() {
         </div>
 
         {events.length > 0 ? (
-          <div className="grid gap-6 md:grid-cols-3">
-            {events.map((event) => (
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {events.map((event, index) => (
             <article
               key={event.slug}
               className="overflow-hidden rounded-3xl border border-[#e5dfd0] bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-md"
             >
-              <div className="bg-[linear-gradient(135deg,#0b2341,#496b3f)] p-6 text-white">
-                <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold backdrop-blur">
+              <div className="relative aspect-[16/9] overflow-hidden">
+                <EventCoverImage index={index} />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#071d35]/35 via-transparent to-transparent" />
+                <span className="absolute left-4 top-4 rounded-full bg-[#496b3f] px-3 py-1.5 text-xs font-bold text-white shadow-lg">
                   {event.type}
                 </span>
-
-                <h3 className="mt-5 text-2xl font-bold">{event.title}</h3>
               </div>
 
               <div className="p-6">
@@ -149,7 +151,7 @@ export default async function VeranstaltungenPage() {
       </section>
 
       <section className="bg-white py-16">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
           <div className="mb-10 text-center">
             <p className="text-sm font-semibold uppercase tracking-[0.25em] text-[#d6a63f]">
               Nach Gemeinde
@@ -163,7 +165,7 @@ export default async function VeranstaltungenPage() {
             </p>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {churches.map((church) => (
               <article
                 key={church.slug}
@@ -181,7 +183,7 @@ export default async function VeranstaltungenPage() {
                   {church.postalCode} {church.city}
                 </p>
 
-                <div className="mt-5 flex gap-2">
+                <div className="mt-5 flex flex-wrap gap-2">
                   {church.languages.map((language) => (
                     <span
                       key={language}
@@ -205,9 +207,9 @@ export default async function VeranstaltungenPage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
+      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16 lg:px-8">
         <div className="rounded-[2rem] bg-[#0b2341] p-8 text-white md:p-12">
-          <div className="grid gap-8 md:grid-cols-[1fr_0.8fr] md:items-center">
+          <div className="grid gap-8 lg:grid-cols-[1fr_0.8fr] md:items-center">
             <div>
               <Globe className="text-[#d6a63f]" size={40} />
 
