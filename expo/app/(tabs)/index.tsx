@@ -634,7 +634,7 @@ const quickActions = useMemo(() => [
     title: t('home.latestSermon'),
     subtitle: t('home.latestSermonSubtitle'),
     color: '#10b981',
-    onPress: () => router.push('/manage-sermons'),
+    onPress: () => router.push('/sermon'),
   },
   {
     icon: Users,

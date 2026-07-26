@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, Platform, Switch } from 'react-native';
-import { Stack } from 'expo-router';
-import { Users, Shield, Plus, Check, UserPlus, Church, BookOpen, Youtube, Edit, Trash2, Ban, RefreshCw, ChevronDown, ChevronUp, X, Globe } from 'lucide-react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, Platform } from 'react-native';
+import { Stack, router } from 'expo-router';
+import { Users, Shield, Plus, Check, UserPlus, Church, BookOpen, Trash2, Ban, RefreshCw, ChevronDown, ChevronUp, X, Globe, ExternalLink, Settings } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '@/lib/trpc';
-import type { Sermon } from '@/types/sermon';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 
@@ -148,18 +147,6 @@ type AdminUserRow = {
 
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [addUserExpanded, setAddUserExpanded] = useState(false);
-  const [editingSermon, setEditingSermon] = useState<Sermon | null>(null);
-  const [sermonForm, setSermonForm] = useState({
-    title: '',
-    speaker: '',
-    date: '',
-    duration: '',
-    description: '',
-    topic: '',
-    youtube_url: '',
-    thumbnail_url: '',
-    is_featured: false,
-  });
 
   const createUserMutation = trpc.users.create.useMutation({
     onSuccess: (createdUser) => {
@@ -525,8 +512,6 @@ type AdminUserRow = {
     onError: (e: Error) => Alert.alert(t('admin.common.error'), t('admin.alerts.failedToAddMembers')),
   });
 
-  const sermonsQuery = trpc.sermons.getAll.useQuery();
-
 const countriesQuery = useQuery({
   queryKey: ['countries'],
   queryFn: async () => {
@@ -675,105 +660,6 @@ const addUserCountryMutation = useMutation({
     },
     onError: (e: Error) => Alert.alert(t('admin.common.error'), t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' })),
   });
-  const createSermonMutation = trpc.sermons.create.useMutation({
-    onSuccess: () => {
-      Alert.alert(t('admin.common.success'), t('admin.alerts.sermonCreated'));
-      resetSermonForm();
-      void sermonsQuery.refetch();
-    },
-    onError: (error) => {
-      Alert.alert(t('admin.common.error'), t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
-    },
-  });
-
-  const updateSermonMutation = trpc.sermons.update.useMutation({
-    onSuccess: () => {
-      Alert.alert(t('admin.common.success'), t('admin.alerts.sermonUpdated'));
-      resetSermonForm();
-      void sermonsQuery.refetch();
-    },
-    onError: (error) => {
-      Alert.alert(t('admin.common.error'), t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
-    },
-  });
-
-  const deleteSermonMutation = trpc.sermons.delete.useMutation({
-    onSuccess: () => {
-      Alert.alert(t('admin.common.success'), t('admin.alerts.sermonDeleted'));
-      void sermonsQuery.refetch();
-    },
-    onError: (error) => {
-      Alert.alert(t('admin.common.error'), t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
-    },
-  });
-
-  const resetSermonForm = () => {
-    setSermonForm({
-      title: '',
-      speaker: '',
-      date: '',
-      duration: '',
-      description: '',
-      topic: '',
-      youtube_url: '',
-      thumbnail_url: '',
-      is_featured: false,
-    });
-    setEditingSermon(null);
-  };
-
-  const handleSermonSubmit = () => {
-    if (!sermonForm.title || !sermonForm.speaker || !sermonForm.date || !sermonForm.duration) {
-      Alert.alert(t('admin.common.error'), t('admin.alerts.fillRequiredFields'));
-      return;
-    }
-
-    if (editingSermon) {
-      updateSermonMutation.mutate({
-        id: editingSermon.id,
-        ...sermonForm,
-        youtube_url: sermonForm.youtube_url || null,
-        thumbnail_url: sermonForm.thumbnail_url || null,
-      });
-    } else {
-      createSermonMutation.mutate({
-        ...sermonForm,
-        youtube_url: sermonForm.youtube_url || null,
-        thumbnail_url: sermonForm.thumbnail_url || null,
-      });
-    }
-  };
-
-  const handleSermonEdit = (sermon: Sermon) => {
-    setEditingSermon(sermon);
-    setSermonForm({
-      title: sermon.title,
-      speaker: sermon.speaker,
-      date: sermon.date,
-      duration: sermon.duration,
-      description: sermon.description,
-      topic: sermon.topic,
-      youtube_url: sermon.youtube_url || '',
-      thumbnail_url: sermon.thumbnail_url || '',
-      is_featured: sermon.is_featured,
-    });
-  };
-
-  const handleSermonDelete = (sermonId: string) => {
-    Alert.alert(
-      t('admin.sermons.deleteTitle'),
-      t('admin.sermons.deleteMessage'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('admin.common.delete'),
-          style: 'destructive',
-          onPress: () => deleteSermonMutation.mutate({ id: sermonId }),
-        },
-      ]
-    );
-  };
-
   const roles: Role[] = ['visitor', 'member', 'pastor', 'church_leader', 'admin'];
 
   const getRoleDisplayName = (role: Role): string => {
@@ -1113,189 +999,62 @@ const addUserCountryMutation = useMutation({
     </>
   );  
   const renderSermonsTab = () => (
-    <>
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <BookOpen size={20} color="#1e3a8a" />
-          <Text style={styles.cardTitle}>
-            {editingSermon ? t('admin.sermons.editSermon') : t('admin.sermons.addNewSermon')}
-          </Text>
+    <View style={styles.sermonHubCard}>
+      <LinearGradient
+        colors={['#eff6ff', '#ffffff']}
+        style={styles.sermonHubGradient}
+      >
+        <View style={styles.sermonHubIcon}>
+          <BookOpen size={28} color="#1e3a8a" />
         </View>
+        <Text style={styles.sermonHubTitle}>
+          {t('sermonLibrary.adminHubTitle')}
+        </Text>
+        <Text style={styles.sermonHubText}>
+          {t('sermonLibrary.adminHubDescription')}
+        </Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder={t('admin.sermons.titlePlaceholder')}
-          value={sermonForm.title}
-          onChangeText={(text) => setSermonForm({ ...sermonForm, title: text })}
-          placeholderTextColor="#94a3b8"
-        />
-
-        <TextInput
-          style={styles.input}
-          placeholder={t('admin.sermons.speakerPlaceholder')}
-          value={sermonForm.speaker}
-          onChangeText={(text) => setSermonForm({ ...sermonForm, speaker: text })}
-          placeholderTextColor="#94a3b8"
-        />
-
-        <View style={styles.row}>
-          <TextInput
-            style={[styles.input, { flex: 1 }]}
-            placeholder={t('admin.sermons.datePlaceholder')}
-            value={sermonForm.date}
-            onChangeText={(text) => setSermonForm({ ...sermonForm, date: text })}
-            placeholderTextColor="#94a3b8"
-          />
-          <TextInput
-            style={[styles.input, { flex: 1 }]}
-            placeholder={t('admin.sermons.durationPlaceholder')}
-            value={sermonForm.duration}
-            onChangeText={(text) => setSermonForm({ ...sermonForm, duration: text })}
-            placeholderTextColor="#94a3b8"
-          />
-        </View>
-
-        <TextInput
-          style={styles.input}
-          placeholder={t('admin.sermons.topicPlaceholder')}
-          value={sermonForm.topic}
-          onChangeText={(text) => setSermonForm({ ...sermonForm, topic: text })}
-          placeholderTextColor="#94a3b8"
-        />
-
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          placeholder={t('admin.sermons.descriptionPlaceholder')}
-          value={sermonForm.description}
-          onChangeText={(text) => setSermonForm({ ...sermonForm, description: text })}
-          multiline
-          numberOfLines={4}
-          placeholderTextColor="#94a3b8"
-        />
-
-        <View style={styles.youtubeSection}>
-          <View style={styles.youtubeBadge}>
-            <Youtube size={14} color="#ef4444" />
-            <Text style={styles.youtubeBadgeText}>{t('admin.sermons.youtubeIntegration')}</Text>
+        <View style={styles.sermonHubSteps}>
+          <View style={styles.sermonHubStep}>
+            <View style={styles.sermonHubStepNumber}>
+              <Text style={styles.sermonHubStepNumberText}>1</Text>
+            </View>
+            <Text style={styles.sermonHubStepText}>
+              {t('sermonLibrary.adminHubStepOne')}
+            </Text>
           </View>
-          
-          <TextInput
-            style={styles.inputLight}
-            placeholder={t('admin.sermons.youtubeUrlPlaceholder')}
-            value={sermonForm.youtube_url}
-            onChangeText={(text) => setSermonForm({ ...sermonForm, youtube_url: text })}
-            autoCapitalize="none"
-            keyboardType="url"
-            placeholderTextColor="#94a3b8"
-          />
-          
-          <TextInput
-            style={styles.inputLight}
-            placeholder={t('admin.sermons.thumbnailUrlPlaceholder')}
-            value={sermonForm.thumbnail_url}
-            onChangeText={(text) => setSermonForm({ ...sermonForm, thumbnail_url: text })}
-            autoCapitalize="none"
-            keyboardType="url"
-            placeholderTextColor="#94a3b8"
-          />
+          <View style={styles.sermonHubStep}>
+            <View style={styles.sermonHubStepNumber}>
+              <Text style={styles.sermonHubStepNumberText}>2</Text>
+            </View>
+            <Text style={styles.sermonHubStepText}>
+              {t('sermonLibrary.adminHubStepTwo')}
+            </Text>
+          </View>
         </View>
 
-        <View style={styles.switchRow}>
-          <Text style={styles.switchLabel}>{t('admin.sermons.featuredSermon')}</Text>
-          <Switch
-            value={sermonForm.is_featured}
-            onValueChange={(value) => setSermonForm({ ...sermonForm, is_featured: value })}
-            trackColor={{ false: '#cbd5e1', true: '#3b82f6' }}
-            thumbColor={sermonForm.is_featured ? '#1e3a8a' : '#f1f5f9'}
-          />
-        </View>
-
-        <View style={styles.buttonRow}>
-          {editingSermon && (
-            <TouchableOpacity
-              style={[styles.secondaryButton, { flex: 1 }]}
-              onPress={resetSermonForm}
-            >
-              <Text style={styles.secondaryButtonText}>{t('common.cancel')}</Text>
-            </TouchableOpacity>
-          )}
+        <View style={styles.sermonHubActions}>
           <TouchableOpacity
-            style={[
-              styles.primaryButton,
-              { flex: 1 },
-              (createSermonMutation.isPending || updateSermonMutation.isPending) && { opacity: 0.7 },
-            ]}
-            onPress={handleSermonSubmit}
-            disabled={createSermonMutation.isPending || updateSermonMutation.isPending}
+            style={styles.sermonHubSecondary}
+            onPress={() => router.push('/sermon')}
           >
-            {createSermonMutation.isPending || updateSermonMutation.isPending ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <View style={styles.buttonContent}>
-                <Plus size={18} color="#fff" />
-                <Text style={styles.primaryButtonText}>
-                  {editingSermon ? t('admin.common.update') : t('admin.common.create')}
-                </Text>
-              </View>
-            )}
+            <ExternalLink size={18} color="#1e3a8a" />
+            <Text style={styles.sermonHubSecondaryText}>
+              {t('sermonLibrary.openLibrary')}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.sermonHubPrimary}
+            onPress={() => router.push('/manage-sermons')}
+          >
+            <Settings size={18} color="#fff" />
+            <Text style={styles.sermonHubPrimaryText}>
+              {t('sermonLibrary.openManager')}
+            </Text>
           </TouchableOpacity>
         </View>
-      </View>
-
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <BookOpen size={20} color="#1e3a8a" />
-          <Text style={styles.cardTitle}>{t('admin.sermons.existingSermons')}</Text>
-        </View>
-
-        {sermonsQuery.isLoading ? (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator color="#1e3a8a" />
-          </View>
-        ) : sermonsQuery.data && sermonsQuery.data.length > 0 ? (
-          sermonsQuery.data.map((sermon) => (
-            <View key={sermon.id} style={styles.sermonRow}>
-              <View style={{ flex: 1 }}>
-                <View style={styles.sermonTitleRow}>
-                  <Text style={styles.sermonTitle}>{sermon.title}</Text>
-                  {sermon.is_featured && (
-                    <View style={styles.featuredBadgeSmall}>
-                      <Text style={styles.featuredBadgeSmallText}>{t('admin.sermons.featured')}</Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={styles.sermonMeta}>
-                  {sermon.speaker} • {sermon.date} • {sermon.duration}
-                </Text>
-                {sermon.youtube_url && (
-                  <View style={styles.youtubeIndicator}>
-                    <Youtube size={12} color="#ef4444" />
-                    <Text style={styles.youtubeIndicatorText}>{t('admin.sermons.youtubeVideo')}</Text>
-                  </View>
-                )}
-              </View>
-              <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={styles.iconButton}
-                  onPress={() => handleSermonEdit(sermon)}
-                >
-                  <Edit size={18} color="#3b82f6" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.iconButton}
-                  onPress={() => handleSermonDelete(sermon.id)}
-                  disabled={deleteSermonMutation.isPending}
-                >
-                  <Trash2 size={18} color="#ef4444" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))
-        ) : (
-          <Text style={styles.emptyText}>{t('admin.sermons.empty')}</Text>
-        )}
-      </View>
-    </>
+      </LinearGradient>
+    </View>
   );
 
   const toggleUserSelection = (userId: string) => {
@@ -1830,7 +1589,12 @@ const addUserCountryMutation = useMutation({
       </LinearGradient>
       
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.tabBar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.tabBarScroller}
+          contentContainerStyle={styles.tabBar}
+        >
           <TouchableOpacity
             style={[styles.tab, activeTab === 'users' && styles.tabActive]}
             onPress={() => setActiveTab('users')}
@@ -1866,7 +1630,7 @@ const addUserCountryMutation = useMutation({
               </TouchableOpacity>
             </>
           )}
-        </View>
+        </ScrollView>
 
         {activeTab === 'users' && renderUsersTab()}
         {isAdminUser && activeTab === 'sermons' && renderSermonsTab()}
@@ -1892,10 +1656,11 @@ const styles = StyleSheet.create({
   statCard: { flex: 1, backgroundColor: 'white', borderRadius: 12, padding: 16, alignItems: 'center' as const, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
   statNumber: { fontSize: 24, fontWeight: 'bold' as const, color: '#1e3a8a' },
   statLabel: { fontSize: 12, color: '#64748b', marginTop: 4 },
-  tabBar: { flexDirection: 'row' as const, gap: 4, marginBottom: 16, backgroundColor: 'white', padding: 4, borderRadius: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  tab: { flex: 1, flexDirection: 'column' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 4, paddingVertical: 8, paddingHorizontal: 2, borderRadius: 8, minWidth: 0 },
+  tabBarScroller: { marginBottom: 16, borderRadius: 12, backgroundColor: 'white', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  tabBar: { flexDirection: 'row' as const, gap: 4, padding: 4 },
+  tab: { minWidth: 108, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, paddingVertical: 11, paddingHorizontal: 10, borderRadius: 8 },
   tabActive: { backgroundColor: '#eff6ff' },
-  tabText: { fontSize: 11, fontWeight: '600' as const, color: '#64748b' },
+  tabText: { fontSize: 12, fontWeight: '600' as const, color: '#64748b' },
   tabTextActive: { color: '#1e3a8a' },
   card: { backgroundColor: 'white', borderRadius: 16, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 },
   cardHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginBottom: 16 },
@@ -1937,31 +1702,29 @@ const styles = StyleSheet.create({
   roleChipTextActive: { color: 'white', fontWeight: '600' as const },
   row: { flexDirection: 'row' as const, gap: 12, marginBottom: 12 },
   input: { flex: 1, backgroundColor: '#f8fafc', borderRadius: 12, paddingHorizontal: 14, paddingVertical: Platform.OS === 'ios' ? 14 : 12, borderWidth: 1, borderColor: '#e2e8f0', color: '#1e293b', fontSize: 15, marginBottom: 12 },
-  inputLight: { flex: 1, backgroundColor: 'white', borderRadius: 12, paddingHorizontal: 14, paddingVertical: Platform.OS === 'ios' ? 14 : 12, borderWidth: 1, borderColor: '#e2e8f0', color: '#1e293b', fontSize: 15, marginBottom: 12 },
   primaryButton: { backgroundColor: '#1e3a8a', paddingVertical: 14, borderRadius: 12, alignItems: 'center' as const },
   primaryButtonCompact: { backgroundColor: '#1e3a8a', paddingVertical: 14, paddingHorizontal: 20, borderRadius: 12, alignItems: 'center' as const },
   primaryButtonText: { color: 'white', fontWeight: '700' as const, fontSize: 15 },
   secondaryButton: { backgroundColor: 'white', borderWidth: 2, borderColor: '#1e3a8a', paddingVertical: 12, borderRadius: 12, alignItems: 'center' as const },
   secondaryButtonText: { color: '#1e3a8a', fontWeight: '700' as const, fontSize: 15 },
   buttonContent: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
-  buttonRow: { flexDirection: 'row' as const, gap: 12 },
   loadingRow: { paddingVertical: 24, alignItems: 'center' as const },
-  textArea: { height: 100, textAlignVertical: 'top' as const },
-  youtubeSection: { backgroundColor: '#fef2f2', borderRadius: 12, padding: 14, marginBottom: 12 },
-  youtubeBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginBottom: 12 },
-  youtubeBadgeText: { fontSize: 12, fontWeight: '700' as const, color: '#ef4444', letterSpacing: 0.5 },
-  switchRow: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, marginBottom: 16, paddingVertical: 8 },
-  switchLabel: { fontSize: 15, fontWeight: '600' as const, color: '#1e293b' },
-  sermonRow: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
-  sermonTitleRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 4 },
-  sermonTitle: { fontSize: 15, fontWeight: '600' as const, color: '#1e293b', flex: 1 },
-  sermonMeta: { fontSize: 13, color: '#64748b', marginBottom: 4 },
-  featuredBadgeSmall: { backgroundColor: '#fef3c7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  featuredBadgeSmallText: { fontSize: 10, fontWeight: '700' as const, color: '#92400e', letterSpacing: 0.5 },
-  youtubeIndicator: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, marginTop: 4 },
-  youtubeIndicatorText: { fontSize: 11, color: '#ef4444', fontWeight: '600' as const },
-  actionButtons: { flexDirection: 'row' as const, gap: 8 },
   iconButton: { width: 40, height: 40, justifyContent: 'center' as const, alignItems: 'center' as const, backgroundColor: '#f8fafc', borderRadius: 10 },
+  sermonHubCard: { overflow: 'hidden', borderRadius: 18, backgroundColor: '#fff', shadowColor: '#0f172a', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
+  sermonHubGradient: { padding: 22 },
+  sermonHubIcon: { width: 58, height: 58, borderRadius: 18, backgroundColor: '#dbeafe', alignItems: 'center' as const, justifyContent: 'center' as const },
+  sermonHubTitle: { color: '#1e293b', fontSize: 22, fontWeight: '800' as const, marginTop: 16 },
+  sermonHubText: { color: '#475569', fontSize: 14, lineHeight: 21, marginTop: 7 },
+  sermonHubSteps: { gap: 10, marginTop: 20, marginBottom: 22 },
+  sermonHubStep: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
+  sermonHubStepNumber: { width: 28, height: 28, borderRadius: 9, backgroundColor: '#1e3a8a', alignItems: 'center' as const, justifyContent: 'center' as const },
+  sermonHubStepNumberText: { color: '#fff', fontSize: 12, fontWeight: '800' as const },
+  sermonHubStepText: { flex: 1, color: '#334155', fontSize: 13, lineHeight: 19 },
+  sermonHubActions: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 10 },
+  sermonHubPrimary: { flexGrow: 1, minWidth: 170, minHeight: 48, borderRadius: 12, backgroundColor: '#1e3a8a', flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, paddingHorizontal: 14 },
+  sermonHubPrimaryText: { color: '#fff', fontSize: 14, fontWeight: '700' as const },
+  sermonHubSecondary: { flexGrow: 1, minWidth: 145, minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: '#bfdbfe', backgroundColor: '#fff', flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, paddingHorizontal: 14 },
+  sermonHubSecondaryText: { color: '#1e3a8a', fontSize: 14, fontWeight: '700' as const },
   emptyText: { textAlign: 'center' as const, color: '#94a3b8', paddingVertical: 24, fontSize: 14 },
   errorContainer: { backgroundColor: '#fee2e2', borderRadius: 12, padding: 16, alignItems: 'center' as const },
   errorTitle: { fontSize: 15, fontWeight: '700' as const, color: '#b91c1c', marginBottom: 6 },

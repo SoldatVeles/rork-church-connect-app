@@ -1,46 +1,55 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, Linking, Platform, TouchableOpacity, Text, ActivityIndicator } from 'react-native';
 import { Play } from 'lucide-react-native';
+import React, { useState } from 'react';
+import {
+  ActivityIndicator,
+  Linking,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { WebView } from 'react-native-webview';
+
+import { getYouTubeVideoId } from '@/utils/youtube';
 
 interface YouTubePlayerProps {
   videoUrl: string;
-  style?: any;
+  style?: StyleProp<ViewStyle>;
+  invalidUrlText?: string;
+  externalFallbackText?: string;
 }
 
-const getYouTubeId = (url: string): string | null => {
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\?\/]+)/,
-    /youtube\.com\/watch\?.*v=([^&]+)/,
-  ];
-
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match && match[1]) {
-      return match[1];
-    }
-  }
-  return null;
-};
-
-export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({ videoUrl, style }) => {
+export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
+  videoUrl,
+  style,
+  invalidUrlText = 'Invalid YouTube URL',
+  externalFallbackText = 'Tap to watch on YouTube',
+}) => {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
-  const videoId = getYouTubeId(videoUrl);
+  const videoId = getYouTubeVideoId(videoUrl);
 
   if (!videoId) {
     return (
       <View style={[styles.container, style, styles.errorContainer]}>
-        <Text style={styles.errorText}>Invalid YouTube URL</Text>
+        <Text style={styles.errorText}>{invalidUrlText}</Text>
       </View>
     );
   }
+
+  const embedUrl =
+    `https://www.youtube-nocookie.com/embed/${videoId}`
+    + '?rel=0&modestbranding=1&playsinline=1';
 
   if (Platform.OS === 'web') {
     return (
       <View style={[styles.container, style]}>
         <iframe
-          src={`https://www.youtube.com/embed/${videoId}?rel=0`}
+          src={embedUrl}
+          title="YouTube video player"
           style={{
             width: '100%',
             height: '100%',
@@ -60,29 +69,15 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({ videoUrl, style })
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <style>
-          * { margin: 0; padding: 0; }
-          body { background-color: #000; }
-          .video-container {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-          }
-          iframe {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            border: none;
-          }
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          html, body, .video-container { width: 100%; height: 100%; background: #000; }
+          iframe { width: 100%; height: 100%; border: 0; }
         </style>
       </head>
       <body>
         <div class="video-container">
           <iframe
-            src="https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1"
-            frameborder="0"
+            src="${embedUrl}"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowfullscreen
           ></iframe>
@@ -95,10 +90,10 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({ videoUrl, style })
     return (
       <TouchableOpacity
         style={[styles.container, style, styles.errorContainer]}
-        onPress={() => Linking.openURL(videoUrl)}
+        onPress={() => void Linking.openURL(videoUrl)}
       >
         <Play size={32} color="#fff" />
-        <Text style={styles.errorText}>Tap to watch on YouTube</Text>
+        <Text style={styles.errorText}>{externalFallbackText}</Text>
       </TouchableOpacity>
     );
   }
@@ -111,10 +106,10 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({ videoUrl, style })
         </View>
       )}
       <WebView
-        source={{ html: embedHtml }}
+        source={{ html: embedHtml, baseUrl: 'https://www.youtube-nocookie.com' }}
         style={styles.webview}
         allowsInlineMediaPlayback
-        mediaPlaybackRequiresUserAction={false}
+        mediaPlaybackRequiresUserAction
         javaScriptEnabled
         domStorageEnabled
         onLoadEnd={() => setIsLoading(false)}
@@ -135,11 +130,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
   },
-  webview: {
-    backgroundColor: 'transparent',
-  },
+  webview: { backgroundColor: '#000' },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
+    zIndex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#000',
@@ -148,6 +142,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#1e3a8a',
+    padding: 20,
   },
   errorText: {
     color: '#fff',

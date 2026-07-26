@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Church Connect App",
-    "slug": "church-connect-app-aqsaja5",
+    "name": "Church Connect",
+    "slug": "church-connect",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "myapp",
+    "scheme": "churchconnect",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -15,14 +15,16 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.rork.church-connect-app-aqsaja5"
+      "bundleIdentifier": "ch.sdarm.churchconnect",
+      "buildNumber": "1"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "app.rork.church-connect-app-aqsaja5"
+      "package": "ch.sdarm.churchconnect",
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
@@ -31,13 +33,14 @@
       [
         "expo-router",
         {
-          "origin": "https://rork.com/"
+          "origin": "https://sdarm.ch"
         }
       ],
       "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "description": "Gemeinsam glauben, dienen und verbunden bleiben."
   }
 }

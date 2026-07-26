@@ -62,8 +62,9 @@ export default async function Home() {
               Willkommen bei sdarm.ch
             </p>
 
-            <h1 className="max-w-xl text-[clamp(2.5rem,5vw,4.6rem)] font-extrabold leading-[0.98] tracking-[-0.045em]">
-              Gemeinschaft im Glauben
+            <h1 className="max-w-xl break-normal text-[clamp(1.75rem,9vw,4.6rem)] font-extrabold leading-[0.98] tracking-[-0.045em] lg:text-[clamp(2.7rem,4.25vw,4.4rem)]">
+              <span className="block whitespace-nowrap">Gemeinschaft</span>
+              <span className="block">im Glauben</span>
             </h1>
 
             <p className="mt-6 max-w-lg text-base leading-7 text-white/78 sm:text-lg sm:leading-8">
