@@ -1,14 +1,10 @@
-import Link from "next/link";
 import {
-  ArrowRight,
   BookOpenText,
   Gift,
   HeartHandshake,
-  Mail,
-  MapPin,
-  User,
 } from "lucide-react";
-import { siteConfig } from "@/config/site";
+
+import { WebsiteRequestForm } from "@/components/WebsiteRequestForm";
 
 export default function KostenloseBuecherPage() {
   return (
@@ -69,104 +65,13 @@ export default function KostenloseBuecherPage() {
         <div className="rounded-3xl border border-[#e5dfd0] bg-white p-7 shadow-sm">
           <h2 className="text-2xl font-bold">Bestellformular</h2>
           <p className="mt-3 text-[#475569]">
-            Dieses Formular ist im ersten Schritt nur vorbereitet. Später
-            verbinden wir es mit Supabase oder senden die Anfrage per E-Mail.
+            Senden Sie uns Ihre Kontaktdaten und die gewünschte Literatur.
+            Ihre Angaben werden vertraulich behandelt.
           </p>
 
-          <form className="mt-8 space-y-5">
-            <div>
-              <label className="mb-2 block text-sm font-semibold">
-                Vorname und Name
-              </label>
-              <div className="relative">
-                <User className="absolute left-3 top-3 text-[#64748b]" size={18} />
-                <input
-                  type="text"
-                  placeholder="Ihr Name"
-                  className="w-full rounded-xl border border-[#e5dfd0] bg-[#f8f6f1] px-10 py-3 outline-none focus:border-[#d6a63f]"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-semibold">
-                E-Mail-Adresse
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-3 text-[#64748b]" size={18} />
-                <input
-                  type="email"
-                  placeholder="name@example.com"
-                  className="w-full rounded-xl border border-[#e5dfd0] bg-[#f8f6f1] px-10 py-3 outline-none focus:border-[#d6a63f]"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-semibold">
-                Adresse
-              </label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-3 text-[#64748b]" size={18} />
-                <input
-                  type="text"
-                  placeholder="Strasse, PLZ, Ort"
-                  className="w-full rounded-xl border border-[#e5dfd0] bg-[#f8f6f1] px-10 py-3 outline-none focus:border-[#d6a63f]"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-semibold">
-                Gewünschtes Material
-              </label>
-              <select className="w-full rounded-xl border border-[#e5dfd0] bg-[#f8f6f1] px-4 py-3 outline-none focus:border-[#d6a63f]">
-                <option>Bitte auswählen</option>
-                <option>Bibelstudienmaterial</option>
-                <option>Christliches Buch</option>
-                <option>Material über den Sabbat</option>
-                <option>Material über Gesundheit und Familie</option>
-                <option>Ich bin nicht sicher</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-semibold">
-                Nachricht, optional
-              </label>
-              <textarea
-                rows={5}
-                placeholder="Ihre Nachricht oder Frage"
-                className="w-full rounded-xl border border-[#e5dfd0] bg-[#f8f6f1] px-4 py-3 outline-none focus:border-[#d6a63f]"
-              />
-            </div>
-
-            <label className="flex gap-3 text-sm text-[#475569]">
-              <input type="checkbox" className="mt-1" />
-              Ich bin einverstanden, dass meine Angaben zur Bearbeitung meiner
-              Anfrage verwendet werden.
-            </label>
-
-            <button
-              type="button"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#0b2341] px-6 py-3 font-semibold text-white hover:bg-[#12365f]"
-            >
-              Anfrage vorbereiten
-              <ArrowRight size={18} />
-            </button>
-
-            <p className="text-xs leading-5 text-[#64748b]">
-              Hinweis: Die technische Übermittlung wird im nächsten Schritt
-              aktiviert. Bis dahin kann die Anfrage direkt über{" "}
-              <Link
-                href={`mailto:${siteConfig.email}`}
-                className="font-semibold text-[#0b2341] underline"
-              >
-                {siteConfig.email}
-              </Link>{" "}
-              erfolgen.
-            </p>
-          </form>
+          <div className="mt-8">
+            <WebsiteRequestForm variant="book" />
+          </div>
         </div>
       </section>
     </main>

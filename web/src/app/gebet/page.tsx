@@ -254,7 +254,7 @@ export default async function GebetPage() {
               </div>
 
               <label className="flex gap-3 text-sm text-[#475569]">
-                <input type="checkbox" className="mt-1" />
+                <input type="checkbox" className="mt-0.5 h-6 w-6 shrink-0 cursor-pointer accent-[#0b2341]" />
                 Ich bin einverstanden, dass meine Angaben zur Bearbeitung des
                 Gebetsanliegens verwendet werden.
               </label>

@@ -296,7 +296,7 @@ export function PrayerRequestForm({ churches }: PrayerRequestFormProps) {
               name="privacyConsent"
               type="checkbox"
               required
-              className="mt-1"
+              className="mt-0.5 h-6 w-6 shrink-0 cursor-pointer accent-[#0b2341]"
             />
             <span>
               Ich bin einverstanden, dass meine Angaben zur Bearbeitung des

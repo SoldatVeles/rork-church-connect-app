@@ -9,11 +9,12 @@ import {
   MessageCircle,
   Send,
   ShieldCheck,
-  User,
 } from "lucide-react";
 
+import { WebsiteRequestForm } from "@/components/WebsiteRequestForm";
 import { churches } from "@/data/churches";
 import { siteConfig } from "@/config/site";
+import { getPrayerSubmissionChurches } from "@/lib/website-churches";
 
 const contactOptions = [
   {
@@ -46,7 +47,9 @@ const contactOptions = [
   },
 ];
 
-export default function KontaktPage() {
+export default async function KontaktPage() {
+  const submissionChurches = await getPrayerSubmissionChurches();
+
   return (
     <main className="min-h-screen bg-[#f8f6f1] text-[#0b2341]">
       <section className="relative overflow-hidden bg-[#071d35] px-4 py-16 text-white sm:px-6 sm:py-20">
@@ -146,93 +149,10 @@ export default function KontaktPage() {
             </div>
           </div>
 
-          <form className="space-y-5">
-            <div>
-              <label className="mb-2 block text-sm font-semibold">
-                Vorname und Name
-              </label>
-              <div className="relative">
-                <User
-                  className="absolute left-3 top-3 text-[#64748b]"
-                  size={18}
-                />
-                <input
-                  type="text"
-                  placeholder="Ihr Name"
-                  className="w-full rounded-xl border border-[#e5dfd0] bg-[#f8f6f1] px-10 py-3 outline-none focus:border-[#d6a63f]"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-semibold">
-                E-Mail-Adresse
-              </label>
-              <div className="relative">
-                <Mail
-                  className="absolute left-3 top-3 text-[#64748b]"
-                  size={18}
-                />
-                <input
-                  type="email"
-                  placeholder="name@example.com"
-                  className="w-full rounded-xl border border-[#e5dfd0] bg-[#f8f6f1] px-10 py-3 outline-none focus:border-[#d6a63f]"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-semibold">
-                Anliegen
-              </label>
-              <select className="w-full rounded-xl border border-[#e5dfd0] bg-[#f8f6f1] px-4 py-3 outline-none focus:border-[#d6a63f]">
-                <option>Bitte auswählen</option>
-                <option>Ich möchte eine Gemeinde besuchen</option>
-                <option>Ich möchte ein Bibelstudium</option>
-                <option>Ich habe ein Gebetsanliegen</option>
-                <option>Ich möchte kostenlose Bücher bestellen</option>
-                <option>Allgemeine Frage</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-semibold">
-                Nachricht
-              </label>
-              <textarea
-                rows={6}
-                placeholder="Ihre Nachricht"
-                className="w-full rounded-xl border border-[#e5dfd0] bg-[#f8f6f1] px-4 py-3 outline-none focus:border-[#d6a63f]"
-              />
-            </div>
-
-            <label className="flex gap-3 text-sm text-[#475569]">
-              <input type="checkbox" className="mt-1" />
-              Ich bin einverstanden, dass meine Angaben zur Bearbeitung meiner
-              Anfrage verwendet werden.
-            </label>
-
-            <button
-              type="button"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#0b2341] px-6 py-3 font-semibold text-white hover:bg-[#12365f]"
-            >
-              Anfrage vorbereiten
-              <ArrowRight size={18} />
-            </button>
-
-            <p className="text-xs leading-5 text-[#64748b]">
-              Hinweis: Dieses Formular ist vorbereitet. Die technische
-              Übermittlung verbinden wir später mit Supabase oder E-Mail.
-              Bis dahin kann der Kontakt direkt über{" "}
-              <a
-                href={`mailto:${siteConfig.email}`}
-                className="font-semibold text-[#0b2341] underline"
-              >
-                {siteConfig.email}
-              </a>{" "}
-              erfolgen.
-            </p>
-          </form>
+          <WebsiteRequestForm
+            variant="contact"
+            churches={submissionChurches}
+          />
         </div>
 
         <div className="space-y-6">
