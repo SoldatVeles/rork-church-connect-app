@@ -13,6 +13,11 @@ import {
 } from 'react-native';
 import { Bell, Calendar, Heart, MessageCircle, X, Trash2, Sun } from 'lucide-react-native';
 import { router } from 'expo-router';
+import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  fetchNotificationPreferences,
+  isNotificationEnabled,
+} from '@/lib/notification-preferences';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -75,6 +80,12 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const preferencesQuery = useQuery({
+    queryKey: ['notification-preferences', user?.id],
+    enabled: !!user?.id,
+    queryFn: () => fetchNotificationPreferences(user!.id),
+  });
+  const preferences = preferencesQuery.data ?? DEFAULT_NOTIFICATION_PREFERENCES;
 
   const notificationScopeQuery = useQuery({
     queryKey: ['notification-scope', user?.id],
@@ -133,8 +144,20 @@ const refreshNotificationCounts = () => {
   onNotificationsChanged?.();
 };
   const notificationsQuery = useQuery({
-    queryKey: ['notifications', user?.id, notificationHomeGroupId, notificationUserIsAdmin, notificationUserCreatedAt, notificationScopeQuery.isFetched],
-    enabled: !!user?.id && notificationScopeQuery.isFetched,
+    queryKey: [
+      'notifications',
+      user?.id,
+      notificationHomeGroupId,
+      notificationUserIsAdmin,
+      notificationUserCreatedAt,
+      notificationScopeQuery.isFetched,
+      preferences.events,
+      preferences.prayers,
+      preferences.sabbathUpdates,
+      preferences.churchAnnouncements,
+      preferencesQuery.isFetched,
+    ],
+    enabled: !!user?.id && notificationScopeQuery.isFetched && preferencesQuery.isFetched,
     queryFn: async (): Promise<NotificationItem[]> => {
       if (!user?.id) return [];
 
@@ -158,7 +181,9 @@ const refreshNotificationCounts = () => {
         throw new Error(notificationsError.message);
       }
 
-      const notificationRows = notificationsData ?? [];
+      const notificationRows = (notificationsData ?? []).filter((notification: any) =>
+        isNotificationEnabled(notification, preferences, user.id)
+      );
 
       if (notificationRows.length === 0) {
         return [];

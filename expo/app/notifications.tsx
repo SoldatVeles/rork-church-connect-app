@@ -1,338 +1,75 @@
 import { Stack } from 'expo-router';
-import React, { useMemo } from 'react';
+import {
+  Calendar,
+  Heart,
+  MessageCircle,
+  RefreshCw,
+  ShieldCheck,
+  Sun,
+} from 'lucide-react-native';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
+  Alert,
   SafeAreaView,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Bell, Trash2 } from 'lucide-react-native';
-import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/providers/auth-provider';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-interface AppNotification {
-  id: string;
-  type: string;
-  title: string;
-  body: string | null;
-  titleKey: string | null;
-  bodyKey: string | null;
-  bodyParams: Record<string, unknown>;
-  created_at: string;
-  isRead: boolean;
-}
-
-function normalizeNotificationParams(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return {};
-  }
-
-  return value as Record<string, unknown>;
-}
-
-function formatSabbathNotificationDate(value: unknown, locale: string): string | undefined {
-  if (typeof value !== 'string' || !value.trim()) {
-    return undefined;
-  }
-
-  const date = new Date(`${value}T12:00:00`);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleDateString(locale, {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
-
-type NotificationScope = {
-  role: string | null;
-  homeGroupId: string | null;
-  createdAt: string | null;
-};
+import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  fetchNotificationPreferences,
+  NotificationPreferences,
+  saveNotificationPreferences,
+} from '@/lib/notification-preferences';
+import { useAuth } from '@/providers/auth-provider';
 
 export default function NotificationsScreen() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const notificationScopeQuery = useQuery<NotificationScope, Error>({
-    queryKey: ['notification-scope', user?.id],
+  const preferencesQuery = useQuery<NotificationPreferences, Error>({
+    queryKey: ['notification-preferences', user?.id],
     enabled: !!user?.id,
-    queryFn: async () => {
-      if (!user?.id) {
-        return { role: null, homeGroupId: null, createdAt: null };
-      }
-
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role, home_group_id, created_at')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (profileError) {
-        console.warn('[NotificationsPage] Profile scope fetch error:', profileError.message);
-        return { role: user.role ?? null, homeGroupId: null, createdAt: null };
-      }
-
-      const profileHomeGroupId = (profile as any)?.home_group_id as string | null;
-
-      if (profileHomeGroupId) {
-        return {
-          role: ((profile as any)?.role ?? user.role ?? null) as string | null,
-          homeGroupId: profileHomeGroupId,
-          createdAt: ((profile as any)?.created_at ?? null) as string | null,
-        };
-      }
-
-      const { data: memberships, error: membershipsError } = await supabase
-        .from('group_members')
-        .select('group_id')
-        .eq('user_id', user.id)
-        .limit(1);
-
-      if (membershipsError) {
-        console.warn('[NotificationsPage] Membership scope fetch error:', membershipsError.message);
-      }
-
-      return {
-        role: ((profile as any)?.role ?? user.role ?? null) as string | null,
-        homeGroupId: memberships && memberships.length > 0 ? ((memberships[0] as any).group_id as string) : null,
-        createdAt: ((profile as any)?.created_at ?? null) as string | null,
-      };
-    },
+    queryFn: () => fetchNotificationPreferences(user!.id),
   });
+  const preferences = preferencesQuery.data ?? DEFAULT_NOTIFICATION_PREFERENCES;
 
-  const notificationScope = notificationScopeQuery.data;
-  const notificationUserIsAdmin = notificationScope?.role === 'admin';
-  const notificationHomeGroupId = notificationScope?.homeGroupId ?? null;
-  const notificationUserCreatedAt = notificationScope?.createdAt ?? null;
-
-  const query = useQuery<AppNotification[], Error>({
-    queryKey: [
-      'notifications',
-      'all',
-      user?.id,
-      notificationHomeGroupId,
-      notificationUserIsAdmin,
-      notificationUserCreatedAt,
-      notificationScopeQuery.isFetched,
-    ],
-    enabled: !!user?.id && notificationScopeQuery.isFetched,
-    queryFn: async () => {
-      if (!user?.id) return [];
-
-      if (!notificationUserIsAdmin && !notificationHomeGroupId) {
-        return [];
+  const savePreferences = useMutation({
+    mutationFn: (nextPreferences: NotificationPreferences) => {
+      if (!user?.id) {
+        throw new Error(t('notifications.mustBeLoggedIn'));
       }
-
-      let notificationsQuery = supabase
-        .from('notifications')
-        .select('*')
-        .or(`user_id.eq.${user.id},user_id.is.null`)
-        .order('created_at', { ascending: false });
-
-      if (notificationUserCreatedAt) {
-        notificationsQuery = notificationsQuery.gte('created_at', notificationUserCreatedAt);
-      }
-
-      const { data: notificationsData, error: notificationsError } = await notificationsQuery;
-
-      if (notificationsError) {
-        throw new Error(notificationsError.message);
-      }
-
-      const notificationRows = notificationsData ?? [];
-
-      if (notificationRows.length === 0) {
-        return [];
-      }
-
-      const notificationIds = notificationRows.map((notification: any) => notification.id);
-
-      const { data: stateRows, error: statesError } = await supabase
-        .from('notification_user_states')
-        .select('notification_id, is_read, is_deleted')
-        .eq('user_id', user.id)
-        .in('notification_id', notificationIds);
-
-      if (statesError) {
-        throw new Error(statesError.message);
-      }
-
-      const stateMap = new Map<string, { is_read: boolean; is_deleted: boolean }>();
-
-      (stateRows ?? []).forEach((state: any) => {
-        stateMap.set(state.notification_id, {
-          is_read: Boolean(state.is_read),
-          is_deleted: Boolean(state.is_deleted),
-        });
-      });
-
-      return notificationRows
-        .filter((notification: any) => {
-          const state = stateMap.get(notification.id);
-          return state?.is_deleted !== true;
+      return saveNotificationPreferences(user.id, nextPreferences);
+    },
+    onSuccess: (savedPreferences) => {
+      queryClient.setQueryData(['notification-preferences', user?.id], savedPreferences);
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+    onError: () => {
+      Alert.alert(
+        t('notifications.preferencesSaveFailedTitle', {
+          defaultValue: 'Preference not saved',
+        }),
+        t('notifications.preferencesSaveFailedMessage', {
+          defaultValue: 'Please check your connection and try again.',
         })
-        .map((notification: any) => {
-          const state = stateMap.get(notification.id);
-
-          return {
-            id: notification.id,
-            type: notification.type ?? 'announcement',
-            title: notification.title ?? t('notifications.fallbackTitle'),
-            body: notification.body ?? null,
-            titleKey: notification.title_key ?? null,
-            bodyKey: notification.body_key ?? null,
-            bodyParams: normalizeNotificationParams(notification.body_params),
-            created_at: notification.created_at,
-            isRead: Boolean(state?.is_read),
-          };
-        });
+      );
     },
-    refetchInterval: 30000,
   });
 
-  const notifications = useMemo(() => query.data ?? [], [query.data]);
-
-  const refreshNotifications = () => {
-    void query.refetch();
-    void queryClient.invalidateQueries({ queryKey: ['notifications'] });
-    void queryClient.invalidateQueries({ queryKey: ['notifications', 'count', user?.id] });
-  };
-
-  const markRead = useMutation({
-    mutationFn: async (id: string) => {
-      if (!user?.id) {
-        throw new Error(t('notifications.mustBeLoggedIn'));
-      }
-
-      const { error } = await supabase
-        .from('notification_user_states')
-        .upsert(
-          {
-            notification_id: id,
-            user_id: user.id,
-            is_read: true,
-            is_deleted: false,
-          },
-          {
-            onConflict: 'notification_id,user_id',
-          }
-        );
-
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: refreshNotifications,
-  });
-
-  const clearAll = useMutation({
-    mutationFn: async () => {
-      if (!user?.id) {
-        throw new Error(t('notifications.mustBeLoggedIn'));
-      }
-
-      if (notifications.length === 0) return;
-
-      const rows = notifications.map((notification) => ({
-        notification_id: notification.id,
-        user_id: user.id,
-        is_read: true,
-        is_deleted: true,
-      }));
-
-      const { error } = await supabase
-        .from('notification_user_states')
-        .upsert(rows, {
-          onConflict: 'notification_id,user_id',
-        });
-
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: refreshNotifications,
-  });
-
-  const deleteOne = useMutation({
-    mutationFn: async (id: string) => {
-      if (!user?.id) {
-        throw new Error(t('notifications.mustBeLoggedIn'));
-      }
-
-      const { error } = await supabase
-        .from('notification_user_states')
-        .upsert(
-          {
-            notification_id: id,
-            user_id: user.id,
-            is_read: true,
-            is_deleted: true,
-          },
-          {
-            onConflict: 'notification_id,user_id',
-          }
-        );
-
-      if (error) throw new Error(error.message);
-    },
-    onSuccess: refreshNotifications,
-  });
-
-  const formatTime = (value: string) => {
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-      return '';
-    }
-
-    return date.toLocaleString(i18n.language);
-  };
-
-  const getNotificationParams = (notification: AppNotification) => {
-    const params = { ...notification.bodyParams };
-    const formattedSabbathDate = formatSabbathNotificationDate(params.sabbathDate, i18n.language);
-
-    if (formattedSabbathDate && !params.date) {
-      params.date = formattedSabbathDate;
-    }
-
-    if (typeof params.sabbathRole === 'string' && !params.role) {
-      params.role = t(`sabbath.roles.${params.sabbathRole}`, {
-        defaultValue: params.sabbathRole,
-      });
-    }
-
-    return params;
-  };
-
-  const getNotificationTitle = (notification: AppNotification) => {
-    if (!notification.titleKey) {
-      return notification.title || t('notifications.fallbackTitle');
-    }
-
-    return t(notification.titleKey, {
-      ...getNotificationParams(notification),
-      defaultValue: notification.title || t('notifications.fallbackTitle'),
-    });
-  };
-
-  const getNotificationBody = (notification: AppNotification) => {
-    if (!notification.bodyKey) {
-      return notification.body;
-    }
-
-    return t(notification.bodyKey, {
-      ...getNotificationParams(notification),
-      defaultValue: notification.body ?? '',
-    });
+  const changePreference = (
+    key: keyof NotificationPreferences,
+    value: boolean
+  ) => {
+    savePreferences.mutate({ ...preferences, [key]: value });
   };
 
   return (
@@ -341,80 +78,155 @@ export default function NotificationsScreen() {
 
       <View style={styles.headerRow}>
         <Text style={styles.title}>{t('notifications.title')}</Text>
-
-        {notifications.length > 0 && (
-          <TouchableOpacity
-            onPress={() => clearAll.mutate()}
-            style={styles.clearBtn}
-            accessibilityRole="button"
-            testID="clear-all-notifications-page"
-            disabled={clearAll.isPending}
-          >
-            <Trash2 size={20} color="#ef4444" />
-          </TouchableOpacity>
-        )}
       </View>
 
-      {query.isError ? (
+      {preferencesQuery.isLoading ? (
         <View style={styles.center}>
-          <Text style={styles.errorText}>{t('notifications.failedToLoad')}</Text>
+          <ActivityIndicator size="large" color="#1e3a8a" />
         </View>
-      ) : query.isLoading || notificationScopeQuery.isLoading ? (
+      ) : preferencesQuery.isError ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#3b82f6" />
-        </View>
-      ) : notifications.length === 0 ? (
-        <View style={styles.center}>
-          <Bell size={48} color="#d1d5db" />
-          <Text style={styles.emptyText}>{t('notifications.empty')}</Text>
+          <RefreshCw size={42} color="#94a3b8" />
+          <Text style={styles.errorTitle}>
+            {t('notifications.failedToLoad')}
+          </Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => void preferencesQuery.refetch()}
+          >
+            <Text style={styles.retryText}>{t('common.retry')}</Text>
+          </TouchableOpacity>
         </View>
       ) : (
-        <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
-          {notifications.map((notification) => (
-            <TouchableOpacity
-              key={notification.id}
-              style={[
-                styles.item,
-                !notification.isRead && styles.unreadItem,
-              ]}
-              onPress={() => {
-                if (!notification.isRead) {
-                  markRead.mutate(notification.id);
-                }
-              }}
-              activeOpacity={0.7}
-            >
-              <View style={styles.content}>
-                <Text
-                  style={[
-                    styles.itemTitle,
-                    !notification.isRead && styles.unreadTitle,
-                  ]}
-                >
-                  {getNotificationTitle(notification)}
-                </Text>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.preferencesTitle}>
+            {t('notifications.preferencesTitle', { defaultValue: 'What you receive' })}
+          </Text>
+          <Text style={styles.preferencesSubtitle}>
+            {t('notifications.preferencesSubtitle', {
+              defaultValue: 'Choose the community updates you want to receive.',
+            })}
+          </Text>
 
-                {getNotificationBody(notification) ? (
-                  <Text style={styles.itemBody}>{getNotificationBody(notification)}</Text>
-                ) : null}
-
-                <Text style={styles.itemTime}>{formatTime(notification.created_at)}</Text>
+          <View style={styles.preferencesCard}>
+            <View style={styles.preferenceRow}>
+              <View style={[styles.preferenceIcon, styles.eventIcon]}>
+                <Calendar size={19} color="#2563eb" />
               </View>
+              <View style={styles.preferenceCopy}>
+                <Text style={styles.preferenceLabel}>
+                  {t('notifications.preferenceEvents', { defaultValue: 'Events' })}
+                </Text>
+                <Text style={styles.preferenceDescription}>
+                  {t('notifications.preferenceEventsDescription', {
+                    defaultValue: 'New church and shared events',
+                  })}
+                </Text>
+              </View>
+              <Switch
+                value={preferences.events}
+                onValueChange={(value) => changePreference('events', value)}
+                disabled={savePreferences.isPending}
+                trackColor={{ false: '#cbd5e1', true: '#93c5fd' }}
+                thumbColor={preferences.events ? '#1d4ed8' : '#f8fafc'}
+                accessibilityLabel={t('notifications.preferenceEvents')}
+              />
+            </View>
 
-              <TouchableOpacity
-                onPress={(e) => {
-                  e.stopPropagation();
-                  deleteOne.mutate(notification.id);
-                }}
-                style={styles.itemDeleteButton}
-                accessibilityRole="button"
-                testID={`delete-notification-${notification.id}`}
-                disabled={deleteOne.isPending}
-              >
-                <Trash2 size={18} color="#9ca3af" />
-              </TouchableOpacity>
-            </TouchableOpacity>
-          ))}
+            <View style={styles.preferenceDivider} />
+
+            <View style={styles.preferenceRow}>
+              <View style={[styles.preferenceIcon, styles.prayerIcon]}>
+                <Heart size={19} color="#dc2626" />
+              </View>
+              <View style={styles.preferenceCopy}>
+                <Text style={styles.preferenceLabel}>
+                  {t('notifications.preferencePrayers', { defaultValue: 'Prayer requests' })}
+                </Text>
+                <Text style={styles.preferenceDescription}>
+                  {t('notifications.preferencePrayersDescription', {
+                    defaultValue: 'New and answered prayer requests',
+                  })}
+                </Text>
+              </View>
+              <Switch
+                value={preferences.prayers}
+                onValueChange={(value) => changePreference('prayers', value)}
+                disabled={savePreferences.isPending}
+                trackColor={{ false: '#cbd5e1', true: '#fca5a5' }}
+                thumbColor={preferences.prayers ? '#dc2626' : '#f8fafc'}
+                accessibilityLabel={t('notifications.preferencePrayers')}
+              />
+            </View>
+
+            <View style={styles.preferenceDivider} />
+
+            <View style={styles.preferenceRow}>
+              <View style={[styles.preferenceIcon, styles.sabbathIcon]}>
+                <Sun size={19} color="#b45309" />
+              </View>
+              <View style={styles.preferenceCopy}>
+                <Text style={styles.preferenceLabel}>
+                  {t('notifications.preferenceSabbaths', { defaultValue: 'Sabbath updates' })}
+                </Text>
+                <Text style={styles.preferenceDescription}>
+                  {t('notifications.preferenceSabbathsDescription', {
+                    defaultValue: 'Published and changed Sabbath programs',
+                  })}
+                </Text>
+              </View>
+              <Switch
+                value={preferences.sabbathUpdates}
+                onValueChange={(value) => changePreference('sabbathUpdates', value)}
+                disabled={savePreferences.isPending}
+                trackColor={{ false: '#cbd5e1', true: '#fcd34d' }}
+                thumbColor={preferences.sabbathUpdates ? '#b45309' : '#f8fafc'}
+                accessibilityLabel={t('notifications.preferenceSabbaths')}
+              />
+            </View>
+
+            <View style={styles.preferenceDivider} />
+
+            <View style={styles.preferenceRow}>
+              <View style={[styles.preferenceIcon, styles.announcementIcon]}>
+                <MessageCircle size={19} color="#047857" />
+              </View>
+              <View style={styles.preferenceCopy}>
+                <Text style={styles.preferenceLabel}>
+                  {t('notifications.preferenceAnnouncements', {
+                    defaultValue: 'Church announcements',
+                  })}
+                </Text>
+                <Text style={styles.preferenceDescription}>
+                  {t('notifications.preferenceAnnouncementsDescription', {
+                    defaultValue: 'General community announcements',
+                  })}
+                </Text>
+              </View>
+              <Switch
+                value={preferences.churchAnnouncements}
+                onValueChange={(value) => changePreference('churchAnnouncements', value)}
+                disabled={savePreferences.isPending}
+                trackColor={{ false: '#cbd5e1', true: '#6ee7b7' }}
+                thumbColor={preferences.churchAnnouncements ? '#047857' : '#f8fafc'}
+                accessibilityLabel={t('notifications.preferenceAnnouncements')}
+              />
+            </View>
+          </View>
+
+          <View style={styles.alwaysOnCard}>
+            <ShieldCheck size={18} color="#1e3a8a" />
+            <Text style={styles.alwaysOnText}>
+              {t('notifications.alwaysOnMessage', {
+                defaultValue:
+                  'Personal assignments, replacement requests, and account notices always stay enabled.',
+              })}
+            </Text>
+          </View>
         </ScrollView>
       )}
     </SafeAreaView>
@@ -427,12 +239,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    minHeight: 52,
+    justifyContent: 'center',
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
     backgroundColor: 'white',
@@ -442,51 +251,86 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0f172a',
   },
-  clearBtn: {
-    padding: 6,
-  },
-  list: {
+  scroll: {
     flex: 1,
-  },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
-  unreadItem: {
-    backgroundColor: '#eff6ff',
   },
   content: {
-    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 44,
   },
-  itemTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 4,
+  preferencesTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a',
   },
-  unreadTitle: {
-    fontWeight: '700',
-    color: '#1e3a8a',
-  },
-  itemBody: {
+  preferencesSubtitle: {
     fontSize: 13,
-    color: '#4b5563',
-    marginBottom: 4,
-    lineHeight: 18,
+    lineHeight: 19,
+    color: '#64748b',
+    marginTop: 4,
+    marginBottom: 14,
   },
-  itemTime: {
+  preferencesCard: {
+    borderRadius: 16,
+    backgroundColor: 'white',
+    overflow: 'hidden',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  preferenceRow: {
+    minHeight: 68,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  preferenceIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  eventIcon: { backgroundColor: '#eff6ff' },
+  prayerIcon: { backgroundColor: '#fef2f2' },
+  sabbathIcon: { backgroundColor: '#fffbeb' },
+  announcementIcon: { backgroundColor: '#ecfdf5' },
+  preferenceCopy: { flex: 1 },
+  preferenceLabel: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  preferenceDescription: {
     fontSize: 12,
-    color: '#9ca3af',
+    lineHeight: 17,
+    color: '#64748b',
+    marginTop: 2,
   },
-  itemDeleteButton: {
-    padding: 6,
-    alignSelf: 'center',
+  preferenceDivider: {
+    height: 1,
+    backgroundColor: '#eef2f7',
+    marginLeft: 63,
+  },
+  alwaysOnCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 9,
+    borderRadius: 12,
+    backgroundColor: '#eff6ff',
+    padding: 12,
+    marginTop: 12,
+  },
+  alwaysOnText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#334155',
   },
   center: {
     flex: 1,
@@ -494,13 +338,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 40,
   },
-  emptyText: {
-    fontSize: 14,
-    color: '#94a3b8',
-    marginTop: 12,
+  errorTitle: {
+    color: '#475569',
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 14,
   },
-  errorText: {
+  retryButton: {
+    borderRadius: 12,
+    backgroundColor: '#1e3a8a',
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    marginTop: 16,
+  },
+  retryText: {
+    color: 'white',
     fontSize: 14,
-    color: '#ef4444',
+    fontWeight: '800',
   },
 });

@@ -1,207 +1,307 @@
-import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, router } from 'expo-router';
-import { MessageCircle, Users, ChevronRight, ArrowLeft } from 'lucide-react-native';
+import { StatusBar } from 'expo-status-bar';
+import {
+  ArrowLeft,
+  ChevronRight,
+  MessageCircle,
+  RefreshCw,
+  Users,
+} from 'lucide-react-native';
+import React, { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import {
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '@/providers/auth-provider';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+
+import {
+  fetchAccessibleGroupIds,
+  fetchChurchMembers,
+} from '@/lib/church-membership';
 import { supabase } from '@/lib/supabase';
-import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '@/providers/auth-provider';
 import type { GroupChat } from '@/types/chat';
 import { getLastReadMap } from '@/utils/chat-read';
 
 export default function GroupsScreen() {
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
 
   const groupsQuery = useQuery({
     queryKey: ['user-groups', user?.id],
+    enabled: !!user?.id,
     queryFn: async (): Promise<GroupChat[]> => {
       if (!user?.id) return [];
 
-      const { data: membershipData, error: membershipError } = await supabase
-        .from('group_members')
-        .select('group_id')
-        .eq('user_id', user.id);
+      const groupIds = await fetchAccessibleGroupIds(user.id);
+      if (groupIds.length === 0) return [];
 
-      if (membershipError) {
-        console.warn('[Groups] Error fetching memberships:', membershipError.message);
-      }
+      const [groupsResult, messagesResult, lastReadMap] = await Promise.all([
+        supabase
+          .from('groups')
+          .select('id, name')
+          .in('id', groupIds),
+        supabase
+          .from('group_messages')
+          .select('group_id, sender_id, content, created_at')
+          .in('group_id', groupIds)
+          .order('created_at', { ascending: false }),
+        getLastReadMap(user.id),
+      ]);
 
-      const groupIds = membershipData?.map((m: any) => m.group_id) || [];
+      if (groupsResult.error) throw new Error(groupsResult.error.message);
+      if (messagesResult.error) throw new Error(messagesResult.error.message);
 
-      const { data: groupsData, error: groupsError } = await supabase
-        .from('groups')
-        .select('*')
-        .or(groupIds.length > 0 ? `id.in.(${groupIds.join(',')})` : 'id.eq.none');
+      const allMessages = (messagesResult.data ?? []) as {
+        group_id: string;
+        sender_id: string;
+        content: string;
+        created_at: string;
+      }[];
 
-      if (groupsError) {
-        console.warn('[Groups] Error fetching groups:', groupsError.message);
-        return [];
-      }
-
-      const lastReadMap = await getLastReadMap(user.id);
-
-      const groups: GroupChat[] = await Promise.all(
-        (groupsData || []).map(async (group: any) => {
-          const { count } = await supabase
-            .from('group_members')
-            .select('*', { count: 'exact', head: true })
-            .eq('group_id', group.id);
-
-          const { data: lastMsg } = await supabase
-            .from('group_messages')
-            .select('content, created_at')
-            .eq('group_id', group.id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
-
-          const since = lastReadMap[group.id] ?? '1970-01-01T00:00:00.000Z';
-          const { count: unread } = await supabase
-            .from('group_messages')
-            .select('*', { count: 'exact', head: true })
-            .eq('group_id', group.id)
-            .neq('sender_id', user.id)
-            .gt('created_at', since);
+      const groups = await Promise.all(
+        (groupsResult.data ?? []).map(async (group: any): Promise<GroupChat> => {
+          const groupMessages = allMessages.filter((message) => message.group_id === group.id);
+          const lastMessage = groupMessages[0];
+          const since = new Date(lastReadMap[group.id] ?? '1970-01-01T00:00:00.000Z').getTime();
+          const memberCount = (await fetchChurchMembers(group.id)).length;
 
           return {
             id: group.id,
             name: group.name,
-            lastMessage: lastMsg?.content,
-            lastMessageTime: lastMsg?.created_at ? new Date(lastMsg.created_at) : undefined,
-            unreadCount: unread ?? 0,
-            memberCount: count || 0,
+            lastMessage: lastMessage?.content,
+            lastMessageTime: lastMessage ? new Date(lastMessage.created_at) : undefined,
+            unreadCount: groupMessages.filter(
+              (message) =>
+                message.sender_id !== user.id &&
+                new Date(message.created_at).getTime() > since
+            ).length,
+            memberCount,
           };
         })
       );
 
       return groups.sort((a, b) => {
-        if (!a.lastMessageTime && !b.lastMessageTime) return 0;
-        if (!a.lastMessageTime) return 1;
-        if (!b.lastMessageTime) return -1;
-        return b.lastMessageTime.getTime() - a.lastMessageTime.getTime();
+        const aTime = a.lastMessageTime?.getTime() ?? 0;
+        const bTime = b.lastMessageTime?.getTime() ?? 0;
+        if (aTime !== bTime) return bTime - aTime;
+        return a.name.localeCompare(b.name);
       });
     },
-    enabled: !!user?.id,
-    refetchInterval: 10000,
+    refetchInterval: 30000,
   });
 
-  const formatTime = (date?: Date) => {
-    if (!date) return '';
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  useEffect(() => {
+    if (!user?.id) return;
 
-    if (diffDays === 0) {
-      return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-    } else if (diffDays === 1) {
-      return 'Yesterday';
-    } else if (diffDays < 7) {
-      return date.toLocaleDateString('en-US', { weekday: 'short' });
+    const channel = supabase
+      .channel(`church-chat-list-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'group_messages' },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ['user-groups', user.id] });
+          void queryClient.invalidateQueries({ queryKey: ['group-unread-total', user.id] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [queryClient, user?.id]);
+
+  const formatTime = (value?: Date | string) => {
+    if (!value) return '';
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const messageDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const differenceDays = Math.round(
+      (today.getTime() - messageDay.getTime()) / (24 * 60 * 60 * 1000)
+    );
+
+    if (differenceDays === 0) {
+      return date.toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' });
     }
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    if (differenceDays === 1) {
+      return t('chat.yesterday', { defaultValue: 'Yesterday' });
+    }
+    if (differenceDays < 7) {
+      return date.toLocaleDateString(i18n.language, { weekday: 'short' });
+    }
+    return date.toLocaleDateString(i18n.language, { month: 'short', day: 'numeric' });
   };
 
   return (
-    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          headerTitle: 'Church Chats',
-          headerTitleStyle: { fontWeight: '600', color: '#1e293b' },
-          headerLeft: () => (
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-              <ArrowLeft size={24} color="#1e3a8a" />
-            </TouchableOpacity>
-          ),
-          headerStyle: { backgroundColor: '#fff' },
-          headerShadowVisible: true,
-        }}
-      />
+    <View style={styles.container}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <StatusBar style="light" />
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {groupsQuery.isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#1e3a8a" />
-            <Text style={styles.loadingText}>Loading churches...</Text>
+      <LinearGradient
+        colors={['#102a5e', '#1e3a8a', '#6d28d9']}
+        style={[styles.header, { paddingTop: insets.top + 10 }]}
+      >
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            accessibilityLabel={t('common.back', { defaultValue: 'Back' })}
+          >
+            <ArrowLeft size={23} color="white" />
+          </TouchableOpacity>
+          <View style={styles.headerCopy}>
+            <Text style={styles.headerTitle}>
+              {t('chat.churchChats', { defaultValue: 'Church Chats' })}
+            </Text>
+            <Text style={styles.headerSubtitle}>
+              {t('chat.churchChatsSubtitle', {
+                defaultValue: 'Conversations from your church communities',
+              })}
+            </Text>
           </View>
-        ) : groupsQuery.data && groupsQuery.data.length > 0 ? (
-          groupsQuery.data.map((group) => (
-            <TouchableOpacity
-              key={group.id}
-              style={styles.groupCard}
-              onPress={() =>
-                router.push({
-                  pathname: '/group-chat',
-                  params: { groupId: group.id, groupName: group.name },
-                })
-              }
-              activeOpacity={0.7}
-            >
-              <View style={styles.groupIcon}>
-                <MessageCircle size={24} color="#1e3a8a" />
-              </View>
-              <View style={styles.groupInfo}>
-                <View style={styles.groupHeader}>
-                  <Text
-                    style={[styles.groupName, group.unreadCount > 0 && styles.groupNameUnread]}
-                    numberOfLines={1}
-                  >
-                    {group.name}
-                  </Text>
-                  {group.lastMessageTime && (
+          <View style={styles.headerIcon}>
+            <MessageCircle size={22} color="white" />
+          </View>
+        </View>
+      </LinearGradient>
+
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={groupsQuery.isRefetching}
+            onRefresh={() => void groupsQuery.refetch()}
+          />
+        }
+      >
+        {groupsQuery.isLoading ? (
+          <View style={styles.stateBox}>
+            <ActivityIndicator size="large" color="#1e3a8a" />
+            <Text style={styles.stateText}>
+              {t('chat.loadingChurches', { defaultValue: 'Loading church chats…' })}
+            </Text>
+          </View>
+        ) : groupsQuery.error ? (
+          <View style={styles.stateBox}>
+            <RefreshCw size={46} color="#94a3b8" />
+            <Text style={styles.stateTitle}>
+              {t('chat.loadFailed', { defaultValue: 'Chats could not be loaded' })}
+            </Text>
+            <Text style={styles.stateText}>{(groupsQuery.error as Error).message}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={() => void groupsQuery.refetch()}>
+              <Text style={styles.retryText}>
+                {t('common.retry', { defaultValue: 'Try again' })}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : (groupsQuery.data?.length ?? 0) === 0 ? (
+          <View style={styles.stateBox}>
+            <MessageCircle size={50} color="#cbd5e1" />
+            <Text style={styles.stateTitle}>
+              {t('chat.noChurchesTitle', { defaultValue: 'No church chats yet' })}
+            </Text>
+            <Text style={styles.stateText}>
+              {t('chat.noChurchesMessage', {
+                defaultValue:
+                  'Ask an administrator or church leader to assign your account to a church.',
+              })}
+            </Text>
+          </View>
+        ) : (
+          <>
+            <View style={styles.tipCard}>
+              <Text style={styles.tipTitle}>
+                {t('chat.tipTitle', { defaultValue: 'Stay connected' })}
+              </Text>
+              <Text style={styles.tipText}>
+                {t('chat.tipText', {
+                  defaultValue:
+                    'New messages appear automatically. Pull down at any time to refresh.',
+                })}
+              </Text>
+            </View>
+
+            {(groupsQuery.data ?? []).map((group) => (
+              <TouchableOpacity
+                key={group.id}
+                style={styles.groupCard}
+                activeOpacity={0.75}
+                onPress={() =>
+                  router.push({
+                    pathname: '/group-chat',
+                    params: { groupId: group.id, groupName: group.name },
+                  })
+                }
+              >
+                <View style={styles.groupIcon}>
+                  <MessageCircle size={24} color="#6d28d9" />
+                </View>
+                <View style={styles.groupInfo}>
+                  <View style={styles.groupHeading}>
                     <Text
-                      style={[styles.groupTime, group.unreadCount > 0 && styles.groupTimeUnread]}
+                      style={[
+                        styles.groupName,
+                        group.unreadCount > 0 && styles.groupNameUnread,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {group.name}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.groupTime,
+                        group.unreadCount > 0 && styles.groupTimeUnread,
+                      ]}
                     >
                       {formatTime(group.lastMessageTime)}
                     </Text>
-                  )}
-                </View>
-                <View style={styles.groupMeta}>
-                  {group.lastMessage ? (
-                    <Text
-                      style={[styles.lastMessage, group.unreadCount > 0 && styles.lastMessageUnread]}
-                      numberOfLines={1}
-                    >
-                      {group.lastMessage}
+                  </View>
+                  <Text
+                    style={[
+                      styles.lastMessage,
+                      group.unreadCount > 0 && styles.lastMessageUnread,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {group.lastMessage ||
+                      t('chat.noMessages', { defaultValue: 'No messages yet' })}
+                  </Text>
+                  <View style={styles.memberRow}>
+                    <Users size={13} color="#94a3b8" />
+                    <Text style={styles.memberCount}>
+                      {t('chat.memberCount', {
+                        defaultValue: '{{count}} members',
+                        count: group.memberCount,
+                      })}
                     </Text>
-                  ) : (
-                    <Text style={styles.noMessages}>No messages yet</Text>
-                  )}
+                  </View>
                 </View>
-                <View style={styles.memberRow}>
-                  <Users size={12} color="#94a3b8" />
-                  <Text style={styles.memberCount}>
-                    {group.memberCount} member{group.memberCount !== 1 ? 's' : ''}
-                  </Text>
-                </View>
-              </View>
-              {group.unreadCount > 0 ? (
-                <View style={styles.unreadBadge}>
-                  <Text style={styles.unreadBadgeText}>
-                    {group.unreadCount > 99 ? '99+' : group.unreadCount}
-                  </Text>
-                </View>
-              ) : (
-                <ChevronRight size={20} color="#cbd5e1" />
-              )}
-            </TouchableOpacity>
-          ))
-        ) : (
-          <View style={styles.emptyContainer}>
-            <MessageCircle size={48} color="#cbd5e1" />
-            <Text style={styles.emptyTitle}>No Churches Yet</Text>
-            <Text style={styles.emptySubtitle}>
-              Ask your admin to add you to a church to start chatting.
-            </Text>
-          </View>
+                {group.unreadCount > 0 ? (
+                  <View style={styles.unreadBadge}>
+                    <Text style={styles.unreadText}>
+                      {group.unreadCount > 99 ? '99+' : group.unreadCount}
+                    </Text>
+                  </View>
+                ) : (
+                  <ChevronRight size={20} color="#cbd5e1" />
+                )}
+              </TouchableOpacity>
+            ))}
+          </>
         )}
       </ScrollView>
     </View>
@@ -209,137 +309,86 @@ export default function GroupsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
+  container: { flex: 1, backgroundColor: '#f8fafc' },
+  header: { paddingHorizontal: 20, paddingBottom: 24, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
+  headerRow: { minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 12 },
   backButton: {
-    padding: 8,
-    marginLeft: -8,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  content: {
-    flex: 1,
-    padding: 16,
+  headerCopy: { flex: 1 },
+  headerTitle: { color: 'white', fontSize: 22, fontWeight: '900' },
+  headerSubtitle: { color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 3 },
+  headerIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
-    paddingVertical: 60,
+  content: { flex: 1 },
+  contentContainer: { padding: 18, paddingBottom: 48 },
+  tipCard: {
+    borderRadius: 15,
+    backgroundColor: '#f5f3ff',
+    borderWidth: 1,
+    borderColor: '#ddd6fe',
+    padding: 15,
+    marginBottom: 16,
   },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#64748b',
-  },
+  tipTitle: { color: '#4c1d95', fontSize: 14, fontWeight: '900' },
+  tipText: { color: '#6d28d9', fontSize: 12, lineHeight: 18, marginTop: 3 },
   groupCard: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
+    minHeight: 100,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 13,
+    backgroundColor: 'white',
+    borderRadius: 17,
+    padding: 15,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowRadius: 8,
     elevation: 2,
   },
   groupIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#eff6ff',
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
-    marginRight: 12,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#f5f3ff',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  groupInfo: {
-    flex: 1,
-  },
-  groupHeader: {
-    flexDirection: 'row' as const,
-    justifyContent: 'space-between' as const,
-    alignItems: 'center' as const,
-    marginBottom: 4,
-  },
-  groupName: {
-    fontSize: 16,
-    fontWeight: '600' as const,
-    color: '#1e293b',
-    flex: 1,
-    marginRight: 8,
-  },
-  groupTime: {
-    fontSize: 12,
-    color: '#94a3b8',
-  },
-  groupNameUnread: {
-    fontWeight: '700' as const,
-    color: '#0f172a',
-  },
-  groupTimeUnread: {
-    color: '#1e3a8a',
-    fontWeight: '600' as const,
-  },
-  lastMessageUnread: {
-    color: '#1e293b',
-    fontWeight: '600' as const,
-  },
+  groupInfo: { flex: 1 },
+  groupHeading: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  groupName: { flex: 1, color: '#334155', fontSize: 16, fontWeight: '800', marginRight: 8 },
+  groupNameUnread: { color: '#0f172a', fontWeight: '900' },
+  groupTime: { color: '#94a3b8', fontSize: 11 },
+  groupTimeUnread: { color: '#6d28d9', fontWeight: '800' },
+  lastMessage: { color: '#64748b', fontSize: 13, marginBottom: 7 },
+  lastMessageUnread: { color: '#334155', fontWeight: '700' },
+  memberRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  memberCount: { color: '#94a3b8', fontSize: 11 },
   unreadBadge: {
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#ef4444',
+    minWidth: 25,
+    height: 25,
+    borderRadius: 13,
+    backgroundColor: '#dc2626',
     paddingHorizontal: 7,
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
-    marginLeft: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  unreadBadgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '700' as const,
-  },
-  groupMeta: {
-    marginBottom: 4,
-  },
-  lastMessage: {
-    fontSize: 14,
-    color: '#64748b',
-  },
-  noMessages: {
-    fontSize: 14,
-    color: '#94a3b8',
-    fontStyle: 'italic' as const,
-  },
-  memberRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: 4,
-  },
-  memberCount: {
-    fontSize: 12,
-    color: '#94a3b8',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
-    paddingVertical: 60,
-    paddingHorizontal: 32,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600' as const,
-    color: '#1e293b',
-    marginTop: 16,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#64748b',
-    marginTop: 8,
-    textAlign: 'center' as const,
-    lineHeight: 20,
-  },
+  unreadText: { color: 'white', fontSize: 11, fontWeight: '900' },
+  stateBox: { alignItems: 'center', paddingVertical: 64, paddingHorizontal: 28 },
+  stateTitle: { color: '#334155', fontSize: 18, fontWeight: '900', marginTop: 16, textAlign: 'center' },
+  stateText: { color: '#64748b', fontSize: 13, lineHeight: 19, marginTop: 8, textAlign: 'center' },
+  retryButton: { marginTop: 18, borderRadius: 12, backgroundColor: '#1e3a8a', paddingHorizontal: 18, paddingVertical: 11 },
+  retryText: { color: 'white', fontWeight: '800', fontSize: 14 },
 });

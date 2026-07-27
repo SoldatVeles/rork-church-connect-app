@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import i18n, {
+import {
   normalizeLanguageCode,
   setAppLanguage,
   supportedLanguages,
@@ -21,7 +21,7 @@ type LanguageSelectorProps = {
 };
 
 export default function LanguageSelector({ variant = 'light' }: LanguageSelectorProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
 
   const currentLanguage = useMemo(() => {

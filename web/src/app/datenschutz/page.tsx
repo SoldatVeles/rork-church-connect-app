@@ -134,10 +134,12 @@ export default function DatenschutzPage() {
             <Cookie className="text-[#f0d28a]" size={38} />
             <h2 className="mt-5 text-2xl font-bold">Cookies und Dienste</h2>
             <p className="mt-4 leading-7 text-white/80">
-              In der ersten Version sollten wir möglichst ohne Tracking starten.
-              Falls später Analytics, Karten, YouTube-Einbettungen oder andere
-              Drittanbieter verwendet werden, muss diese Erklärung erweitert
-              werden.
+              Wir verwenden standardmässig kein Besucher-Tracking. Wenn Sie im
+              Sprachmenü eine andere Sprache als Deutsch auswählen, wird Google
+              Translate erst nach Ihrer Auswahl geladen. Dabei können technische
+              Daten wie Ihre IP-Adresse an Google übertragen und für die gewählte
+              Sprache Cookies gesetzt werden. Die Übersetzung ist freiwillig und
+              kann jederzeit durch die Auswahl von Deutsch beendet werden.
             </p>
           </div>
 

@@ -12,12 +12,21 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { useAuth } from '@/providers/auth-provider';
-import { useChurch } from '@/providers/church-provider';
 import { isAdmin } from '@/utils/permissions';
 import { canManageAnySabbath, buildChurchScope } from '@/utils/church-scope';
 import { router } from 'expo-router';
 import NotificationDropdown from '@/components/NotificationDropdown';
+import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  fetchNotificationPreferences,
+  isNotificationEnabled,
+} from '@/lib/notification-preferences';
 import { supabase } from '@/lib/supabase';
+import {
+  fetchAccessibleGroupIds,
+  fetchChurchMembers,
+  resolveHomeGroupId,
+} from '@/lib/church-membership';
 import { useQuery } from '@tanstack/react-query';
 import { getLastReadMap } from '@/utils/chat-read';
 
@@ -280,8 +289,6 @@ const _bibleVerseKeys = [
 export default function HomeScreen() {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
-  const { currentChurch } = useChurch();
-  const currentChurchId = currentChurch?.id ?? null;
   const userIsAdmin = isAdmin(user);
   const pastorGroupsQuery = useQuery({
     queryKey: ['home-pastor-groups', user?.id],
@@ -356,29 +363,12 @@ const canManageSabbath =
   const bellButtonRef = useRef<View>(null);
   const [bellPosition, setBellPosition] = useState({ x: 0, y: 0 });
 
-  // Resolve the user's actual home group (not the church picker) so visibility is per-user.
+  // Resolve the signed-in person's canonical home church.
   const homeGroupQuery = useQuery({
     queryKey: ['home-user-group', user?.id],
     enabled: !!user?.id,
-    queryFn: async (): Promise<string | null> => {
-      if (!user?.id) return null;
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('home_group_id')
-        .eq('id', user.id)
-        .single();
-      const homeGroupId = (profile as any)?.home_group_id as string | null;
-      if (homeGroupId) return homeGroupId;
-      const { data: memberships } = await supabase
-        .from('group_members')
-        .select('group_id')
-        .eq('user_id', user.id)
-        .limit(1);
-      if (memberships && memberships.length > 0) {
-        return (memberships[0] as any).group_id as string;
-      }
-      return null;
-    },
+    queryFn: (): Promise<string | null> =>
+      user?.id ? resolveHomeGroupId(user.id) : Promise.resolve(null),
   });
   const userHomeGroupId = homeGroupQuery.data ?? null;
   const userHasHomeChurch = Boolean(userHomeGroupId);
@@ -444,45 +434,42 @@ const canManageSabbath =
   });
 
   const usersQuery = useQuery({
-    queryKey: ['home-members', userHomeGroupId, userIsAdmin, homeGroupQuery.isFetched],
-    enabled: userIsAdmin || homeGroupQuery.isFetched,
-    queryFn: async () => {
-      if (userIsAdmin) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*');
-        if (error) return [];
-        return data || [];
-      }
-
-      if (!userHomeGroupId) {
-        return [];
-      }
-
-      const { data: memberLinks, error: linkError } = await supabase
-        .from('group_members')
-        .select('user_id')
-        .eq('group_id', userHomeGroupId);
-      if (linkError) return [];
-      const userIds = (memberLinks || []).map((m: any) => m.user_id as string);
-      if (userIds.length === 0) return [];
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .in('id', userIds);
-      if (error) return [];
-      return data || [];
-    },
+    queryKey: ['home-members', userHomeGroupId, homeGroupQuery.isFetched],
+    enabled: homeGroupQuery.isFetched,
+    queryFn: () => (userHomeGroupId ? fetchChurchMembers(userHomeGroupId) : Promise.resolve([])),
   });
 
   const totalEventsCount = eventsQuery.data?.length ?? 0;
 
   const activeRequestsCount = prayersActiveQuery.data?.length ?? 0;
   const membersCount = usersQuery.data?.length ?? 0;
+  const notificationPreferencesQuery = useQuery({
+    queryKey: ['notification-preferences', user?.id],
+    enabled: !!user?.id,
+    queryFn: () => fetchNotificationPreferences(user!.id),
+  });
+  const notificationPreferences =
+    notificationPreferencesQuery.data ?? DEFAULT_NOTIFICATION_PREFERENCES;
+
 const notificationsCountQuery = useQuery({
-  queryKey: ['notifications', 'count', user?.id, userHomeGroupId, userIsAdmin, homeGroupQuery.isFetched, homeProfileQuery.data?.created_at],
-  enabled: !!user?.id && (userIsAdmin || homeGroupQuery.isFetched),
+  queryKey: [
+    'notifications',
+    'count',
+    user?.id,
+    userHomeGroupId,
+    userIsAdmin,
+    homeGroupQuery.isFetched,
+    homeProfileQuery.data?.created_at,
+    notificationPreferences.events,
+    notificationPreferences.prayers,
+    notificationPreferences.sabbathUpdates,
+    notificationPreferences.churchAnnouncements,
+    notificationPreferencesQuery.isFetched,
+  ],
+  enabled:
+    !!user?.id &&
+    (userIsAdmin || homeGroupQuery.isFetched) &&
+    notificationPreferencesQuery.isFetched,
   queryFn: async () => {
     if (!user?.id) return 0;
 
@@ -492,7 +479,7 @@ const notificationsCountQuery = useQuery({
 
     let notificationsQuery = supabase
       .from('notifications')
-      .select('id')
+      .select('id, type, title_key, user_id')
       .or(`user_id.eq.${user.id},user_id.is.null`);
 
     if (homeProfileQuery.data?.created_at) {
@@ -505,7 +492,10 @@ const notificationsCountQuery = useQuery({
       return 0;
     }
 
-    const notificationIds = (notificationsData ?? []).map((notification: any) => notification.id);
+    const enabledNotifications = (notificationsData ?? []).filter((notification: any) =>
+      isNotificationEnabled(notification, notificationPreferences, user.id)
+    );
+    const notificationIds = enabledNotifications.map((notification: any) => notification.id);
 
     if (notificationIds.length === 0) {
       return 0;
@@ -551,14 +541,7 @@ const notificationsCountQuery = useQuery({
     queryFn: async (): Promise<number> => {
       if (!user?.id) return 0;
       if (!userIsAdmin && !userHomeGroupId) return 0;
-      const { data: memberships, error: mErr } = await supabase
-        .from('group_members')
-        .select('group_id')
-        .eq('user_id', user.id);
-      if (mErr) {
-        return 0;
-      }
-      const groupIds = (memberships || []).map((m: any) => m.group_id as string);
+      const groupIds = await fetchAccessibleGroupIds(user.id);
       if (groupIds.length === 0) return 0;
       const lastReadMap = await getLastReadMap(user.id);
       const counts = await Promise.all(

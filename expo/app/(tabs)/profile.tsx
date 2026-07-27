@@ -7,7 +7,7 @@ import {
   Shield,
   Bell,
   Heart,
-  Users,
+  HandHeart,
   ChevronRight,
 } from 'lucide-react-native';
 import React, { useMemo } from 'react';
@@ -23,9 +23,10 @@ import {
 import { useAuth } from '@/providers/auth-provider';
 import { isChurchLeaderLevel as checkIsChurchLeader } from '@/utils/permissions';
 import { router } from 'expo-router';
-import { trpc } from '@/lib/trpc';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from '@/components/LanguageSelector';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase';
 
 function formatPermissionFallback(permission: string): string {
   return permission
@@ -37,15 +38,39 @@ export default function ProfileScreen() {
   const { t, i18n } = useTranslation();
   const { user, logout, isLogoutLoading } = useAuth();
 
-  const { data: userStats, isLoading: isStatsLoading } = trpc.users.getStats.useQuery(
-    { userId: user?.id ?? '' },
-    { enabled: !!user?.id }
-  );
+  const activityQuery = useQuery({
+    queryKey: ['profile-activity', user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      if (!user?.id) {
+        return { eventsRegistered: 0, prayersShared: 0, prayersSupported: 0 };
+      }
 
-  const { data: totalCount, isLoading: isTotalCountLoading } = trpc.users.getTotalCount.useQuery(
-    undefined,
-    { enabled: !!user?.id }
-  );
+      const [eventsResult, prayersResult, supportResult] = await Promise.all([
+        supabase
+          .from('events')
+          .select('id', { count: 'exact', head: true })
+          .contains('registered_users', [user.id]),
+        supabase
+          .from('prayers')
+          .select('id', { count: 'exact', head: true })
+          .or(`created_by.eq.${user.id},requested_by.eq.${user.id}`),
+        supabase
+          .from('prayer_prayers')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id),
+      ]);
+
+      const firstError = eventsResult.error || prayersResult.error || supportResult.error;
+      if (firstError) throw new Error(firstError.message);
+
+      return {
+        eventsRegistered: eventsResult.count ?? 0,
+        prayersShared: prayersResult.count ?? 0,
+        prayersSupported: supportResult.count ?? 0,
+      };
+    },
+  });
 
   const handleLogout = () => {
     Alert.alert(
@@ -67,31 +92,30 @@ export default function ProfileScreen() {
   const profileStats = useMemo(
     () => [
       {
-        label: t('profile.eventsAttended'),
-        value: isStatsLoading ? '...' : String(userStats?.eventsAttended ?? 0),
+        label: t('profile.eventsRegistered', { defaultValue: 'Event registrations' }),
+        value: activityQuery.isLoading ? '...' : String(activityQuery.data?.eventsRegistered ?? 0),
         icon: Calendar,
         color: '#3b82f6',
       },
       {
         label: t('profile.prayersShared'),
-        value: isStatsLoading ? '...' : String(userStats?.prayersShared ?? 0),
+        value: activityQuery.isLoading ? '...' : String(activityQuery.data?.prayersShared ?? 0),
         icon: Heart,
         color: '#ef4444',
       },
       {
-        label: t('profile.totalUsers'),
-        value: isTotalCountLoading ? '...' : String(totalCount?.totalUsers ?? 0),
-        icon: Users,
+        label: t('profile.prayersSupported', { defaultValue: 'Prayers supported' }),
+        value: activityQuery.isLoading ? '...' : String(activityQuery.data?.prayersSupported ?? 0),
+        icon: HandHeart,
         color: '#10b981',
       },
     ],
     [
       t,
-      isStatsLoading,
-      userStats?.eventsAttended,
-      userStats?.prayersShared,
-      isTotalCountLoading,
-      totalCount?.totalUsers,
+      activityQuery.isLoading,
+      activityQuery.data?.eventsRegistered,
+      activityQuery.data?.prayersShared,
+      activityQuery.data?.prayersSupported,
     ]
   );
 
@@ -99,39 +123,23 @@ export default function ProfileScreen() {
     () => [
       {
         title: t('profile.notifications'),
-        subtitle: t('profile.notificationsSubtitle'),
+        subtitle: t('profile.notificationsSubtitle', {
+          defaultValue: 'View and manage your notifications',
+        }),
         icon: Bell,
-        onPress: () =>
-          Alert.alert(
-            t('common.comingSoon'),
-            t('profile.notificationsComingSoon', {
-              defaultValue: 'Notification settings will be available soon.',
-            })
-          ),
+        onPress: () => router.push('/notifications'),
       },
       {
         title: t('profile.privacySecurity'),
         subtitle: t('profile.privacySecuritySubtitle'),
         icon: Shield,
-        onPress: () =>
-          Alert.alert(
-            t('common.comingSoon'),
-            t('profile.privacySecurityComingSoon', {
-              defaultValue: 'Privacy and security settings will be available soon.',
-            })
-          ),
+        onPress: () => router.push('/privacy-security' as any),
       },
       {
         title: t('profile.appSettings'),
         subtitle: t('profile.appSettingsSubtitle'),
         icon: Settings,
-        onPress: () =>
-          Alert.alert(
-            t('common.comingSoon'),
-            t('profile.appSettingsComingSoon', {
-              defaultValue: 'App settings will be available soon.',
-            })
-          ),
+        onPress: () => router.push('/app-settings' as any),
       },
       ...(checkIsChurchLeader(user)
         ? [
@@ -207,7 +215,10 @@ export default function ProfileScreen() {
 
           <View style={styles.userInfo}>
             <Text style={styles.userName}>
-              {user?.firstName} {user?.lastName}
+              {[user?.firstName, user?.lastName].filter(Boolean).join(' ') ||
+                user?.displayName ||
+                user?.email?.split('@')[0] ||
+                t('common.unknown')}
             </Text>
             <Text style={styles.userEmail}>{user?.email}</Text>
             {user?.phone && (
@@ -364,10 +375,13 @@ const styles = StyleSheet.create({
   },
   statsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
   },
   statCard: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '45%',
+    minWidth: 120,
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,

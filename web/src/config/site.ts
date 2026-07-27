@@ -23,27 +23,27 @@ export const siteConfig = {
     {
       code: "fr",
       label: "Français",
-      enabled: false,
+      enabled: true,
     },
     {
       code: "en",
       label: "English",
-      enabled: false,
+      enabled: true,
     },
     {
       code: "es",
       label: "Español",
-      enabled: false,
+      enabled: true,
     },
     {
       code: "pt",
       label: "Português",
-      enabled: false,
+      enabled: true,
     },
     {
       code: "it",
       label: "Italiano",
-      enabled: false,
+      enabled: true,
     },
   ],
 

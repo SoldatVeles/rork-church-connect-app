@@ -1,27 +1,72 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
+  ArrowLeft,
+  MessageCircle,
+  RefreshCw,
+  Send,
+  Share2,
+  Users,
+} from 'lucide-react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { Stack, useLocalSearchParams, router } from 'expo-router';
-import { Send, ArrowLeft, Users } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '@/providers/auth-provider';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { fetchChurchMembers, getProfileDisplayName } from '@/lib/church-membership';
 import { supabase } from '@/lib/supabase';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/providers/auth-provider';
 import type { ChatMessage } from '@/types/chat';
 import { setLastRead } from '@/utils/chat-read';
 
+const MESSAGE_LIMIT = 1000;
+const AVATAR_COLORS = [
+  '#1e3a8a',
+  '#b91c1c',
+  '#047857',
+  '#7c3aed',
+  '#c2410c',
+  '#0e7490',
+  '#a16207',
+  '#4338ca',
+];
+
+function avatarColor(senderId: string): string {
+  let hash = 0;
+  for (let index = 0; index < senderId.length; index += 1) {
+    hash = senderId.charCodeAt(index) + ((hash << 5) - hash);
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+function initials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '?';
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
+}
+
 export default function GroupChatScreen() {
-  const { groupId, groupName } = useLocalSearchParams<{ groupId: string; groupName: string }>();
+  const { groupId, groupName } = useLocalSearchParams<{
+    groupId: string;
+    groupName: string;
+  }>();
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
@@ -30,6 +75,7 @@ export default function GroupChatScreen() {
 
   const messagesQuery = useQuery({
     queryKey: ['group-messages', groupId],
+    enabled: !!groupId,
     queryFn: async (): Promise<ChatMessage[]> => {
       const { data, error } = await supabase
         .from('group_messages')
@@ -39,270 +85,347 @@ export default function GroupChatScreen() {
           sender_id,
           content,
           created_at,
-          profiles!group_messages_sender_id_fkey(full_name)
+          profiles!group_messages_sender_id_fkey(full_name, display_name, name)
         `)
         .eq('group_id', groupId)
         .order('created_at', { ascending: true });
 
-      if (error) {
-        console.warn('[GroupChat] Error fetching messages:', error.message);
-        return [];
-      }
+      if (error) throw new Error(error.message);
 
-      return (data || []).map((msg: any) => ({
-        id: msg.id,
-        groupId: msg.group_id,
-        senderId: msg.sender_id,
-        senderName: msg.profiles?.full_name || 'Unknown',
-        content: msg.content,
-        createdAt: new Date(msg.created_at),
+      return (data ?? []).map((row: any) => ({
+        id: row.id,
+        groupId: row.group_id,
+        senderId: row.sender_id,
+        senderName: getProfileDisplayName(
+          Array.isArray(row.profiles) ? row.profiles[0] : row.profiles,
+          t('chat.unknownMember', { defaultValue: 'Church member' })
+        ),
+        content: row.content,
+        createdAt: new Date(row.created_at),
         isRead: true,
       }));
     },
-    refetchInterval: 5000,
+    refetchInterval: 30000,
+  });
+
+  const messages = useMemo(
+    () =>
+      (messagesQuery.data ?? [])
+        .map((chatMessage) => ({
+          ...chatMessage,
+          createdAt:
+            chatMessage.createdAt instanceof Date
+              ? chatMessage.createdAt
+              : new Date(chatMessage.createdAt as unknown as string),
+        }))
+        .filter((chatMessage) => !Number.isNaN(chatMessage.createdAt.getTime())),
+    [messagesQuery.data]
+  );
+
+  const membersQuery = useQuery({
+    queryKey: ['group-chat-members', groupId],
+    enabled: !!groupId,
+    queryFn: () => fetchChurchMembers(String(groupId)),
   });
 
   const sendMessageMutation = useMutation({
     mutationFn: async (content: string) => {
-      if (!user?.id || !groupId) throw new Error('Invalid session');
+      if (!user?.id || !groupId) {
+        throw new Error(t('chat.invalidSession', { defaultValue: 'Your session is not available.' }));
+      }
 
       const { error } = await supabase.from('group_messages').insert({
         group_id: groupId,
         sender_id: user.id,
         content,
       });
-
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
       setMessage('');
-      queryClient.invalidateQueries({ queryKey: ['group-messages', groupId] });
+      void queryClient.invalidateQueries({ queryKey: ['group-messages', groupId] });
+      void queryClient.invalidateQueries({ queryKey: ['user-groups', user?.id] });
     },
     onError: (error: Error) => {
-      Alert.alert('Error', error.message || 'Failed to send message');
+      Alert.alert(
+        t('chat.sendFailedTitle', { defaultValue: 'Message not sent' }),
+        error.message || t('chat.sendFailedMessage', { defaultValue: 'Please try again.' })
+      );
     },
   });
 
   useEffect(() => {
-    if (messagesQuery.data && messagesQuery.data.length > 0) {
-      setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-      const last = messagesQuery.data[messagesQuery.data.length - 1];
-      if (user?.id && groupId && last?.createdAt) {
-        void setLastRead(user.id, String(groupId), last.createdAt.toISOString()).then(() => {
-          queryClient.invalidateQueries({ queryKey: ['group-unread-total', user.id] });
-          queryClient.invalidateQueries({ queryKey: ['group-unread-map', user.id] });
-          queryClient.invalidateQueries({ queryKey: ['user-groups', user.id] });
-        });
-      }
-    }
-  }, [messagesQuery.data, user?.id, groupId, queryClient]);
+    if (!groupId) return;
+
+    const channel = supabase
+      .channel(`group-chat-${groupId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'group_messages',
+          filter: `group_id=eq.${groupId}`,
+        },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ['group-messages', groupId] });
+          if (user?.id) {
+            void queryClient.invalidateQueries({ queryKey: ['user-groups', user.id] });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [groupId, queryClient, user?.id]);
 
   useEffect(() => {
-    if (!user?.id || !groupId) return;
-    let cancelled = false;
-    const markAsReadOnOpen = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('group_messages')
-          .select('created_at')
-          .eq('group_id', groupId)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (cancelled) return;
-        const nowIso = new Date().toISOString();
-        const ts = !error && data?.created_at ? data.created_at : nowIso;
-        await setLastRead(user.id, String(groupId), ts);
-        if (cancelled) return;
-        queryClient.invalidateQueries({ queryKey: ['group-unread-total', user.id] });
-        queryClient.invalidateQueries({ queryKey: ['group-unread-map', user.id] });
-        queryClient.invalidateQueries({ queryKey: ['user-groups', user.id] });
-      } catch (e) {
-        console.warn('[GroupChat] markAsReadOnOpen error:', (e as Error).message);
-      }
-    };
-    void markAsReadOnOpen();
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id, groupId, queryClient]);
+    if (!messages.length || !user?.id || !groupId) return;
 
-  const handleSend = () => {
-    const trimmed = message.trim();
-    if (!trimmed) return;
-    sendMessageMutation.mutate(trimmed);
-  };
+    const lastMessage = messages[messages.length - 1];
+    const timeout = setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 100);
 
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
+    void setLastRead(user.id, String(groupId), lastMessage.createdAt.toISOString()).then(() => {
+      void queryClient.invalidateQueries({ queryKey: ['group-unread-total', user.id] });
+      void queryClient.invalidateQueries({ queryKey: ['group-unread-map', user.id] });
+      void queryClient.invalidateQueries({ queryKey: ['user-groups', user.id] });
     });
-  };
 
-  const formatDate = (date: Date) => {
+    return () => clearTimeout(timeout);
+  }, [groupId, messages, queryClient, user?.id]);
+
+  const dateLabel = (date: Date): string => {
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
 
-    if (date.toDateString() === today.toDateString()) return 'Today';
-    if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
-
-  const getInitials = (name: string): string => {
-    const parts = name.trim().split(/\s+/);
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    if (date.toDateString() === today.toDateString()) {
+      return t('chat.today', { defaultValue: 'Today' });
     }
-    return (name[0] || '?').toUpperCase();
-  };
-
-  const avatarColors = [
-    '#1e3a8a', '#b91c1c', '#047857', '#7c3aed',
-    '#c2410c', '#0e7490', '#a16207', '#4338ca',
-  ];
-
-  const getAvatarColor = (senderId: string): string => {
-    let hash = 0;
-    for (let i = 0; i < senderId.length; i++) {
-      hash = senderId.charCodeAt(i) + ((hash << 5) - hash);
+    if (date.toDateString() === yesterday.toDateString()) {
+      return t('chat.yesterday', { defaultValue: 'Yesterday' });
     }
-    return avatarColors[Math.abs(hash) % avatarColors.length];
-  };
-
-  const groupMessagesByDate = (messages: ChatMessage[]) => {
-    const groups: { date: string; messages: ChatMessage[] }[] = [];
-    let currentDate = '';
-
-    messages.forEach((msg) => {
-      const dateStr = formatDate(msg.createdAt);
-      if (dateStr !== currentDate) {
-        currentDate = dateStr;
-        groups.push({ date: dateStr, messages: [msg] });
-      } else {
-        groups[groups.length - 1].messages.push(msg);
-      }
+    return date.toLocaleDateString(i18n.language, {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      year: date.getFullYear() === today.getFullYear() ? undefined : 'numeric',
     });
-
-    return groups;
   };
 
-  const messageGroups = groupMessagesByDate(messagesQuery.data || []);
+  const messageGroups = useMemo(() => {
+    const groups: { date: string; messages: ChatMessage[] }[] = [];
+    for (const chatMessage of messages) {
+      const label = dateLabel(chatMessage.createdAt);
+      const current = groups[groups.length - 1];
+      if (!current || current.date !== label) {
+        groups.push({ date: label, messages: [chatMessage] });
+      } else {
+        current.messages.push(chatMessage);
+      }
+    }
+    return groups;
+    // date labels must update when app language changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, i18n.language, t]);
+
+  const send = () => {
+    const content = message.trim();
+    if (!content || sendMessageMutation.isPending) return;
+    sendMessageMutation.mutate(content);
+  };
+
+  const openMessageOptions = (chatMessage: ChatMessage) => {
+    Alert.alert(
+      t('chat.messageOptions', { defaultValue: 'Message options' }),
+      undefined,
+      [
+        {
+          text: t('chat.shareMessage', { defaultValue: 'Share message' }),
+          onPress: () => void Share.share({ message: chatMessage.content }),
+        },
+        { text: t('common.cancel'), style: 'cancel' },
+      ]
+    );
+  };
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={0}
     >
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          headerTitle: () => (
-            <View style={styles.headerTitle}>
-              <Text style={styles.headerTitleText} numberOfLines={1}>
-                {groupName || 'Church Chat'}
-              </Text>
-              <View style={styles.headerSubtitle}>
-                <Users size={12} color="#64748b" />
-                <Text style={styles.headerSubtitleText}>Church Chat</Text>
-              </View>
-            </View>
-          ),
-          headerLeft: () => (
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-              <ArrowLeft size={24} color="#1e3a8a" />
-            </TouchableOpacity>
-          ),
-          headerStyle: { backgroundColor: '#fff' },
-          headerShadowVisible: true,
-        }}
-      />
+      <Stack.Screen options={{ headerShown: false }} />
+      <StatusBar style="light" />
+
+      <LinearGradient
+        colors={['#102a5e', '#1e3a8a', '#6d28d9']}
+        style={[styles.header, { paddingTop: insets.top + 10 }]}
+      >
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+          accessibilityLabel={t('common.back', { defaultValue: 'Back' })}
+        >
+          <ArrowLeft size={23} color="white" />
+        </TouchableOpacity>
+        <View style={styles.headerCopy}>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {groupName || t('chat.churchChat', { defaultValue: 'Church Chat' })}
+          </Text>
+          <View style={styles.headerMeta}>
+            <Users size={12} color="rgba(255,255,255,0.72)" />
+            <Text style={styles.headerSubtitle}>
+              {membersQuery.isLoading
+                ? t('chat.connecting', { defaultValue: 'Connecting…' })
+                : t('chat.memberCount', {
+                    defaultValue: '{{count}} members',
+                    count: membersQuery.data?.length ?? 0,
+                  })}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.liveBadge}>
+          <View style={styles.liveDot} />
+          <Text style={styles.liveText}>{t('chat.live', { defaultValue: 'Live' })}</Text>
+        </View>
+      </LinearGradient>
 
       <ScrollView
         ref={scrollViewRef}
-        style={styles.messagesContainer}
+        style={styles.messages}
         contentContainerStyle={styles.messagesContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={messagesQuery.isRefetching}
+            onRefresh={() => void messagesQuery.refetch()}
+          />
+        }
       >
         {messagesQuery.isLoading ? (
-          <View style={styles.loadingContainer}>
+          <View style={styles.stateBox}>
             <ActivityIndicator size="large" color="#1e3a8a" />
-            <Text style={styles.loadingText}>Loading messages...</Text>
+            <Text style={styles.stateText}>
+              {t('chat.loadingMessages', { defaultValue: 'Loading messages…' })}
+            </Text>
+          </View>
+        ) : messagesQuery.error ? (
+          <View style={styles.stateBox}>
+            <RefreshCw size={44} color="#94a3b8" />
+            <Text style={styles.stateTitle}>
+              {t('chat.messagesLoadFailed', { defaultValue: 'Messages could not be loaded' })}
+            </Text>
+            <Text style={styles.stateText}>{(messagesQuery.error as Error).message}</Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => void messagesQuery.refetch()}
+            >
+              <Text style={styles.retryText}>
+                {t('common.retry', { defaultValue: 'Try again' })}
+              </Text>
+            </TouchableOpacity>
           </View>
         ) : messageGroups.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Users size={48} color="#cbd5e1" />
-            <Text style={styles.emptyTitle}>No messages yet</Text>
-            <Text style={styles.emptySubtitle}>Start the conversation!</Text>
+          <View style={styles.stateBox}>
+            <View style={styles.emptyIcon}>
+              <MessageCircle size={36} color="#6d28d9" />
+            </View>
+            <Text style={styles.stateTitle}>
+              {t('chat.noMessages', { defaultValue: 'No messages yet' })}
+            </Text>
+            <Text style={styles.stateText}>
+              {t('chat.startConversation', { defaultValue: 'Start the conversation!' })}
+            </Text>
           </View>
         ) : (
-          messageGroups.map((group, groupIndex) => (
-            <View key={groupIndex}>
+          messageGroups.map((group) => (
+            <View key={group.date}>
               <View style={styles.dateDivider}>
                 <View style={styles.dateLine} />
                 <Text style={styles.dateText}>{group.date}</Text>
                 <View style={styles.dateLine} />
               </View>
-              {group.messages.map((msg, msgIndex) => {
-                const isOwnMessage = msg.senderId === user?.id;
-                const showAvatar = !isOwnMessage && (
-                  msgIndex === 0 ||
-                  group.messages[msgIndex - 1].senderId !== msg.senderId
-                );
-                const displayName = isOwnMessage ? 'You' : msg.senderName;
+
+              {group.messages.map((chatMessage, index) => {
+                const ownMessage = chatMessage.senderId === user?.id;
+                const previous = group.messages[index - 1];
+                const showSender = !ownMessage && previous?.senderId !== chatMessage.senderId;
+
                 return (
                   <View
-                    key={msg.id}
+                    key={chatMessage.id}
                     style={[
                       styles.messageRow,
-                      isOwnMessage ? styles.ownMessageRow : styles.otherMessageRow,
+                      ownMessage ? styles.ownRow : styles.otherRow,
                     ]}
                   >
-                    {!isOwnMessage && (
+                    {!ownMessage && (
                       <View style={styles.avatarSlot}>
-                        {showAvatar ? (
-                          <View style={[styles.avatar, { backgroundColor: getAvatarColor(msg.senderId) }]}>
-                            <Text style={styles.avatarText}>{getInitials(msg.senderName)}</Text>
+                        {showSender && (
+                          <View
+                            style={[
+                              styles.avatar,
+                              { backgroundColor: avatarColor(chatMessage.senderId) },
+                            ]}
+                          >
+                            <Text style={styles.avatarText}>
+                              {initials(chatMessage.senderName)}
+                            </Text>
                           </View>
-                        ) : null}
+                        )}
                       </View>
                     )}
-                    <View
+
+                    <TouchableOpacity
+                      activeOpacity={0.82}
+                      onLongPress={() => openMessageOptions(chatMessage)}
+                      delayLongPress={350}
                       style={[
-                        styles.messageBubble,
-                        isOwnMessage ? styles.ownMessage : styles.otherMessage,
+                        styles.bubble,
+                        ownMessage ? styles.ownBubble : styles.otherBubble,
                       ]}
                     >
-                      <Text
-                        style={[
-                          styles.senderName,
-                          { color: isOwnMessage ? 'rgba(255,255,255,0.85)' : getAvatarColor(msg.senderId) },
-                        ]}
-                      >
-                        {displayName}
-                      </Text>
+                      {!ownMessage && showSender && (
+                        <Text
+                          style={[
+                            styles.senderName,
+                            { color: avatarColor(chatMessage.senderId) },
+                          ]}
+                        >
+                          {chatMessage.senderName}
+                        </Text>
+                      )}
                       <Text
                         style={[
                           styles.messageText,
-                          isOwnMessage ? styles.ownMessageText : styles.otherMessageText,
+                          ownMessage && styles.ownMessageText,
                         ]}
                       >
-                        {msg.content}
+                        {chatMessage.content}
                       </Text>
-                      <Text
-                        style={[
-                          styles.messageTime,
-                          isOwnMessage ? styles.ownMessageTime : styles.otherMessageTime,
-                        ]}
-                      >
-                        {formatTime(msg.createdAt)}
-                      </Text>
-                    </View>
+                      <View style={styles.messageMeta}>
+                        <Text
+                          style={[
+                            styles.messageTime,
+                            ownMessage && styles.ownMessageTime,
+                          ]}
+                        >
+                          {chatMessage.createdAt.toLocaleTimeString(i18n.language, {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </Text>
+                        <Share2
+                          size={11}
+                          color={ownMessage ? 'rgba(255,255,255,0.66)' : '#94a3b8'}
+                        />
+                      </View>
+                    </TouchableOpacity>
                   </View>
                 );
               })}
@@ -311,214 +434,131 @@ export default function GroupChatScreen() {
         )}
       </ScrollView>
 
-      <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <TextInput
-          style={styles.input}
-          placeholder="Type a message..."
-          placeholderTextColor="#94a3b8"
-          value={message}
-          onChangeText={setMessage}
-          multiline
-          maxLength={1000}
-        />
-        <TouchableOpacity
-          style={[styles.sendButton, !message.trim() && styles.sendButtonDisabled]}
-          onPress={handleSend}
-          disabled={!message.trim() || sendMessageMutation.isPending}
-        >
-          {sendMessageMutation.isPending ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Send size={20} color="#fff" />
-          )}
-        </TouchableOpacity>
+      <View style={[styles.composerArea, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+        {message.length >= 800 && (
+          <Text style={styles.characterCount}>
+            {message.length}/{MESSAGE_LIMIT}
+          </Text>
+        )}
+        <View style={styles.composer}>
+          <TextInput
+            style={styles.input}
+            value={message}
+            onChangeText={setMessage}
+            placeholder={t('chat.messagePlaceholder', { defaultValue: 'Write a message…' })}
+            placeholderTextColor="#94a3b8"
+            multiline
+            maxLength={MESSAGE_LIMIT}
+            editable={!sendMessageMutation.isPending}
+            accessibilityLabel={t('chat.messagePlaceholder', { defaultValue: 'Write a message' })}
+          />
+          <TouchableOpacity
+            style={[
+              styles.sendButton,
+              (!message.trim() || sendMessageMutation.isPending) && styles.sendButtonDisabled,
+            ]}
+            onPress={send}
+            disabled={!message.trim() || sendMessageMutation.isPending}
+            accessibilityLabel={t('chat.send', { defaultValue: 'Send message' })}
+          >
+            {sendMessageMutation.isPending ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Send size={20} color="white" />
+            )}
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.composerHint}>
+          {t('chat.longPressHint', {
+            defaultValue: 'Tip: press and hold a message to share it.',
+          })}
+        </Text>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f1f5f9',
-  },
-  headerTitle: {
+  container: { flex: 1, backgroundColor: '#f8fafc' },
+  header: {
+    minHeight: 94,
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+    flexDirection: 'row',
     alignItems: 'center',
-  },
-  headerTitleText: {
-    fontSize: 17,
-    fontWeight: '600' as const,
-    color: '#1e293b',
-  },
-  headerSubtitle: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: 4,
-    marginTop: 2,
-  },
-  headerSubtitleText: {
-    fontSize: 12,
-    color: '#64748b',
+    gap: 12,
   },
   backButton: {
-    padding: 8,
-    marginLeft: -8,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  messagesContainer: {
-    flex: 1,
+  headerCopy: { flex: 1 },
+  headerTitle: { color: 'white', fontSize: 18, fontWeight: '900' },
+  headerMeta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
+  headerSubtitle: { color: 'rgba(255,255,255,0.72)', fontSize: 11 },
+  liveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    paddingHorizontal: 9,
+    paddingVertical: 6,
   },
-  messagesContent: {
-    padding: 16,
-    flexGrow: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
-    paddingVertical: 60,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#64748b',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
-    paddingVertical: 60,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600' as const,
-    color: '#1e293b',
-    marginTop: 16,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#64748b',
-    marginTop: 4,
-  },
-  dateDivider: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    marginVertical: 16,
-  },
-  dateLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#cbd5e1',
-  },
-  dateText: {
-    paddingHorizontal: 12,
-    fontSize: 12,
-    fontWeight: '500' as const,
-    color: '#64748b',
-  },
-  messageRow: {
-    flexDirection: 'row' as const,
-    marginBottom: 4,
-    alignItems: 'flex-end' as const,
-  },
-  ownMessageRow: {
-    justifyContent: 'flex-end' as const,
-  },
-  otherMessageRow: {
-    justifyContent: 'flex-start' as const,
-  },
-  avatarSlot: {
-    width: 32,
-    marginRight: 6,
-    alignItems: 'center' as const,
-    justifyContent: 'flex-end' as const,
-  },
-  avatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-  },
-  avatarText: {
-    fontSize: 12,
-    fontWeight: '700' as const,
-    color: '#fff',
-  },
-  messageBubble: {
-    maxWidth: '75%',
-    padding: 12,
-    borderRadius: 16,
-    marginBottom: 2,
-  },
-  ownMessage: {
-    backgroundColor: '#1e3a8a',
-    borderBottomRightRadius: 4,
-  },
-  otherMessage: {
-    backgroundColor: '#fff',
-    borderBottomLeftRadius: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  senderName: {
-    fontSize: 12,
-    fontWeight: '600' as const,
-    marginBottom: 4,
-  },
-  messageText: {
-    fontSize: 15,
-    lineHeight: 20,
-  },
-  ownMessageText: {
-    color: '#fff',
-  },
-  otherMessageText: {
-    color: '#1e293b',
-  },
-  messageTime: {
-    fontSize: 10,
-    marginTop: 4,
-  },
-  ownMessageTime: {
-    color: 'rgba(255,255,255,0.7)',
-    textAlign: 'right' as const,
-  },
-  otherMessageTime: {
-    color: '#94a3b8',
-  },
-  inputContainer: {
-    flexDirection: 'row' as const,
-    alignItems: 'flex-end' as const,
-    padding: 12,
-    paddingTop: 12,
-    backgroundColor: '#fff',
+  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#86efac' },
+  liveText: { color: 'white', fontSize: 10, fontWeight: '800' },
+  messages: { flex: 1 },
+  messagesContent: { flexGrow: 1, paddingHorizontal: 14, paddingVertical: 16 },
+  stateBox: { flex: 1, minHeight: 360, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 30 },
+  emptyIcon: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#f5f3ff', alignItems: 'center', justifyContent: 'center' },
+  stateTitle: { color: '#334155', fontSize: 17, fontWeight: '900', marginTop: 15, textAlign: 'center' },
+  stateText: { color: '#64748b', fontSize: 13, lineHeight: 19, marginTop: 7, textAlign: 'center' },
+  retryButton: { marginTop: 18, borderRadius: 12, backgroundColor: '#1e3a8a', paddingHorizontal: 18, paddingVertical: 11 },
+  retryText: { color: 'white', fontWeight: '800', fontSize: 14 },
+  dateDivider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 16 },
+  dateLine: { flex: 1, height: 1, backgroundColor: '#e2e8f0' },
+  dateText: { color: '#94a3b8', fontSize: 11, fontWeight: '800' },
+  messageRow: { flexDirection: 'row', marginBottom: 7 },
+  ownRow: { justifyContent: 'flex-end', paddingLeft: 54 },
+  otherRow: { justifyContent: 'flex-start', paddingRight: 44 },
+  avatarSlot: { width: 36, marginRight: 7, justifyContent: 'flex-end' },
+  avatar: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: 'white', fontSize: 10, fontWeight: '900' },
+  bubble: { maxWidth: '86%', borderRadius: 17, paddingHorizontal: 13, paddingVertical: 9 },
+  ownBubble: { backgroundColor: '#1e3a8a', borderBottomRightRadius: 5 },
+  otherBubble: { backgroundColor: 'white', borderBottomLeftRadius: 5, borderWidth: 1, borderColor: '#eef2f7' },
+  senderName: { fontSize: 11, fontWeight: '900', marginBottom: 3 },
+  messageText: { color: '#334155', fontSize: 15, lineHeight: 20 },
+  ownMessageText: { color: 'white' },
+  messageMeta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 5, marginTop: 4 },
+  messageTime: { color: '#94a3b8', fontSize: 9 },
+  ownMessageTime: { color: 'rgba(255,255,255,0.66)' },
+  composerArea: {
+    backgroundColor: 'white',
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
-    gap: 8,
+    paddingHorizontal: 12,
+    paddingTop: 10,
   },
+  characterCount: { alignSelf: 'flex-end', color: '#94a3b8', fontSize: 10, marginBottom: 4, marginRight: 5 },
+  composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 9 },
   input: {
     flex: 1,
-    backgroundColor: '#f1f5f9',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    paddingTop: 10,
-    fontSize: 15,
-    color: '#1e293b',
-    maxHeight: 100,
-  },
-  sendButton: {
-    width: 44,
-    height: 44,
+    minHeight: 45,
+    maxHeight: 120,
     borderRadius: 22,
-    backgroundColor: '#1e3a8a',
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
+    backgroundColor: '#f1f5f9',
+    color: '#0f172a',
+    fontSize: 15,
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 12 : 10,
+    paddingBottom: Platform.OS === 'ios' ? 12 : 10,
   },
-  sendButtonDisabled: {
-    backgroundColor: '#94a3b8',
-  },
+  sendButton: { width: 45, height: 45, borderRadius: 23, backgroundColor: '#6d28d9', alignItems: 'center', justifyContent: 'center' },
+  sendButtonDisabled: { backgroundColor: '#cbd5e1' },
+  composerHint: { color: '#94a3b8', fontSize: 9, marginTop: 5, marginLeft: 4 },
 });
