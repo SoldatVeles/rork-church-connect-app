@@ -40,7 +40,8 @@ main :where(section, article, div, form, nav) {
 }
 
 :where(h1, h2, h3, h4) {
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
+  hyphens: auto;
   text-wrap: balance;
 }
 

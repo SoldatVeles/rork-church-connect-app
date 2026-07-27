@@ -17,7 +17,7 @@ export default function KostenloseBuecherPage() {
             Kostenloses Studienmaterial
           </p>
 
-          <h1 className="max-w-4xl text-[clamp(2.35rem,7vw,5rem)] font-extrabold leading-[1.03] tracking-[-0.04em]">
+          <h1 className="max-w-4xl text-[clamp(2rem,7vw,5rem)] font-extrabold leading-[1.03] tracking-[-0.04em]">
             Kostenlose Bücher bestellen
           </h1>
 
