@@ -62,13 +62,14 @@ export default function DatenschutzPage() {
         <div className="mb-10 rounded-3xl bg-[#d6a63f] p-7 text-[#071d35]">
           <ShieldCheck size={38} />
           <h2 className="mt-5 text-2xl font-bold">
-            Entwurf für die erste Website-Version
+            Datenschutz auf einen Blick
           </h2>
           <p className="mt-4 max-w-3xl leading-7 text-[#071d35]/75">
-            Diese Datenschutzerklärung ist vorbereitet und muss vor dem
-            öffentlichen Launch mit den finalen Angaben ergänzt werden:
-            verantwortliche Stelle, Hosting, Formulare, Supabase, E-Mail,
-            Cookies, Analytics und allfällige Drittanbieter.
+            Diese Datenschutzerklärung informiert darüber, welche Angaben über
+            Formulare, Supabase und freiwillig aktivierte Übersetzungsdienste
+            bearbeitet werden. Wir beschränken die Bearbeitung auf den
+            jeweiligen Zweck und schützen persönliche Inhalte vor
+            unbeabsichtigter Veröffentlichung.
           </p>
         </div>
 
@@ -105,20 +106,28 @@ export default function DatenschutzPage() {
 
             <div className="mt-5 rounded-2xl bg-white p-5 text-[#475569]">
               <p className="font-semibold text-[#0b2341]">{siteConfig.name}</p>
-              <p>[Offizielle Adresse ergänzen]</p>
-              <p>[PLZ Ort], Schweiz</p>
+              <p>{siteConfig.address.street}</p>
+              <p>
+                {siteConfig.address.postalCode} {siteConfig.address.city},{" "}
+                {siteConfig.address.country}
+              </p>
               <a
                 href={`mailto:${siteConfig.email}`}
                 className="font-semibold text-[#0b2341] underline"
               >
                 {siteConfig.email}
               </a>
+              <p className="mt-3">
+                {siteConfig.responsible.name}
+                <br />
+                {siteConfig.responsible.role}
+              </p>
             </div>
           </div>
 
           <div className="rounded-3xl bg-[#0b2341] p-8 text-white">
             <Lock className="text-[#d6a63f]" size={38} />
-            <h2 className="mt-5 text-2xl font-bold">Private by default</h2>
+            <h2 className="mt-5 text-2xl font-bold">Standardmässig privat</h2>
             <p className="mt-4 leading-7 text-white/75">
               Für Church Connect und die Website gilt: persönliche Inhalte wie
               Gebetsanliegen oder Mitgliederdaten sind nicht öffentlich, ausser
@@ -135,11 +144,13 @@ export default function DatenschutzPage() {
             <h2 className="mt-5 text-2xl font-bold">Cookies und Dienste</h2>
             <p className="mt-4 leading-7 text-white/80">
               Wir verwenden standardmässig kein Besucher-Tracking. Wenn Sie im
-              Sprachmenü eine andere Sprache als Deutsch auswählen, wird Google
-              Translate erst nach Ihrer Auswahl geladen. Dabei können technische
-              Daten wie Ihre IP-Adresse an Google übertragen und für die gewählte
-              Sprache Cookies gesetzt werden. Die Übersetzung ist freiwillig und
-              kann jederzeit durch die Auswahl von Deutsch beendet werden.
+              Sprachmenü eine andere Sprache als Deutsch auswählen, werden die
+              sichtbaren Website-Texte erst nach Ihrer Auswahl an den
+              Übersetzungsdienst von Google gesendet. Dabei können technische
+              Daten wie Ihre IP-Adresse an Google übertragen werden. Ihre
+              Sprachwahl und bereits geladene Übersetzungen werden lokal in Ihrem
+              Browser gespeichert. Die Übersetzung ist freiwillig und kann
+              jederzeit durch die Auswahl von Deutsch beendet werden.
             </p>
           </div>
 

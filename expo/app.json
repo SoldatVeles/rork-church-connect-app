@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "ch.sdarm.churchconnect",
+      "bundleIdentifier": "ch.staref.churchconnect",
       "buildNumber": "1"
     },
     "android": {
@@ -23,7 +23,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "ch.sdarm.churchconnect",
+      "package": "ch.staref.churchconnect",
       "versionCode": 1
     },
     "web": {
@@ -33,7 +33,7 @@
       [
         "expo-router",
         {
-          "origin": "https://sdarm.ch"
+          "origin": "https://staref.ch"
         }
       ],
       "expo-localization"

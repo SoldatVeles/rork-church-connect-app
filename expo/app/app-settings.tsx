@@ -117,8 +117,8 @@ export default function AppSettingsScreen() {
           <SettingsRow
             icon={Mail}
             title={t('appSettings.contactSupport', { defaultValue: 'Contact support' })}
-            subtitle="info@sdarm.ch"
-            onPress={() => void Linking.openURL('mailto:info@sdarm.ch?subject=Church%20Connect')}
+            subtitle="office@sta-ref.org"
+            onPress={() => void Linking.openURL('mailto:office@sta-ref.org?subject=Church%20Connect')}
           />
         </View>
 

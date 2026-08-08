@@ -2,7 +2,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 const PUBLIC_WEBSITE_URL =
-  process.env.EXPO_PUBLIC_WEBSITE_URL?.replace(/\/+$/, '') || 'https://sdarm.ch';
+  process.env.EXPO_PUBLIC_WEBSITE_URL?.replace(/\/+$/, '') || 'https://staref.ch';
 
 function getDevelopmentHostname(): string | null {
   if (!__DEV__) return null;

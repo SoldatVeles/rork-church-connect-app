@@ -220,7 +220,7 @@ export default async function VeranstaltungenPage() {
               <p className="mt-4 max-w-2xl leading-7 text-white/75">
                 Verantwortliche können in Church Connect eine bereinigte
                 öffentliche Version prüfen, veröffentlichen, aktualisieren oder
-                wieder von sdarm.ch zurückziehen.
+                wieder von staref.ch zurückziehen.
               </p>
             </div>
 

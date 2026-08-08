@@ -35,11 +35,11 @@ export default function ImpressumPage() {
             <div>
               <p className="font-semibold text-[#0b2341]">Adresse</p>
               <p>
-                [Offizielle Vereins-/Gemeindeadresse ergänzen]
+                {siteConfig.address.street}
                 <br />
-                [PLZ Ort]
+                {siteConfig.address.postalCode} {siteConfig.address.city}
                 <br />
-                Schweiz
+                {siteConfig.address.country}
               </p>
             </div>
 
@@ -54,6 +54,17 @@ export default function ImpressumPage() {
             </div>
 
             <div>
+              <p className="font-semibold text-[#0b2341]">Telefon</p>
+              <p>{siteConfig.publicContact.name}, {siteConfig.publicContact.role}</p>
+              <a
+                href={`tel:${siteConfig.publicContact.phoneHref}`}
+                className="font-semibold text-[#0b2341] underline"
+              >
+                {siteConfig.publicContact.phone}
+              </a>
+            </div>
+
+            <div>
               <p className="font-semibold text-[#0b2341]">Domain</p>
               <p>{siteConfig.domain}</p>
             </div>
@@ -62,7 +73,8 @@ export default function ImpressumPage() {
               <p className="font-semibold text-[#0b2341]">
                 Verantwortlich für den Inhalt
               </p>
-              <p>[Name / Vorstand / Verantwortliche Person ergänzen]</p>
+              <p>{siteConfig.responsible.name}</p>
+              <p>{siteConfig.responsible.role}</p>
             </div>
           </div>
         </div>
@@ -70,11 +82,11 @@ export default function ImpressumPage() {
         <div className="space-y-6">
           <div className="rounded-3xl bg-[#0b2341] p-7 text-white">
             <ShieldCheck className="text-[#d6a63f]" size={38} />
-            <h2 className="mt-5 text-2xl font-bold">Hinweis</h2>
+            <h2 className="mt-5 text-2xl font-bold">Transparenz</h2>
             <p className="mt-4 leading-7 text-white/75">
-              Dieses Impressum ist als Entwurf vorbereitet. Vor der
-              Veröffentlichung müssen die offiziellen Angaben ergänzt und geprüft
-              werden.
+              Die Angaben auf dieser Seite nennen den Betreiber, die
+              verantwortliche Person sowie die direkten Kontaktmöglichkeiten
+              der Website.
             </p>
           </div>
 

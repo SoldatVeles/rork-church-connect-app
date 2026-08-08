@@ -59,7 +59,7 @@ export default async function Home() {
         <div className="grid overflow-hidden rounded-[2rem] bg-[#071d35] shadow-[0_30px_90px_rgba(7,29,53,0.18)] lg:grid-cols-[0.9fr_1.1fr]">
           <div className="flex flex-col justify-center p-7 text-white sm:p-10 lg:p-12">
             <p className="mb-5 text-sm font-bold uppercase tracking-[0.18em] text-[#f0d28a]">
-              Willkommen bei sdarm.ch
+              Willkommen bei staref.ch
             </p>
 
             <h1 className="max-w-xl hyphens-auto text-[clamp(1.75rem,9vw,4.6rem)] font-extrabold leading-[0.98] tracking-[-0.045em] lg:text-[clamp(2.7rem,4.25vw,4.4rem)]">

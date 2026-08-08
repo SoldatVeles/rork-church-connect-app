@@ -115,7 +115,7 @@ export default function AppPage() {
 
                 <div className="rounded-2xl bg-[#0b2341] p-5 text-white shadow-sm">
                   <p className="text-sm text-white/70">
-                    Öffentliche Inhalte können später auf sdarm.ch erscheinen.
+                    Öffentliche Inhalte können später auf staref.ch erscheinen.
                   </p>
                   <p className="mt-3 font-semibold text-[#f0d28a]">
                     App + Website verbunden
@@ -200,7 +200,7 @@ export default function AppPage() {
               <Globe2 className="text-[#d6a63f]" size={32} />
               <h3 className="mt-4 text-xl font-bold">Öffentlich</h3>
               <p className="mt-3 text-[#475569]">
-                Freigegebene Veranstaltungen erscheinen auf sdarm.ch.
+                Freigegebene Veranstaltungen erscheinen auf staref.ch.
               </p>
             </div>
 

@@ -1,16 +1,32 @@
 export const siteConfig = {
   name: "Siebenten Tags Adventisten Reformationsbewegung Schweiz",
   shortName: "STA Reformationsbewegung Schweiz",
-  domain: "sdarm.ch",
-  email: "info@sdarm.ch",
+  domain: "staref.ch",
+  email: "office@sta-ref.org",
+  address: {
+    street: "Langfurrenstrasse 66",
+    postalCode: "8105",
+    city: "Regensdorf",
+    country: "Schweiz",
+  },
+  responsible: {
+    name: "Bruno Daniel Gonçalves Fernandes",
+    role: "Verantwortlich für Inhalt und Technik",
+  },
+  publicContact: {
+    name: "Hector Figueredo",
+    role: "Gemeindeleitung",
+    phone: "+41 79 745 10 21",
+    phoneHref: "+41797451021",
+  },
 
-    freeBooks: {
+  freeBooks: {
     title: "Kostenlose Bücher bestellen",
     shortTitle: "Kostenlose Bücher",
     href: "/kostenlose-buecher",
     description:
-        "Bestellen Sie kostenlos ausgewählte christliche Bücher und Bibelmaterial für Ihr persönliches Studium.",
-    },
+      "Bestellen Sie kostenlos ausgewählte christliche Bücher und Bibelmaterial für Ihr persönliches Studium.",
+  },
 
   defaultLanguage: "de",
 
