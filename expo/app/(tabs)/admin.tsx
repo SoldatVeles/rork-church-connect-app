@@ -5,7 +5,6 @@ import { Users, Shield, Plus, Check, UserPlus, Church, BookOpen, Trash2, Ban, Re
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { trpc } from '@/lib/trpc';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 
@@ -89,7 +88,7 @@ type AdminUserRow = {
 
       const { data, error } = await query;
       if (error) throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
-      const rows = (data ?? []) as Array<{
+      const rows = (data ?? []) as {
         id: string;
         email: string | null;
         full_name: string | null;
@@ -99,7 +98,7 @@ type AdminUserRow = {
         created_at: string;
         phone: string | null;
         home_group_id: string | null;
-      }>;
+      }[];
       return rows
         .filter((p) => Boolean(p.email))
         .map((p) => {
@@ -123,14 +122,6 @@ type AdminUserRow = {
     refetchOnWindowFocus: false,
   });
 
-
-  const _diagnosticsQuery = trpc.users.diagnostics.useQuery(undefined, {
-    enabled: false,
-    refetchOnReconnect: false,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-  });
-  
   const [newUser, setNewUser] = useState({
     firstName: '',
     lastName: '',
@@ -148,16 +139,41 @@ type AdminUserRow = {
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [addUserExpanded, setAddUserExpanded] = useState(false);
 
-  const createUserMutation = trpc.users.create.useMutation({
+  const manageChurchUser = async (payload: Record<string, unknown>) => {
+    const { data, error } = await supabase.functions.invoke('manage-church-users', {
+      body: payload,
+    });
+
+    if (error || !data?.success) {
+      throw new Error('Church user management request failed.');
+    }
+
+    return data as { success: true; userId?: string };
+  };
+
+  const createUserMutation = useMutation({
+    mutationFn: async (input: {
+      firstName: string;
+      lastName: string;
+      email: string;
+      phone?: string;
+      password: string;
+      role: Role;
+    }) =>
+      manageChurchUser({
+        action: 'create',
+        firstName: input.firstName,
+        lastName: input.lastName,
+        email: input.email,
+        phone: input.phone,
+        password: input.password,
+        role: input.role,
+      }),
     onSuccess: (createdUser) => {
       void queryClient.invalidateQueries({ queryKey: ['users', 'getAll'] });
       void usersQuery.refetch();
       setNewUser({ firstName: '', lastName: '', email: '', phone: '', password: '', role: 'member' });
-      const requiresEmailConfirmation = Boolean(createdUser?.requiresEmailConfirmation);
-      const successMessage = requiresEmailConfirmation
-        ? t('admin.alerts.accountCreatedConfirm')
-        : t('admin.alerts.userCreatedReady');
-      Alert.alert(t('admin.common.success'), successMessage);
+      Alert.alert(t('admin.common.success'), t('admin.alerts.userCreatedReady'));
     },
     onError: (error) => {
       Alert.alert(t('admin.common.error'), t('admin.alerts.failedToCreateUser'));
@@ -165,18 +181,8 @@ type AdminUserRow = {
   });
   
   const updateRoleMutation = useMutation({
-    mutationFn: async (input: { userId: string; role: Role }) => {
-      const { error } = await supabase.rpc('update_user_role_admin', {
-        target_user_id: input.userId,
-        target_role: input.role,
-      });
-
-      if (error) {
-        throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
-      }
-
-      return input;
-    },
+    mutationFn: async (input: { userId: string; role: Role }) =>
+      manageChurchUser({ action: 'set_role', userId: input.userId, role: input.role }),
     onSuccess: () => {
       Alert.alert(t('admin.common.success'), t('admin.alerts.userRoleUpdated'));
       void usersQuery.refetch();
@@ -187,7 +193,9 @@ type AdminUserRow = {
     },
   });
 
-  const deleteUserMutation = trpc.users.delete.useMutation({
+  const deleteUserMutation = useMutation({
+    mutationFn: async ({ userId }: { userId: string }) =>
+      manageChurchUser({ action: 'delete', userId }),
     onSuccess: () => {
       Alert.alert(t('admin.common.success'), t('admin.alerts.userRemovedFromChurch'));
       void usersQuery.refetch();
@@ -199,23 +207,11 @@ type AdminUserRow = {
 
   const blockUserMutation = useMutation({
     mutationFn: async (input: { userId: string; isBlocked: boolean }) => {
-      if (!user?.id || user.role !== 'admin') {
-        throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
-      }
-
-      if (input.userId === user.id) {
-        throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
-      }
-
-      const { error } = await supabase
-        .from('profiles')
-        .update({ is_blocked: input.isBlocked })
-        .eq('id', input.userId);
-
-      if (error) {
-        throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
-      }
-
+      await manageChurchUser({
+        action: 'set_blocked',
+        userId: input.userId,
+        isBlocked: input.isBlocked,
+      });
       return input;
     },
     onSuccess: (data) => {
@@ -736,6 +732,23 @@ const addUserCountryMutation = useMutation({
         </View>
       </View>
 
+      {isAdminUser && (
+        <TouchableOpacity style={styles.moderationCard} onPress={() => router.push('/moderation' as never)}>
+          <View style={styles.moderationIcon}>
+            <Shield size={20} color="#1e3a8a" />
+          </View>
+          <View style={styles.moderationCopy}>
+            <Text style={styles.moderationTitle}>
+              {t('moderation.title', { defaultValue: 'Safety & moderation' })}
+            </Text>
+            <Text style={styles.moderationText}>
+              {t('moderation.shortHelp', { defaultValue: 'Review member reports and protect your community.' })}
+            </Text>
+          </View>
+          <ChevronDown size={18} color="#64748b" style={{ transform: [{ rotate: '-90deg' }] }} />
+        </TouchableOpacity>
+      )}
+
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <Users size={20} color="#1e3a8a" />
@@ -979,7 +992,6 @@ const addUserCountryMutation = useMutation({
                     lastName: newUser.lastName,
                     phone: newUser.phone || undefined,
                     role: newUser.role,
-                    permissions: [],
                   });
                 }}
               >
@@ -1653,6 +1665,11 @@ const styles = StyleSheet.create({
   accessDeniedTitle: { fontSize: 20, fontWeight: 'bold' as const, color: '#1e293b', marginTop: 16 },
   accessDeniedText: { fontSize: 14, color: '#64748b', marginTop: 8, textAlign: 'center' as const },
   statsRow: { flexDirection: 'row' as const, gap: 12, marginBottom: 16 },
+  moderationCard: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, borderRadius: 14, borderWidth: 1, borderColor: '#bfdbfe', backgroundColor: '#eff6ff', padding: 14, marginBottom: 16 },
+  moderationIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'white', alignItems: 'center' as const, justifyContent: 'center' as const },
+  moderationCopy: { flex: 1 },
+  moderationTitle: { color: '#0f172a', fontSize: 15, fontWeight: '800' as const, marginBottom: 2 },
+  moderationText: { color: '#475569', fontSize: 12, lineHeight: 17 },
   statCard: { flex: 1, backgroundColor: 'white', borderRadius: 12, padding: 16, alignItems: 'center' as const, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
   statNumber: { fontSize: 24, fontWeight: 'bold' as const, color: '#1e3a8a' },
   statLabel: { fontSize: 12, color: '#64748b', marginTop: 4 },

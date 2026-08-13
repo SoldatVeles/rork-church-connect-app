@@ -48,6 +48,9 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           full_name: fullName,
           display_name: fullName,
           role: 'member',
+          terms_version: (user.user_metadata?.terms_version as string | undefined) ?? null,
+          terms_accepted_at: (user.user_metadata?.terms_accepted_at as string | undefined) ?? null,
+          privacy_accepted_at: (user.user_metadata?.privacy_accepted_at as string | undefined) ?? null,
         })
         .select()
         .single();

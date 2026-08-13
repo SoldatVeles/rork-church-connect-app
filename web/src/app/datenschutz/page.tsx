@@ -175,6 +175,14 @@ export default function DatenschutzPage() {
       </section>
 
       <section className="mx-auto max-w-6xl px-4 pb-14 sm:px-6 sm:pb-16 lg:px-8">
+        <div className="rounded-3xl border border-[#e5dfd0] bg-white p-7 sm:p-8">
+          <h2 className="text-2xl font-bold">Konto löschen</h2>
+          <p className="mt-4 max-w-3xl leading-7 text-[#475569]">In Church Connect können Sie Ihr Konto unter Profil → Datenschutz &amp; Sicherheit löschen. Wenn Sie keinen Zugang zur App haben, finden Sie auf unserer Löschseite eine sichere Kontaktmöglichkeit.</p>
+          <Link href="/account-deletion" className="mt-6 inline-flex rounded-xl bg-[#0b2341] px-5 py-3 font-semibold text-white">Konto-Löschung öffnen</Link>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 pb-14 sm:px-6 sm:pb-16 lg:px-8">
         <div className="rounded-[2rem] bg-[#d6a63f] p-6 sm:p-8 md:p-12">
           <div className="grid gap-8 lg:grid-cols-[1fr_0.8fr] md:items-center">
             <div>

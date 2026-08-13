@@ -1,7 +1,7 @@
-import { publicProcedure } from "../../../create-context";
+import { adminProcedure } from "../../../create-context";
 import { z } from "zod";
 
-export const deleteUserProcedure = publicProcedure
+export const deleteUserProcedure = adminProcedure
   .input(
     z.object({
       userId: z.string(),
@@ -9,6 +9,10 @@ export const deleteUserProcedure = publicProcedure
   )
   .mutation(async ({ input, ctx }) => {
     const { supabaseAdmin, hasServiceRoleAccess } = ctx;
+
+    if (input.userId === ctx.user.id) {
+      throw new Error("Administrators cannot delete their own account from member management.");
+    }
 
     if (!hasServiceRoleAccess) {
       console.error(

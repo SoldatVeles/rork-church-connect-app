@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { StatusBar } from 'expo-status-bar';
-import { Heart, Plus, Clock, User, AlertCircle, CheckCircle, MessageSquarePlus, ChevronDown, ChevronUp, Sparkles, Globe, Church, Inbox, BookOpenText } from 'lucide-react-native';
+import { Heart, Plus, Clock, User, AlertCircle, CheckCircle, Flag, MessageSquarePlus, ChevronDown, ChevronUp, Sparkles, Globe, Church, Inbox, BookOpenText } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import {
@@ -692,6 +692,41 @@ export default function PrayersScreen() {
     },
   });
 
+  const reportPrayerMutation = useMutation({
+    mutationFn: async ({ prayer, reason }: { prayer: PrayerRequest; reason: string }) => {
+      if (!user?.id) {
+        throw new Error(t('prayers.loginRequiredTitle'));
+      }
+
+      const { error } = await (supabase.from as any)('content_reports').insert({
+        reporter_id: user.id,
+        content_type: 'prayer',
+        content_id: prayer.id,
+        reported_user_id: prayer.requestedBy ?? null,
+        group_id: prayer.groupId ?? null,
+        reason,
+      });
+
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      Alert.alert(
+        t('prayers.reportSentTitle', { defaultValue: 'Report sent' }),
+        t('prayers.reportSentMessage', {
+          defaultValue: 'Thank you. Church leadership will review this prayer request.',
+        })
+      );
+    },
+    onError: () => {
+      Alert.alert(
+        t('prayers.reportFailedTitle', { defaultValue: 'Report was not sent' }),
+        t('prayers.reportFailedMessage', {
+          defaultValue: 'You may already have reported this prayer request. Please try again later.',
+        })
+      );
+    },
+  });
+
   const togglePrayerExpanded = (prayerId: string) => {
     setExpandedPrayers(prev => {
       const next = new Set(prev);
@@ -974,6 +1009,26 @@ export default function PrayersScreen() {
     });
   };
 
+  const reportPrayer = (prayer: PrayerRequest) => {
+    Alert.alert(
+      t('prayers.reportPrayerTitle', { defaultValue: 'Report prayer request' }),
+      t('prayers.reportPrayerHelp', {
+        defaultValue: 'Why should church leadership review this prayer request?',
+      }),
+      [
+        {
+          text: t('prayers.reportReasonSpam', { defaultValue: 'Spam' }),
+          onPress: () => reportPrayerMutation.mutate({ prayer, reason: 'spam' }),
+        },
+        {
+          text: t('prayers.reportReasonInappropriate', { defaultValue: 'Inappropriate' }),
+          onPress: () => reportPrayerMutation.mutate({ prayer, reason: 'inappropriate' }),
+        },
+        { text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' },
+      ]
+    );
+  };
+
   const activePrayers = allPrayers.filter((p: PrayerRequest) => p.status === 'active');
   const answeredPrayers = allPrayers.filter((p: PrayerRequest) => p.status === 'answered');
 
@@ -1163,6 +1218,18 @@ export default function PrayersScreen() {
                   {hasUserPrayed(prayer) ? t('prayers.praying') : t('prayers.pray')}
                 </Text>
               </TouchableOpacity>
+              {prayer.requestedBy !== user?.id && (
+                <TouchableOpacity
+                  testID={`report-prayer-button-${prayer.id}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('prayers.reportPrayerTitle', { defaultValue: 'Report prayer request' })}
+                  onPress={() => reportPrayer(prayer)}
+                  disabled={reportPrayerMutation.isPending}
+                  style={styles.reportButton}
+                >
+                  <Flag size={15} color="#64748b" />
+                </TouchableOpacity>
+              )}
           </View>
         </View>
 
@@ -1839,6 +1906,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600' as const,
     color: 'white',
+  },
+  reportButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
   },
   prayedButtonText: {
     color: 'white',

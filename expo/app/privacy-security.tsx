@@ -1,5 +1,5 @@
 import { Stack, router } from 'expo-router';
-import { Eye, EyeOff, ExternalLink, Lock, ShieldCheck, UserRoundCheck } from 'lucide-react-native';
+import { Eye, EyeOff, ExternalLink, Lock, ShieldCheck, Trash2, UserRoundCheck } from 'lucide-react-native';
 import * as WebBrowser from 'expo-web-browser';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -30,6 +30,7 @@ export default function PrivacySecurityScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const updatePassword = async () => {
     const nextPassword = password.trim();
@@ -75,6 +76,50 @@ export default function PrivacySecurityScreen() {
         defaultValue: 'Your new password is active now.',
       })
     );
+  };
+
+  const deleteAccount = () => {
+    Alert.alert(
+      t('privacySecurity.deleteAccountTitle', { defaultValue: 'Delete account?' }),
+      t('privacySecurity.deleteAccountMessage', {
+        defaultValue:
+          'This permanently removes your account and private account data. Shared church content may remain without your name when it is needed for the community record.',
+      }),
+      [
+        { text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' },
+        {
+          text: t('privacySecurity.deleteAccountConfirm', { defaultValue: 'Delete account' }),
+          style: 'destructive',
+          onPress: () => void confirmAccountDeletion(),
+        },
+      ]
+    );
+  };
+
+  const confirmAccountDeletion = async () => {
+    setIsDeleting(true);
+
+    try {
+      const { error } = await supabase.functions.invoke('delete-own-account', {
+        body: { confirmation: 'DELETE_ACCOUNT' },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      await supabase.auth.signOut({ scope: 'local' });
+      router.replace('/(auth)/login');
+    } catch {
+      Alert.alert(
+        t('privacySecurity.deleteAccountFailedTitle', { defaultValue: 'Account was not deleted' }),
+        t('privacySecurity.deleteAccountFailedMessage', {
+          defaultValue: 'Please check your connection and try again. If the problem continues, contact support.',
+        })
+      );
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -216,6 +261,39 @@ export default function PrivacySecurityScreen() {
             <ExternalLink size={20} color="#1e3a8a" />
           </TouchableOpacity>
 
+          <Text style={styles.sectionTitle}>
+            {t('privacySecurity.deleteAccountSection', { defaultValue: 'Account deletion' })}
+          </Text>
+          <View style={[styles.card, styles.deleteCard]}>
+            <Text style={styles.deleteTitle}>
+              {t('privacySecurity.deleteAccountTitle', { defaultValue: 'Delete account' })}
+            </Text>
+            <Text style={styles.deleteText}>
+              {t('privacySecurity.deleteAccountHelp', {
+                defaultValue:
+                  'You can permanently delete your Church Connect account from here. This cannot be undone.',
+              })}
+            </Text>
+            <TouchableOpacity
+              style={[styles.deleteButton, isDeleting && styles.disabledButton]}
+              onPress={deleteAccount}
+              disabled={isDeleting}
+              accessibilityRole="button"
+              accessibilityLabel={t('privacySecurity.deleteAccountTitle', { defaultValue: 'Delete account' })}
+            >
+              {isDeleting ? (
+                <ActivityIndicator color="#b91c1c" />
+              ) : (
+                <>
+                  <Trash2 size={18} color="#b91c1c" />
+                  <Text style={styles.deleteButtonText}>
+                    {t('privacySecurity.deleteAccountConfirm', { defaultValue: 'Delete account' })}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+
           <TouchableOpacity style={styles.doneButton} onPress={() => router.back()}>
             <Text style={styles.doneButtonText}>
               {t('common.done', { defaultValue: 'Done' })}
@@ -267,6 +345,21 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
+  deleteCard: { borderWidth: 1, borderColor: '#fecaca' },
+  deleteTitle: { fontSize: 16, fontWeight: '800', color: '#991b1b', marginBottom: 6 },
+  deleteText: { fontSize: 13, lineHeight: 19, color: '#7f1d1d', marginBottom: 14 },
+  deleteButton: {
+    minHeight: 48,
+    borderRadius: 12,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  deleteButtonText: { color: '#b91c1c', fontSize: 14, fontWeight: '800' },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   iconCircle: {
     width: 42,

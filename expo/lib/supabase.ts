@@ -36,6 +36,9 @@ export type Database = {
           phone: string | null;
           role: 'member' | 'pastor' | 'church_leader' | 'admin' | 'visitor';
           is_blocked: boolean | null;
+          terms_version: string | null;
+          terms_accepted_at: string | null;
+          privacy_accepted_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -48,6 +51,9 @@ export type Database = {
           phone?: string | null;
           role?: 'member' | 'pastor' | 'church_leader' | 'admin' | 'visitor';
           is_blocked?: boolean | null;
+          terms_version?: string | null;
+          terms_accepted_at?: string | null;
+          privacy_accepted_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -60,6 +66,9 @@ export type Database = {
           phone?: string | null;
           role?: 'member' | 'pastor' | 'church_leader' | 'admin' | 'visitor';
           is_blocked?: boolean | null;
+          terms_version?: string | null;
+          terms_accepted_at?: string | null;
+          privacy_accepted_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };

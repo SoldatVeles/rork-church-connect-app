@@ -1,13 +1,13 @@
-import { publicProcedure } from "../../../create-context";
+import { adminProcedure } from "../../../create-context";
 import { z } from "zod";
 
 const roles = ["admin", "church_leader", "pastor", "member", "visitor"] as const;
 
-export const createUserProcedure = publicProcedure
+export const createUserProcedure = adminProcedure
   .input(
     z.object({
       email: z.string().email(),
-      password: z.string().min(6),
+      password: z.string().min(8),
       firstName: z.string().min(1),
       lastName: z.string().min(1),
       phone: z.string().optional(),

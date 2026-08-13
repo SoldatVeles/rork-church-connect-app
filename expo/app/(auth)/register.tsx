@@ -16,11 +16,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
+  Linking,
   TouchableWithoutFeedback,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from '@/components/LanguageSelector';
 import { supabase } from '@/lib/supabase';
+import { getWebsiteUrl } from '@/lib/website-url';
 import { translateAuthError } from '@/utils/auth-errors';
 
 type RegisterStep = 'form' | 'code' | 'done';
@@ -40,6 +42,7 @@ export default function RegisterScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [acceptedCommunityRules, setAcceptedCommunityRules] = useState(false);
 
   const updateFormData = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -74,8 +77,18 @@ export default function RegisterScreen() {
       return;
     }
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       Alert.alert(t('auth.passwordReset.passwordTooShortTitle'), t('auth.registerScreen.passwordTooShortMessage'));
+      return;
+    }
+
+    if (!acceptedCommunityRules) {
+      Alert.alert(
+        t('auth.registerScreen.rulesRequiredTitle', { defaultValue: 'Community rules required' }),
+        t('auth.registerScreen.rulesRequiredMessage', {
+          defaultValue: 'Please accept the Community Rules and Privacy Policy to create an account.',
+        })
+      );
       return;
     }
 
@@ -93,6 +106,9 @@ export default function RegisterScreen() {
             first_name: firstName,
             last_name: lastName,
             phone,
+            terms_version: '2026-08-12',
+            terms_accepted_at: new Date().toISOString(),
+            privacy_accepted_at: new Date().toISOString(),
           },
         },
       });
@@ -278,6 +294,28 @@ export default function RegisterScreen() {
           )}
         </TouchableOpacity>
       </View>
+
+      <TouchableOpacity
+        style={styles.rulesRow}
+        onPress={() => setAcceptedCommunityRules((value) => !value)}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: acceptedCommunityRules }}
+      >
+        <View style={[styles.rulesCheckbox, acceptedCommunityRules && styles.rulesCheckboxChecked]}>
+          {acceptedCommunityRules ? <CheckCircle size={18} color="white" /> : null}
+        </View>
+        <Text style={styles.rulesText}>
+          {t('auth.registerScreen.rulesPrefix', { defaultValue: 'I accept the ' })}
+          <Text style={styles.rulesLink} onPress={() => void Linking.openURL(getWebsiteUrl('/gemeinschaftsregeln'))}>
+            {t('auth.registerScreen.communityRules', { defaultValue: 'Community Rules' })}
+          </Text>
+          {t('auth.registerScreen.rulesAnd', { defaultValue: ' and the ' })}
+          <Text style={styles.rulesLink} onPress={() => void Linking.openURL(getWebsiteUrl('/datenschutz'))}>
+            {t('auth.registerScreen.privacyPolicy', { defaultValue: 'Privacy Policy' })}
+          </Text>
+          .
+        </Text>
+      </TouchableOpacity>
 
       <TouchableOpacity
         style={[styles.primaryButton, isLoading && styles.primaryButtonDisabled]}
@@ -508,6 +546,11 @@ const styles = StyleSheet.create({
   eyeButton: {
     padding: 4,
   },
+  rulesRow: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 10, marginBottom: 18, paddingHorizontal: 2 },
+  rulesCheckbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: '#94a3b8', alignItems: 'center' as const, justifyContent: 'center' as const, marginTop: 1 },
+  rulesCheckboxChecked: { backgroundColor: '#1e3a8a', borderColor: '#1e3a8a' },
+  rulesText: { flex: 1, fontSize: 12, lineHeight: 18, color: '#475569' },
+  rulesLink: { color: '#1e3a8a', fontWeight: '700' as const, textDecorationLine: 'underline' as const },
   primaryButton: {
     backgroundColor: '#1e3a8a',
     paddingVertical: 16,

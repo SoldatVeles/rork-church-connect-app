@@ -3,6 +3,7 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import {
   ArrowLeft,
+  Flag,
   MessageCircle,
   RefreshCw,
   Send,
@@ -128,6 +129,24 @@ export default function GroupChatScreen() {
     queryFn: () => fetchChurchMembers(String(groupId)),
   });
 
+  const blockedMembersQuery = useQuery({
+    queryKey: ['blocked-members', user?.id],
+    enabled: !!user?.id,
+    queryFn: async (): Promise<string[]> => {
+      const { data, error } = await (supabase.from as any)('member_blocks')
+        .select('blocked_id')
+        .eq('blocker_id', user?.id);
+
+      if (error) throw new Error(error.message);
+      return (data ?? []).map((row: { blocked_id: string }) => row.blocked_id);
+    },
+  });
+
+  const blockedMemberIds = useMemo(
+    () => new Set(blockedMembersQuery.data ?? []),
+    [blockedMembersQuery.data]
+  );
+
   const sendMessageMutation = useMutation({
     mutationFn: async (content: string) => {
       if (!user?.id || !groupId) {
@@ -150,6 +169,60 @@ export default function GroupChatScreen() {
       Alert.alert(
         t('chat.sendFailedTitle', { defaultValue: 'Message not sent' }),
         error.message || t('chat.sendFailedMessage', { defaultValue: 'Please try again.' })
+      );
+    },
+  });
+
+  const reportMessageMutation = useMutation({
+    mutationFn: async ({ chatMessage, reason }: { chatMessage: ChatMessage; reason: string }) => {
+      if (!user?.id) {
+        throw new Error(t('chat.invalidSession', { defaultValue: 'Your session is not available.' }));
+      }
+
+      const { error } = await (supabase.from as any)('content_reports').insert({
+        reporter_id: user.id,
+        content_type: 'group_message',
+        content_id: chatMessage.id,
+        reported_user_id: chatMessage.senderId,
+        group_id: groupId,
+        reason,
+      });
+
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      Alert.alert(
+        t('chat.reportSentTitle', { defaultValue: 'Report sent' }),
+        t('chat.reportSentMessage', { defaultValue: 'Thank you. Church leadership will review this message.' })
+      );
+    },
+    onError: () => {
+      Alert.alert(
+        t('chat.reportFailedTitle', { defaultValue: 'Report was not sent' }),
+        t('chat.reportFailedMessage', { defaultValue: 'You may already have reported this message. Please try again later.' })
+      );
+    },
+  });
+
+  const blockMemberMutation = useMutation({
+    mutationFn: async ({ memberId, currentlyBlocked }: { memberId: string; currentlyBlocked: boolean }) => {
+      if (!user?.id) throw new Error('Missing user session.');
+
+      const query = (supabase.from as any)('member_blocks');
+      const { error } = currentlyBlocked
+        ? await query.delete().eq('blocker_id', user.id).eq('blocked_id', memberId)
+        : await query.insert({ blocker_id: user.id, blocked_id: memberId });
+
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['blocked-members', user?.id] });
+      void queryClient.invalidateQueries({ queryKey: ['group-messages', groupId] });
+    },
+    onError: () => {
+      Alert.alert(
+        t('chat.blockFailedTitle', { defaultValue: 'Member could not be blocked' }),
+        t('chat.blockFailedMessage', { defaultValue: 'Please try again.' })
       );
     },
   });
@@ -239,17 +312,64 @@ export default function GroupChatScreen() {
     sendMessageMutation.mutate(content);
   };
 
+  const reportMessage = (chatMessage: ChatMessage) => {
+    Alert.alert(
+      t('chat.reportMessageTitle', { defaultValue: 'Report message' }),
+      t('chat.reportMessageHelp', { defaultValue: 'Why should church leadership review this message?' }),
+      [
+        {
+          text: t('chat.reportReasonSpam', { defaultValue: 'Spam' }),
+          onPress: () => reportMessageMutation.mutate({ chatMessage, reason: 'spam' }),
+        },
+        {
+          text: t('chat.reportReasonHarassment', { defaultValue: 'Harassment' }),
+          onPress: () => reportMessageMutation.mutate({ chatMessage, reason: 'harassment' }),
+        },
+        {
+          text: t('chat.reportReasonInappropriate', { defaultValue: 'Inappropriate' }),
+          onPress: () => reportMessageMutation.mutate({ chatMessage, reason: 'inappropriate' }),
+        },
+        { text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' },
+      ]
+    );
+  };
+
   const openMessageOptions = (chatMessage: ChatMessage) => {
+    const ownMessage = chatMessage.senderId === user?.id;
+    const currentlyBlocked = blockedMemberIds.has(chatMessage.senderId);
+    const actions: { text: string; style?: 'cancel' | 'destructive' | 'default'; onPress?: () => void }[] = [
+      {
+        text: t('chat.shareMessage', { defaultValue: 'Share message' }),
+        onPress: () => void Share.share({ message: chatMessage.content }),
+      },
+    ];
+
+    if (!ownMessage) {
+      actions.push(
+        {
+          text: t('chat.reportMessage', { defaultValue: 'Report message' }),
+          style: 'destructive',
+          onPress: () => reportMessage(chatMessage),
+        },
+        {
+          text: currentlyBlocked
+            ? t('chat.unblockMember', { defaultValue: 'Unblock member' })
+            : t('chat.blockMember', { defaultValue: 'Block member' }),
+          style: currentlyBlocked ? 'default' : 'destructive',
+          onPress: () => blockMemberMutation.mutate({
+            memberId: chatMessage.senderId,
+            currentlyBlocked,
+          }),
+        }
+      );
+    }
+
+    actions.push({ text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' });
+
     Alert.alert(
       t('chat.messageOptions', { defaultValue: 'Message options' }),
       undefined,
-      [
-        {
-          text: t('chat.shareMessage', { defaultValue: 'Share message' }),
-          onPress: () => void Share.share({ message: chatMessage.content }),
-        },
-        { text: t('common.cancel'), style: 'cancel' },
-      ]
+      actions
     );
   };
 
@@ -424,6 +544,7 @@ export default function GroupChatScreen() {
                           size={11}
                           color={ownMessage ? 'rgba(255,255,255,0.66)' : '#94a3b8'}
                         />
+                        {!ownMessage && <Flag size={11} color="#94a3b8" />}
                       </View>
                     </TouchableOpacity>
                   </View>

@@ -1,7 +1,7 @@
-import { publicProcedure } from "../../../create-context";
+import { adminProcedure } from "../../../create-context";
 import { z } from "zod";
 
-export const updateUserRoleProcedure = publicProcedure
+export const updateUserRoleProcedure = adminProcedure
   .input(
     z.object({
       userId: z.string(),
@@ -10,6 +10,10 @@ export const updateUserRoleProcedure = publicProcedure
   )
   .mutation(async ({ input, ctx }) => {
     const { supabaseAdmin, hasServiceRoleAccess } = ctx;
+
+    if (input.userId === ctx.user.id) {
+      throw new Error("Administrators cannot change their own role.");
+    }
 
     if (!hasServiceRoleAccess) {
       console.error(

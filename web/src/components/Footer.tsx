@@ -87,6 +87,8 @@ export function Footer() {
           <div className="flex flex-wrap gap-x-5 gap-y-2">
             <Link href="/impressum" className="hover:text-white">Impressum</Link>
             <Link href="/datenschutz" className="hover:text-white">Datenschutz</Link>
+            <Link href="/gemeinschaftsregeln" className="hover:text-white">Gemeinschaftsregeln</Link>
+            <Link href="/account-deletion" className="hover:text-white">Konto löschen</Link>
           </div>
         </div>
       </div>
