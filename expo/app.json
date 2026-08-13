@@ -44,6 +44,15 @@
     "experiments": {
       "typedRoutes": true
     },
-    "description": "Gemeinsam glauben, dienen und verbunden bleiben."
+    "description": "Gemeinsam glauben, dienen und verbunden bleiben.",
+    "extra": {
+      "router": {
+        "origin": "https://staref.ch"
+      },
+      "eas": {
+        "projectId": "83d31e98-8c7b-4903-a3e5-9fa9772314c3"
+      }
+    },
+    "owner": "velesoldat"
   }
 }
