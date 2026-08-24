@@ -6,3 +6,6 @@ node_modules
 # Private invoices and website launch cost records
 output/pdf/private/
 /Invoice 8059037.pdf
+
+# Local Netlify folder
+.netlify
