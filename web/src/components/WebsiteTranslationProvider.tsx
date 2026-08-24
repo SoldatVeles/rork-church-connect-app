@@ -307,14 +307,20 @@ export function WebsiteTranslationProvider({
       const targets = collectTargets();
       const cache = readCachedTranslations(targetLanguage);
       const missing = [...targets.keys()].filter((value) => !cache.has(value));
+      const batches = splitIntoBatches(missing);
 
-      for (const batch of splitIntoBatches(missing)) {
-        const results = await requestTranslation(batch, targetLanguage);
-        if (translationRun.current !== runId) return;
+      const batchResults = await Promise.all(
+        batches.map((batch) => requestTranslation(batch, targetLanguage)),
+      );
 
-        batch.forEach((value, index) => cache.set(value, results[index]));
-        writeCachedTranslations(targetLanguage, cache);
-      }
+      if (translationRun.current !== runId) return;
+
+      batches.forEach((batch, batchIndex) => {
+        batch.forEach((value, index) => {
+          cache.set(value, batchResults[batchIndex][index]);
+        });
+      });
+      writeCachedTranslations(targetLanguage, cache);
 
       if (translationRun.current !== runId) return;
 
@@ -374,9 +380,11 @@ export function WebsiteTranslationProvider({
   useEffect(() => {
     const runId = ++translationRun.current;
     document.documentElement.lang = language;
-    restoreOriginalContent();
 
-    if (language === siteConfig.defaultLanguage) return;
+    if (language === siteConfig.defaultLanguage) {
+      restoreOriginalContent();
+      return;
+    }
 
     window.queueMicrotask(() => {
       if (translationRun.current === runId) setStatus("loading");

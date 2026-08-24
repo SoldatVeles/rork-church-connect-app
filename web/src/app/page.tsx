@@ -56,13 +56,13 @@ export default async function Home() {
   return (
     <main className="min-h-screen bg-[#f8f6f1] text-[#0b2341]">
       <section className="site-container pb-14 pt-6 sm:pb-20 sm:pt-9">
-        <div className="grid overflow-hidden rounded-[2rem] bg-[#071d35] shadow-[0_30px_90px_rgba(7,29,53,0.18)] lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="flex flex-col justify-center p-7 text-white sm:p-10 lg:p-12">
+        <div className="grid overflow-hidden rounded-[2rem] bg-[#071d35] shadow-[0_30px_90px_rgba(7,29,53,0.18)] lg:grid-cols-[0.72fr_1.28fr]">
+          <div className="flex flex-col justify-center p-7 text-white sm:p-10 lg:p-10">
             <p className="mb-5 text-sm font-bold uppercase tracking-[0.18em] text-[#f0d28a]">
               Willkommen bei staref.ch
             </p>
 
-            <h1 className="max-w-xl hyphens-auto text-[clamp(1.75rem,9vw,4.6rem)] font-extrabold leading-[0.98] tracking-[-0.045em] lg:text-[clamp(2.7rem,4.25vw,4.4rem)]">
+            <h1 className="max-w-xl hyphens-auto text-[clamp(1.75rem,9vw,4.6rem)] font-extrabold leading-[0.98] tracking-[-0.045em] lg:text-[clamp(2.7rem,4vw,4.1rem)]">
               <span className="block">Gemeinschaft</span>
               <span className="block">im Glauben</span>
             </h1>
@@ -98,14 +98,14 @@ export default async function Home() {
             </blockquote>
           </div>
 
-          <div className="relative min-h-[24rem] lg:min-h-[38rem]">
+          <div className="relative min-h-[18rem] sm:min-h-[22rem] lg:min-h-[35rem]">
             <Image
               src="/images/website/hero-community-zurich.webp"
               alt="Eine generationenübergreifende Gemeinschaft vor der Zürcher Altstadt und den Schweizer Alpen"
               fill
               priority
               sizes="(max-width: 1024px) 100vw, 58vw"
-              className="object-cover"
+              className="object-cover object-right"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-[#071d35]/25 via-transparent to-transparent lg:bg-gradient-to-r lg:from-[#071d35]/22 lg:to-transparent" />
           </div>
