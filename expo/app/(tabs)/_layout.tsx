@@ -72,7 +72,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="admin"
         options={{
-          title: t('tabs.admin'),
+          title: t('leadership.title', { defaultValue: t('tabs.admin') }),
           tabBarIcon: ({ color, size }) => <Shield size={size} color={color} />,
           href: canAccessAdminPanel(user) ? '/(tabs)/admin' : null,
         }}

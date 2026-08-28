@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
+import { isAdmin, isChurchLeaderLevel } from '@/utils/permissions';
 
 type ContentReport = {
   id: string;
@@ -27,10 +28,12 @@ export default function ModerationScreen() {
   const { user } = useAuth();
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
+  const canReviewReports = isChurchLeaderLevel(user);
+  const canBlockMembers = isAdmin(user);
 
   const reportsQuery = useQuery({
     queryKey: ['content-reports'],
-    enabled: user?.role === 'admin',
+    enabled: canReviewReports,
     queryFn: async (): Promise<ContentReport[]> => {
       const { data, error } = await (supabase.from as any)('content_reports')
         .select(`
@@ -101,8 +104,8 @@ export default function ModerationScreen() {
     );
   };
 
-  if (user?.role !== 'admin') {
-    return <SafeAreaView style={styles.container}><Stack.Screen options={{ title: t('moderation.title', { defaultValue: 'Moderation' }) }} /><View style={styles.denied}><ShieldCheck size={46} color="#b91c1c" /><Text style={styles.deniedTitle}>Administrator access required</Text></View></SafeAreaView>;
+  if (!canReviewReports) {
+    return <SafeAreaView style={styles.container}><Stack.Screen options={{ title: t('moderation.title', { defaultValue: 'Moderation' }) }} /><View style={styles.denied}><ShieldCheck size={46} color="#b91c1c" /><Text style={styles.deniedTitle}>{t('leadership.accessRequired', { defaultValue: 'Leadership access required' })}</Text></View></SafeAreaView>;
   }
 
   return (
@@ -119,7 +122,7 @@ export default function ModerationScreen() {
           <Text style={styles.reportText}>{t('moderation.reason', { defaultValue: 'Reason' })}: {report.reason}</Text>
           <Text style={styles.reportMeta}>{t('moderation.reportedBy', { defaultValue: 'Reported by' })}: {displayName(report.reporter)}</Text>
           <Text style={styles.reportMeta}>{t('moderation.reportedMember', { defaultValue: 'Reported member' })}: {displayName(report.reported_user)}</Text>
-          <View style={styles.actions}><TouchableOpacity style={styles.dismissButton} onPress={() => reviewMutation.mutate({ reportId: report.id, status: 'dismissed' })} disabled={reviewMutation.isPending}><XCircle size={16} color="#64748b" /><Text style={styles.dismissText}>{t('moderation.dismiss', { defaultValue: 'Dismiss' })}</Text></TouchableOpacity>{report.reported_user_id ? <TouchableOpacity style={styles.blockButton} onPress={() => confirmBlock(report)} disabled={blockMemberMutation.isPending}><Ban size={16} color="white" /><Text style={styles.blockText}>{t('moderation.block', { defaultValue: 'Block member' })}</Text></TouchableOpacity> : <TouchableOpacity style={styles.actionButton} onPress={() => reviewMutation.mutate({ reportId: report.id, status: 'action_taken' })} disabled={reviewMutation.isPending}><CheckCircle2 size={16} color="white" /><Text style={styles.blockText}>{t('moderation.actionTaken', { defaultValue: 'Action taken' })}</Text></TouchableOpacity>}</View>
+          <View style={styles.actions}><TouchableOpacity style={styles.dismissButton} onPress={() => reviewMutation.mutate({ reportId: report.id, status: 'dismissed' })} disabled={reviewMutation.isPending}><XCircle size={16} color="#64748b" /><Text style={styles.dismissText}>{t('moderation.dismiss', { defaultValue: 'Dismiss' })}</Text></TouchableOpacity>{canBlockMembers && report.reported_user_id ? <TouchableOpacity style={styles.blockButton} onPress={() => confirmBlock(report)} disabled={blockMemberMutation.isPending}><Ban size={16} color="white" /><Text style={styles.blockText}>{t('moderation.block', { defaultValue: 'Block member' })}</Text></TouchableOpacity> : <TouchableOpacity style={styles.actionButton} onPress={() => reviewMutation.mutate({ reportId: report.id, status: 'action_taken' })} disabled={reviewMutation.isPending}><CheckCircle2 size={16} color="white" /><Text style={styles.blockText}>{t('moderation.actionTaken', { defaultValue: 'Action taken' })}</Text></TouchableOpacity>}</View>
         </View>)}
       </ScrollView>
     </SafeAreaView>

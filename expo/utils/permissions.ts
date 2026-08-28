@@ -53,5 +53,5 @@ export function canManageUsers(user: User | null | undefined): boolean {
 }
 
 export function canAccessAdminPanel(user: User | null | undefined): boolean {
-  return isChurchLeaderLevel(user);
+  return isPastorLevel(user);
 }

@@ -21,7 +21,7 @@ import {
   Alert,
 } from 'react-native';
 import { useAuth } from '@/providers/auth-provider';
-import { isChurchLeaderLevel as checkIsChurchLeader } from '@/utils/permissions';
+import { canAccessAdminPanel as canAccessLeadership } from '@/utils/permissions';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from '@/components/LanguageSelector';
@@ -141,11 +141,11 @@ export default function ProfileScreen() {
         icon: Settings,
         onPress: () => router.push('/app-settings' as any),
       },
-      ...(checkIsChurchLeader(user)
+      ...(canAccessLeadership(user)
         ? [
             {
-              title: t('profile.adminDashboard'),
-              subtitle: t('profile.adminDashboardSubtitle'),
+              title: t('leadership.title', { defaultValue: 'Leadership' }),
+              subtitle: t('leadership.subtitle', { defaultValue: 'Your church work, in one place.' }),
               icon: Shield,
               onPress: () => router.push('/admin'),
             },

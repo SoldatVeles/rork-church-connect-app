@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { StatusBar } from 'expo-status-bar';
-import { Heart, Plus, Clock, User, AlertCircle, CheckCircle, Flag, MessageSquarePlus, ChevronDown, ChevronUp, Sparkles, Globe, Church, Inbox, BookOpenText } from 'lucide-react-native';
+import { Heart, Plus, Clock, User, AlertCircle, CheckCircle, Flag, MessageSquarePlus, ChevronDown, ChevronUp, Sparkles, Globe, Church } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import {
@@ -23,8 +23,6 @@ import type { PrayerRequest, PrayerStatus, PrayerUpdate } from '@/types/prayer';
 import { supabase } from '@/lib/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PrayerPublicationModal } from '@/components/PrayerPublicationModal';
-import { WebsitePrayerInboxModal } from '@/components/WebsitePrayerInboxModal';
-import { WebsiteContactInboxModal } from '@/components/WebsiteContactInboxModal';
 
 const PRAYER_UPDATES_NOT_CONFIGURED = 'PRAYER_UPDATES_NOT_CONFIGURED';
 const PRAYER_TRACKING_NOT_CONFIGURED = 'PRAYER_TRACKING_NOT_CONFIGURED';
@@ -61,8 +59,6 @@ export default function PrayersScreen() {
   const [expandedPrayers, setExpandedPrayers] = useState<Set<string>>(new Set());
   const [highlightedPrayerId, setHighlightedPrayerId] = useState<string | null>(null);
   const [selectedPrayerForPublication, setSelectedPrayerForPublication] = useState<PrayerRequest | null>(null);
-  const [showWebsitePrayerInbox, setShowWebsitePrayerInbox] = useState(false);
-  const [showWebsiteContactInbox, setShowWebsiteContactInbox] = useState(false);
 
   const queryClient = useQueryClient();
   const userIsAdmin = isAdmin(user);
@@ -156,39 +152,6 @@ export default function PrayersScreen() {
       }
 
       return Array.from(groupIds);
-    },
-  });
-
-  const canReviewWebsiteSubmissions =
-    user?.role === 'admin' ||
-    user?.role === 'pastor' ||
-    user?.role === 'church_leader';
-
-  const websitePrayerSubmissionCountQuery = useQuery({
-    queryKey: ['website-prayer-submissions-count', user?.id],
-    enabled: Boolean(user?.id && canReviewWebsiteSubmissions),
-    queryFn: async (): Promise<number> => {
-      const { count, error } = await supabase
-        .from('website_prayer_submissions')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'pending');
-
-      if (error) throw new Error(error.message);
-      return count ?? 0;
-    },
-  });
-
-  const websiteContactSubmissionCountQuery = useQuery({
-    queryKey: ['website-contact-submissions-count', user?.id],
-    enabled: Boolean(user?.id && canReviewWebsiteSubmissions),
-    queryFn: async (): Promise<number> => {
-      const { count, error } = await supabase
-        .from('website_contact_submissions')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'pending');
-
-      if (error) throw new Error(error.message);
-      return count ?? 0;
     },
   });
 
@@ -1321,46 +1284,6 @@ export default function PrayersScreen() {
           </TouchableOpacity>
         </View>
 
-        {canReviewWebsiteSubmissions ? (
-          <TouchableOpacity
-            testID="open-website-prayer-inbox-button"
-            accessibilityRole="button"
-            accessibilityLabel={t('prayers.websiteInbox.button')}
-            style={styles.inboxButton}
-            onPress={() => setShowWebsitePrayerInbox(true)}
-          >
-            <Inbox size={18} color="#1e3a8a" />
-            <Text numberOfLines={1} style={styles.inboxButtonText}>
-              {t('prayers.websiteInbox.button')}
-            </Text>
-            {(websitePrayerSubmissionCountQuery.data ?? 0) > 0 ? (
-              <Text style={styles.inboxCount}>
-                {websitePrayerSubmissionCountQuery.data}
-              </Text>
-            ) : null}
-          </TouchableOpacity>
-        ) : null}
-
-        {canReviewWebsiteSubmissions ? (
-          <TouchableOpacity
-            testID="open-website-contact-inbox-button"
-            accessibilityRole="button"
-            accessibilityLabel={t('prayers.websiteRequests.button')}
-            style={styles.inboxButton}
-            onPress={() => setShowWebsiteContactInbox(true)}
-          >
-            <BookOpenText size={18} color="#1e3a8a" />
-            <Text numberOfLines={1} style={styles.inboxButtonText}>
-              {t('prayers.websiteRequests.button')}
-            </Text>
-            {(websiteContactSubmissionCountQuery.data ?? 0) > 0 ? (
-              <Text style={styles.inboxCount}>
-                {websiteContactSubmissionCountQuery.data}
-              </Text>
-            ) : null}
-          </TouchableOpacity>
-        ) : null}
-
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -1429,18 +1352,6 @@ export default function PrayersScreen() {
         prayer={selectedPrayerForPublication}
         visible={!!selectedPrayerForPublication}
         onClose={() => setSelectedPrayerForPublication(null)}
-      />
-
-      <WebsitePrayerInboxModal
-        visible={showWebsitePrayerInbox}
-        userId={user?.id ?? null}
-        onClose={() => setShowWebsitePrayerInbox(false)}
-      />
-
-      <WebsiteContactInboxModal
-        visible={showWebsiteContactInbox}
-        userId={user?.id ?? null}
-        onClose={() => setShowWebsiteContactInbox(false)}
       />
 
       <Modal

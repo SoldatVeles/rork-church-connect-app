@@ -45,12 +45,14 @@ type WebsiteContactSubmission = {
 type WebsiteContactInboxModalProps = {
   visible: boolean;
   userId: string | null;
+  submissionType?: WebsiteContactSubmission['submissionType'];
   onClose: () => void;
 };
 
 export function WebsiteContactInboxModal({
   visible,
   userId,
+  submissionType,
   onClose,
 }: WebsiteContactInboxModalProps) {
   const { t, i18n } = useTranslation();
@@ -58,12 +60,17 @@ export function WebsiteContactInboxModal({
   const [selected, setSelected] =
     useState<WebsiteContactSubmission | null>(null);
 
-  const queryKey = ['website-contact-submissions', 'pending', userId] as const;
+  const queryKey = [
+    'website-contact-submissions',
+    'pending',
+    userId,
+    submissionType ?? 'all',
+  ] as const;
   const submissionsQuery = useQuery({
     queryKey,
     enabled: visible && !!userId,
     queryFn: async (): Promise<WebsiteContactSubmission[]> => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('website_contact_submissions')
         .select(`
           id,
@@ -78,6 +85,12 @@ export function WebsiteContactInboxModal({
         `)
         .eq('status', 'pending')
         .order('created_at', { ascending: true });
+
+      if (submissionType) {
+        query = query.eq('submission_type', submissionType);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw new Error(error.message);
 
@@ -209,7 +222,9 @@ export function WebsiteContactInboxModal({
               {t('prayers.websiteRequests.website')}
             </Text>
             <Text style={styles.headerTitle}>
-              {t('prayers.websiteRequests.title')}
+              {submissionType
+                ? typeLabel(submissionType)
+                : t('prayers.websiteRequests.title')}
             </Text>
           </View>
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, Platform } from 'react-native';
 import { Stack, router } from 'expo-router';
-import { Users, Shield, Plus, Check, UserPlus, Church, BookOpen, Trash2, Ban, RefreshCw, ChevronDown, ChevronUp, X, Globe, ExternalLink, Settings } from 'lucide-react-native';
+import { ArrowLeft, BookOpen, Check, ChevronDown, ChevronRight, ChevronUp, Church, Globe, Heart, Inbox, LayoutDashboard, Plus, RefreshCw, Settings, Shield, ShieldCheck, Trash2, UserPlus, Users, X, Ban, ExternalLink } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -17,16 +17,17 @@ interface Group {
   created_at: string;
 }
 
-type AdminTab = 'users' | 'sermons' | 'groups' | 'countries';
+type AdminTab = 'overview' | 'users' | 'sermons' | 'groups' | 'countries';
 
 export default function AdminTabScreen() {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<AdminTab>('users');
+  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
 
   const isAdminUser = user?.role === 'admin';
   const isChurchLeaderUser = user?.role === 'church_leader';
+  const isPastorUser = user?.role === 'pastor';
 
   const currentUserProfileQuery = useQuery({
     queryKey: ['admin-current-user-profile', user?.id],
@@ -53,6 +54,51 @@ export default function AdminTabScreen() {
   const userHomeGroupId =
     currentUserProfileQuery.data?.home_group_id ??
     ((user as any)?.home_group_id ?? (user as any)?.homeGroupId ?? null) as string | null;
+
+  const canReviewWebsiteSubmissions =
+    isAdminUser || isChurchLeaderUser || isPastorUser;
+  const canReviewSafetyReports = isAdminUser || isChurchLeaderUser;
+
+  const websitePrayerSubmissionCountQuery = useQuery({
+    queryKey: ['website-prayer-submissions-count', user?.id],
+    enabled: Boolean(user?.id && canReviewWebsiteSubmissions),
+    queryFn: async (): Promise<number> => {
+      const { count, error } = await supabase
+        .from('website_prayer_submissions')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'pending');
+
+      if (error) throw new Error(error.message);
+      return count ?? 0;
+    },
+  });
+
+  const websiteContactSubmissionCountQuery = useQuery({
+    queryKey: ['website-contact-submissions-count', user?.id],
+    enabled: Boolean(user?.id && canReviewWebsiteSubmissions),
+    queryFn: async (): Promise<number> => {
+      const { count, error } = await supabase
+        .from('website_contact_submissions')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'pending');
+
+      if (error) throw new Error(error.message);
+      return count ?? 0;
+    },
+  });
+
+  const moderationReportCountQuery = useQuery({
+    queryKey: ['content-reports-count', user?.id],
+    enabled: Boolean(user?.id && canReviewSafetyReports),
+    queryFn: async (): Promise<number> => {
+      const { count, error } = await (supabase.from as any)('content_reports')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'pending');
+
+      if (error) throw new Error(error.message);
+      return count ?? 0;
+    },
+  });
   
   // Direct Supabase query (bypasses cold-starting Hono backend so the list
   // loads quickly and reliably). Admin uses RLS-permitted access to profiles.
@@ -229,7 +275,7 @@ type AdminUserRow = {
       if (!user?.id) {
         throw new Error(t('admin.alerts.mustBeLoggedInCreateChurch'));
       }
-      
+
       const { data: insertedData, error } = await supabase
         .from('groups')
         .insert({
@@ -237,7 +283,7 @@ type AdminUserRow = {
           created_by: user.id,
         })
         .select();
-      
+
       if (error) {
         throw new Error(t('admin.alerts.genericError', { defaultValue: 'Something went wrong. Please try again.' }));
       }
@@ -694,15 +740,17 @@ const addUserCountryMutation = useMutation({
     );
   };
 
-  const canAccessChurchManagement = isAdminUser || isChurchLeaderUser;
+  const canAccessLeadership = isAdminUser || isChurchLeaderUser || isPastorUser;
 
   React.useEffect(() => {
-    if (!isAdminUser && activeTab !== 'users') {
-      setActiveTab('users');
+    if (isPastorUser && activeTab !== 'overview') {
+      setActiveTab('overview');
+    } else if (isChurchLeaderUser && !['overview', 'users'].includes(activeTab)) {
+      setActiveTab('overview');
     }
-  }, [isAdminUser, activeTab]);
+  }, [activeTab, isChurchLeaderUser, isPastorUser]);
 
-  if (!canAccessChurchManagement) {
+  if (!canAccessLeadership) {
     return (
       <View style={styles.container}>
         <Stack.Screen options={{ headerShown: false }} />
@@ -731,23 +779,6 @@ const addUserCountryMutation = useMutation({
           <Text style={styles.statLabel}>{t('admin.stats.pastors')}</Text>
         </View>
       </View>
-
-      {isAdminUser && (
-        <TouchableOpacity style={styles.moderationCard} onPress={() => router.push('/moderation' as never)}>
-          <View style={styles.moderationIcon}>
-            <Shield size={20} color="#1e3a8a" />
-          </View>
-          <View style={styles.moderationCopy}>
-            <Text style={styles.moderationTitle}>
-              {t('moderation.title', { defaultValue: 'Safety & moderation' })}
-            </Text>
-            <Text style={styles.moderationText}>
-              {t('moderation.shortHelp', { defaultValue: 'Review member reports and protect your community.' })}
-            </Text>
-          </View>
-          <ChevronDown size={18} color="#64748b" style={{ transform: [{ rotate: '-90deg' }] }} />
-        </TouchableOpacity>
-      )}
 
       <View style={styles.card}>
         <View style={styles.cardHeader}>
@@ -1591,59 +1622,242 @@ const addUserCountryMutation = useMutation({
     );
   };
 
+  const pendingWebsiteRequests =
+    (websitePrayerSubmissionCountQuery.data ?? 0) +
+    (websiteContactSubmissionCountQuery.data ?? 0);
+
+  const renderLeadershipOverview = () => (
+    <>
+      <View style={styles.leadershipHero}>
+        <View style={styles.leadershipHeroIcon}>
+          <LayoutDashboard size={25} color="#1e3a8a" />
+        </View>
+        <View style={styles.leadershipHeroCopy}>
+          <Text style={styles.leadershipHeroTitle}>
+            {t('leadership.welcomeTitle', { defaultValue: 'Leadership centre' })}
+          </Text>
+          <Text style={styles.leadershipHeroText}>
+            {t('leadership.welcomeText', { defaultValue: 'Review requests, care for your congregation, and manage church work in one place.' })}
+          </Text>
+        </View>
+      </View>
+
+      <Text style={styles.dashboardSectionTitle}>
+        {t('leadership.needsAttention', { defaultValue: 'Needs attention' })}
+      </Text>
+
+      {canReviewSafetyReports ? (
+        <TouchableOpacity
+          testID="leadership-safety-card"
+          accessibilityRole="button"
+          style={[styles.dashboardCard, styles.safetyDashboardCard]}
+          onPress={() => router.push('/moderation' as never)}
+        >
+          <View style={[styles.dashboardIcon, styles.safetyDashboardIcon]}>
+            <ShieldCheck size={21} color="#b45309" />
+          </View>
+          <View style={styles.dashboardCopy}>
+            <Text style={styles.dashboardTitle}>
+              {t('moderation.title', { defaultValue: 'Safety & moderation' })}
+            </Text>
+            <Text style={styles.dashboardText}>
+              {t('leadership.safetyHelp', { defaultValue: 'Review reports from your congregation and take the appropriate action.' })}
+            </Text>
+          </View>
+          <View style={styles.dashboardEnd}>
+            <Text style={styles.attentionBadge}>{moderationReportCountQuery.data ?? 0}</Text>
+            <ChevronRight size={19} color="#64748b" />
+          </View>
+        </TouchableOpacity>
+      ) : null}
+
+      <TouchableOpacity
+        testID="leadership-website-inbox-card"
+        accessibilityRole="button"
+        style={styles.dashboardCard}
+        onPress={() => router.push('/leadership-inbox' as never)}
+      >
+        <View style={[styles.dashboardIcon, styles.websiteDashboardIcon]}>
+          <Inbox size={21} color="#1e3a8a" />
+        </View>
+        <View style={styles.dashboardCopy}>
+          <Text style={styles.dashboardTitle}>
+            {t('leadership.websiteInbox', { defaultValue: 'Website inbox' })}
+          </Text>
+          <Text style={styles.dashboardText}>
+            {t('leadership.websiteInboxShortHelp', { defaultValue: 'Prayer, contact, and free-book requests from the public website.' })}
+          </Text>
+        </View>
+        <View style={styles.dashboardEnd}>
+          <Text style={styles.attentionBadge}>{pendingWebsiteRequests}</Text>
+          <ChevronRight size={19} color="#64748b" />
+        </View>
+      </TouchableOpacity>
+
+      {isAdminUser || isChurchLeaderUser ? (
+        <>
+          <Text style={styles.dashboardSectionTitle}>
+            {t('leadership.congregation', { defaultValue: 'Congregation' })}
+          </Text>
+          <TouchableOpacity
+            testID="leadership-members-card"
+            accessibilityRole="button"
+            style={styles.dashboardCard}
+            onPress={() => setActiveTab('users')}
+          >
+            <View style={[styles.dashboardIcon, styles.membersDashboardIcon]}>
+              <Users size={21} color="#496b3f" />
+            </View>
+            <View style={styles.dashboardCopy}>
+              <Text style={styles.dashboardTitle}>{t('admin.tabs.members')}</Text>
+              <Text style={styles.dashboardText}>
+                {isAdminUser
+                  ? t('leadership.membersAdminHelp', { defaultValue: 'Manage member accounts, roles, and access.' })
+                  : t('leadership.membersLeaderHelp', { defaultValue: 'Manage the members assigned to your church.' })}
+              </Text>
+            </View>
+            <ChevronRight size={19} color="#64748b" />
+          </TouchableOpacity>
+        </>
+      ) : null}
+
+      {isAdminUser ? (
+        <>
+          <TouchableOpacity
+            testID="leadership-churches-card"
+            accessibilityRole="button"
+            style={styles.dashboardCard}
+            onPress={() => setActiveTab('groups')}
+          >
+            <View style={[styles.dashboardIcon, styles.churchesDashboardIcon]}>
+              <Church size={21} color="#6d28d9" />
+            </View>
+            <View style={styles.dashboardCopy}>
+              <Text style={styles.dashboardTitle}>{t('admin.tabs.churches')}</Text>
+              <Text style={styles.dashboardText}>
+                {t('leadership.churchesHelp', { defaultValue: 'Create churches and organise their members and pastors.' })}
+              </Text>
+            </View>
+            <ChevronRight size={19} color="#64748b" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            testID="leadership-countries-card"
+            accessibilityRole="button"
+            style={styles.dashboardCard}
+            onPress={() => setActiveTab('countries')}
+          >
+            <View style={[styles.dashboardIcon, styles.countriesDashboardIcon]}>
+              <Globe size={21} color="#0f766e" />
+            </View>
+            <View style={styles.dashboardCopy}>
+              <Text style={styles.dashboardTitle}>{t('admin.countries.title')}</Text>
+              <Text style={styles.dashboardText}>
+                {t('leadership.countriesHelp', { defaultValue: 'Manage country access and church assignments.' })}
+              </Text>
+            </View>
+            <ChevronRight size={19} color="#64748b" />
+          </TouchableOpacity>
+        </>
+      ) : null}
+
+      <Text style={styles.dashboardSectionTitle}>
+        {t('leadership.contentWebsite', { defaultValue: 'Content & website' })}
+      </Text>
+
+      <TouchableOpacity
+        testID="leadership-event-publications-card"
+        accessibilityRole="button"
+        style={styles.dashboardCard}
+        onPress={() => router.push('/events' as never)}
+      >
+        <View style={[styles.dashboardIcon, styles.publicationDashboardIcon]}>
+          <Globe size={21} color="#1e3a8a" />
+        </View>
+        <View style={styles.dashboardCopy}>
+          <Text style={styles.dashboardTitle}>
+            {t('events.title', { defaultValue: 'Events' })}
+          </Text>
+          <Text style={styles.dashboardText}>
+            {t('events.publication.openManager', { defaultValue: 'Manage website publication' })}
+          </Text>
+        </View>
+        <ChevronRight size={19} color="#64748b" />
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        testID="leadership-prayer-publications-card"
+        accessibilityRole="button"
+        style={styles.dashboardCard}
+        onPress={() => router.push('/prayers' as never)}
+      >
+        <View style={[styles.dashboardIcon, styles.prayerDashboardIcon]}>
+          <Heart size={21} color="#b91c1c" />
+        </View>
+        <View style={styles.dashboardCopy}>
+          <Text style={styles.dashboardTitle}>
+            {t('prayers.title', { defaultValue: 'Prayers' })}
+          </Text>
+          <Text style={styles.dashboardText}>
+            {t('prayers.publication.openManager', { defaultValue: 'Manage website publication' })}
+          </Text>
+        </View>
+        <ChevronRight size={19} color="#64748b" />
+      </TouchableOpacity>
+
+      {isAdminUser ? (
+        <TouchableOpacity
+          testID="leadership-sermons-card"
+          accessibilityRole="button"
+          style={styles.dashboardCard}
+          onPress={() => setActiveTab('sermons')}
+        >
+          <View style={[styles.dashboardIcon, styles.sermonsDashboardIcon]}>
+            <BookOpen size={21} color="#7c3f00" />
+          </View>
+          <View style={styles.dashboardCopy}>
+            <Text style={styles.dashboardTitle}>{t('admin.tabs.sermons')}</Text>
+            <Text style={styles.dashboardText}>
+              {t('leadership.sermonsHelp', { defaultValue: 'Manage sermons and Sabbath School video links.' })}
+            </Text>
+          </View>
+          <ChevronRight size={19} color="#64748b" />
+        </TouchableOpacity>
+      ) : null}
+    </>
+  );
+
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-      
+
       <LinearGradient colors={['#1e3a8a', '#3b82f6']} style={styles.header}>
-        <Text style={styles.headerTitle}>{t('admin.title')}</Text>
-        <Text style={styles.headerSubtitle}>{t('admin.subtitle')}</Text>
+        <View style={styles.headerRow}>
+          {activeTab !== 'overview' ? (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={t('leadership.backToOverview', { defaultValue: 'Back to Leadership' })}
+              style={styles.headerBackButton}
+              onPress={() => setActiveTab('overview')}
+            >
+              <ArrowLeft size={20} color="white" />
+            </TouchableOpacity>
+          ) : null}
+          <View style={styles.headerCopy}>
+            <Text style={styles.headerTitle}>
+              {t('leadership.title', { defaultValue: 'Leadership' })}
+            </Text>
+            <Text style={styles.headerSubtitle}>
+              {activeTab === 'overview'
+                ? t('leadership.subtitle', { defaultValue: 'Your church work, in one place.' })
+                : t('leadership.backToOverview', { defaultValue: 'Back to Leadership' })}
+            </Text>
+          </View>
+        </View>
       </LinearGradient>
-      
+
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.tabBarScroller}
-          contentContainerStyle={styles.tabBar}
-        >
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'users' && styles.tabActive]}
-            onPress={() => setActiveTab('users')}
-          >
-            <Users size={16} color={activeTab === 'users' ? '#1e3a8a' : '#64748b'} />
-            <Text style={[styles.tabText, activeTab === 'users' && styles.tabTextActive]}>{t('admin.tabs.members')}</Text>
-          </TouchableOpacity>
-
-          {isAdminUser && (
-            <>
-              <TouchableOpacity
-                style={[styles.tab, activeTab === 'sermons' && styles.tabActive]}
-                onPress={() => setActiveTab('sermons')}
-              >
-                <BookOpen size={16} color={activeTab === 'sermons' ? '#1e3a8a' : '#64748b'} />
-                <Text style={[styles.tabText, activeTab === 'sermons' && styles.tabTextActive]}>{t('admin.tabs.sermons')}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.tab, activeTab === 'groups' && styles.tabActive]}
-                onPress={() => setActiveTab('groups')}
-              >
-                <Church size={16} color={activeTab === 'groups' ? '#1e3a8a' : '#64748b'} />
-                <Text style={[styles.tabText, activeTab === 'groups' && styles.tabTextActive]}>{t('admin.tabs.churches')}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.tab, activeTab === 'countries' && styles.tabActive]}
-                onPress={() => setActiveTab('countries')}
-              >
-                <Globe size={16} color={activeTab === 'countries' ? '#1e3a8a' : '#64748b'} />
-                <Text style={[styles.tabText, activeTab === 'countries' && styles.tabTextActive]}>{t('admin.countries.title')}</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </ScrollView>
-
+        {activeTab === 'overview' && renderLeadershipOverview()}
         {activeTab === 'users' && renderUsersTab()}
         {isAdminUser && activeTab === 'sermons' && renderSermonsTab()}
         {isAdminUser && activeTab === 'groups' && renderGroupsTab()}
@@ -1658,12 +1872,37 @@ const addUserCountryMutation = useMutation({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   header: { paddingTop: 60, paddingBottom: 20, paddingHorizontal: 24 },
+  headerRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
+  headerBackButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: 'rgba(255,255,255,0.18)' },
+  headerCopy: { flex: 1 },
   headerTitle: { fontSize: 28, fontWeight: 'bold' as const, color: 'white' },
   headerSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 4 },
   content: { flex: 1, padding: 16 },
   accessDenied: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   accessDeniedTitle: { fontSize: 20, fontWeight: 'bold' as const, color: '#1e293b', marginTop: 16 },
   accessDeniedText: { fontSize: 14, color: '#64748b', marginTop: 8, textAlign: 'center' as const },
+  leadershipHero: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 13, borderRadius: 18, padding: 17, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', marginBottom: 22 },
+  leadershipHeroIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'white', alignItems: 'center' as const, justifyContent: 'center' as const },
+  leadershipHeroCopy: { flex: 1 },
+  leadershipHeroTitle: { color: '#0f172a', fontSize: 18, fontWeight: '800' as const, marginBottom: 4 },
+  leadershipHeroText: { color: '#475569', fontSize: 14, lineHeight: 20 },
+  dashboardSectionTitle: { color: '#475569', fontSize: 12, fontWeight: '800' as const, letterSpacing: 0.7, textTransform: 'uppercase' as const, marginTop: 4, marginBottom: 10 },
+  dashboardCard: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 13, borderRadius: 18, padding: 16, backgroundColor: 'white', borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 11 },
+  safetyDashboardCard: { borderColor: '#fed7aa', backgroundColor: '#fffaf2' },
+  dashboardIcon: { width: 46, height: 46, borderRadius: 23, alignItems: 'center' as const, justifyContent: 'center' as const },
+  safetyDashboardIcon: { backgroundColor: '#fef3c7' },
+  websiteDashboardIcon: { backgroundColor: '#eff6ff' },
+  membersDashboardIcon: { backgroundColor: '#f0fdf4' },
+  churchesDashboardIcon: { backgroundColor: '#f5f3ff' },
+  countriesDashboardIcon: { backgroundColor: '#f0fdfa' },
+  publicationDashboardIcon: { backgroundColor: '#eff6ff' },
+  prayerDashboardIcon: { backgroundColor: '#fef2f2' },
+  sermonsDashboardIcon: { backgroundColor: '#fff7ed' },
+  dashboardCopy: { flex: 1 },
+  dashboardTitle: { color: '#0f172a', fontSize: 16, fontWeight: '800' as const, marginBottom: 3 },
+  dashboardText: { color: '#64748b', fontSize: 13, lineHeight: 18 },
+  dashboardEnd: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+  attentionBadge: { minWidth: 25, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 12, backgroundColor: '#dc2626', color: 'white', textAlign: 'center' as const, fontSize: 12, fontWeight: '800' as const },
   statsRow: { flexDirection: 'row' as const, gap: 12, marginBottom: 16 },
   moderationCard: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, borderRadius: 14, borderWidth: 1, borderColor: '#bfdbfe', backgroundColor: '#eff6ff', padding: 14, marginBottom: 16 },
   moderationIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'white', alignItems: 'center' as const, justifyContent: 'center' as const },
