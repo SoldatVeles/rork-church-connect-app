@@ -62,7 +62,7 @@ export default async function Home() {
               Willkommen bei staref.ch
             </p>
 
-            <h1 className="max-w-xl hyphens-auto text-[clamp(1.75rem,9vw,4.6rem)] font-extrabold leading-[0.98] tracking-[-0.045em] lg:text-[clamp(2.7rem,4vw,4.1rem)]">
+            <h1 className="home-hero-title max-w-xl text-[clamp(1.75rem,9vw,4.6rem)] font-extrabold leading-[0.98] tracking-[-0.045em] lg:text-[clamp(2.7rem,4vw,4.1rem)]">
               <span className="block">Gemeinschaft</span>
               <span className="block">im Glauben</span>
             </h1>

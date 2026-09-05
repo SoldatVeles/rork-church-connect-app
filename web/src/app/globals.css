@@ -45,6 +45,29 @@ main :where(section, article, div, form, nav) {
   text-wrap: balance;
 }
 
+/*
+ * The opening hero uses one intentional word per line.  It must never split a
+ * translated word mid-word: German "Gemeinschaft" is the widest supported
+ * title, so the desktop scale is capped to keep it inside the text column.
+ */
+.home-hero-title {
+  max-width: none;
+  overflow-wrap: normal;
+  word-break: keep-all;
+  hyphens: none;
+  text-wrap: nowrap;
+}
+
+.home-hero-title > span {
+  white-space: nowrap;
+}
+
+@media (min-width: 1024px) {
+  .home-hero-title {
+    font-size: clamp(2rem, 3.5vw, 3rem);
+  }
+}
+
 :where(p, li, label, a, button) {
   overflow-wrap: break-word;
 }
