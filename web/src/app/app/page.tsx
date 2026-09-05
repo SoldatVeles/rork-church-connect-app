@@ -92,11 +92,9 @@ export default function AppPage() {
             </p>
 
             <h1 className="mt-5 max-w-xl text-[clamp(2.25rem,6vw,4.7rem)] font-extrabold leading-[0.98] tracking-[-0.045em]">
-              Gemeinde.
-              <br />
-              Verbunden.
-              <br />
-              Immer dabei.
+              <span className="app-launch-title-line">Gemeinde.</span>
+              <span className="app-launch-title-line">Verbunden.</span>
+              <span className="app-launch-title-line">Immer dabei.</span>
             </h1>
 
             <p className="mt-6 max-w-xl text-base leading-7 text-white/78 sm:text-lg sm:leading-8">

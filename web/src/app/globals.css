@@ -62,6 +62,17 @@ main :where(section, article, div, form, nav) {
   white-space: nowrap;
 }
 
+/* The automatic translator may return a lower-case word when it translates
+ * a short line on its own. Every line of the Church Connect tagline is a
+ * sentence, so its first letter is always displayed as a capital. */
+.app-launch-title-line {
+  display: block;
+}
+
+.app-launch-title-line::first-letter {
+  text-transform: uppercase;
+}
+
 @media (min-width: 1024px) {
   .home-hero-title {
     font-size: clamp(2rem, 3.5vw, 3rem);
