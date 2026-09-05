@@ -1,10 +1,15 @@
+import Image from "next/image";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import {
+  Apple,
   ArrowRight,
   CalendarDays,
-  Church,
   Globe2,
+  Heart,
+  House,
   Lock,
+  Play,
   ShieldCheck,
   Smartphone,
   Users,
@@ -12,239 +17,237 @@ import {
 
 const appFeatures = [
   {
-    title: "Gemeinden verbinden",
+    title: "Gemeinschaft",
     description:
-      "Mitglieder, Pastoren und Gemeindeleiter können innerhalb ihrer Gemeinde besser informiert bleiben.",
-    icon: Church,
+      "Aktuelles aus der Gemeinde, hilfreiche Informationen und ein Ort, um verbunden zu bleiben.",
+    icon: House,
   },
   {
-    title: "Veranstaltungen verwalten",
+    title: "Termine",
     description:
-      "Öffentliche und interne Veranstaltungen können zentral geplant und später auf der Website angezeigt werden.",
+      "Sabbat, Veranstaltungen und wichtige Anlässe übersichtlich an einem Ort.",
     icon: CalendarDays,
   },
   {
-    title: "Gebetsanliegen sicher teilen",
+    title: "Gebet",
     description:
-      "Gebetsanliegen bleiben privat und werden nur entsprechend der gewählten Sichtbarkeit geteilt.",
-    icon: Lock,
-  },
-  {
-    title: "Schweizweite Übersicht",
-    description:
-      "Die Gemeinden in der Schweiz können gemeinsame Informationen und öffentliche Termine sichtbar machen.",
-    icon: Globe2,
+      "Anliegen bewusst und geschützt teilen – nur mit den Menschen, für die sie bestimmt sind.",
+    icon: Heart,
   },
 ];
+
+function StoreCard({
+  store,
+  label,
+  icon,
+}: Readonly<{
+  store: string;
+  label: string;
+  icon: ReactNode;
+}>) {
+  return (
+    <div
+      aria-label={`${store}: ${label}`}
+      className="flex min-h-14 items-center gap-3 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-left shadow-sm"
+    >
+      <span className="flex h-8 w-8 items-center justify-center text-white">
+        {icon}
+      </span>
+      <span>
+        <span className="block text-[0.68rem] font-semibold uppercase tracking-[0.13em] text-white/55">
+          {label}
+        </span>
+        <span className="block text-sm font-bold text-white">{store}</span>
+      </span>
+    </div>
+  );
+}
 
 export default function AppPage() {
   return (
     <main className="min-h-screen bg-[#f8f6f1] text-[#0b2341]">
-      <section className="relative overflow-hidden bg-[#071d35] px-4 py-16 text-white sm:px-6 sm:py-20">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(214,166,63,0.25),_transparent_35%),radial-gradient(circle_at_bottom_left,_rgba(73,107,63,0.35),_transparent_35%)]" />
+      <section className="relative overflow-hidden bg-[#071d35] px-4 py-12 text-white sm:px-6 sm:py-16 lg:py-20">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_90%_15%,_rgba(214,166,63,0.28),_transparent_30%),radial-gradient(circle_at_10%_100%,_rgba(73,107,63,0.45),_transparent_36%)]" />
 
-        <div className="relative mx-auto grid max-w-6xl gap-10 lg:grid-cols-[1fr_0.8fr] lg:items-center">
-          <div>
-            <p className="mb-4 inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-[#f0d28a]">
-              Church Connect App
+        <div className="relative mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[0.84fr_1.16fr] lg:gap-14">
+          <div className="py-2">
+            <div className="mb-6 flex items-center gap-3">
+              <Image
+                src="/images/website/church-connect-app-icon.png"
+                alt="Church Connect App-Logo"
+                width={64}
+                height={64}
+                className="h-14 w-14 rounded-2xl shadow-[0_12px_28px_rgba(0,0,0,0.28)]"
+              />
+              <div>
+                <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#f0d28a]">
+                  Church Connect
+                </p>
+                <p className="mt-1 text-sm text-white/65">Ihre Gemeinde. Immer dabei.</p>
+              </div>
+            </div>
+
+            <p className="inline-flex rounded-full border border-[#f0d28a]/30 bg-[#d6a63f]/15 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.14em] text-[#f0d28a]">
+              Jetzt in der Testphase
             </p>
 
-            <h1 className="max-w-4xl text-[clamp(2rem,7vw,5rem)] font-extrabold leading-[1.03] tracking-[-0.04em]">
-              Die interne Plattform für unsere Gemeinden
+            <h1 className="mt-5 max-w-xl text-[clamp(2.25rem,6vw,4.7rem)] font-extrabold leading-[0.98] tracking-[-0.045em]">
+              Gemeinde.
+              <br />
+              Verbunden.
+              <br />
+              Immer dabei.
             </h1>
 
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-white/80">
-              Church Connect soll die Gemeinden unterstützen: mit
-              Veranstaltungen, Gebetsanliegen, Sabbatplanung, Mitgliedern und
-              sicherer Kommunikation.
+            <p className="mt-6 max-w-xl text-base leading-7 text-white/78 sm:text-lg sm:leading-8">
+              Church Connect bringt Gemeinschaft, Termine und Gebet in eine
+              ruhige, geschützte App – für das Leben Ihrer Gemeinde.
             </p>
 
-            <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:flex-wrap">
-              <Link
-                href="/kontakt"
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#d6a63f] px-6 py-3 font-semibold text-[#071d35] shadow-sm hover:bg-[#c99631]"
-              >
-                Zugang anfragen
-                <ArrowRight size={18} />
-              </Link>
-
-              <Link
-                href="/ueber-uns"
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-6 py-3 font-semibold text-[#071d35] shadow-sm hover:bg-white/90"
-              >
-                Mehr über uns
-              </Link>
+            <div className="mt-8 grid max-w-md gap-3 sm:grid-cols-2">
+              <StoreCard
+                label="Bald im"
+                store="App Store"
+                icon={<Apple size={27} strokeWidth={2.1} />}
+              />
+              <StoreCard
+                label="Bald bei"
+                store="Google Play"
+                icon={<Play size={26} fill="currentColor" strokeWidth={0} />}
+              />
             </div>
+
+            <p className="mt-3 text-sm text-white/58">
+              Der öffentliche Download folgt nach Abschluss der Tests.
+            </p>
+
+            <Link
+              href="/kontakt"
+              className="mt-7 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#d6a63f] px-6 py-3 font-bold text-[#071d35] transition hover:bg-[#e3b956]"
+            >
+              Testzugang anfragen
+              <ArrowRight size={18} />
+            </Link>
           </div>
 
-          <div className="rounded-[2rem] border border-white/15 bg-white/10 p-5 shadow-2xl backdrop-blur">
-            <div className="rounded-[1.5rem] bg-[#f8f6f1] p-6 text-[#0b2341]">
-              <div className="mb-6 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#496b3f]">
-                    Vorschau
-                  </p>
-                  <h2 className="mt-1 text-2xl font-bold">Church Connect</h2>
-                </div>
-
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#0b2341] text-white">
-                  <Smartphone size={24} />
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="rounded-2xl bg-white p-5 shadow-sm">
-                  <p className="text-sm font-semibold text-[#d6a63f]">
-                    Nächster Sabbat
-                  </p>
-                  <h3 className="mt-2 font-bold">Sabbatgottesdienst</h3>
-                  <p className="mt-1 text-sm text-[#475569]">
-                    Planung, Rollen, Teilnahme und Informationen.
-                  </p>
-                </div>
-
-                <div className="rounded-2xl bg-white p-5 shadow-sm">
-                  <p className="text-sm font-semibold text-[#496b3f]">
-                    Gebetsanliegen
-                  </p>
-                  <h3 className="mt-2 font-bold">Privat und geschützt</h3>
-                  <p className="mt-1 text-sm text-[#475569]">
-                    Sichtbarkeit wird bewusst gewählt.
-                  </p>
-                </div>
-
-                <div className="rounded-2xl bg-[#0b2341] p-5 text-white shadow-sm">
-                  <p className="text-sm text-white/70">
-                    Öffentliche Inhalte können später auf staref.ch erscheinen.
-                  </p>
-                  <p className="mt-3 font-semibold text-[#f0d28a]">
-                    App + Website verbunden
-                  </p>
-                </div>
-              </div>
+          <div className="relative mx-auto w-full max-w-3xl">
+            <div className="absolute inset-x-10 inset-y-8 rounded-[2.5rem] bg-[#d6a63f]/20 blur-3xl" />
+            <div className="relative overflow-hidden rounded-[2rem] border border-white/15 bg-[#f8f6f1] p-2 shadow-[0_32px_80px_rgba(0,0,0,0.35)] sm:p-3">
+              <Image
+                src="/images/website/church-connect-preview-phones.png"
+                alt="Vorschau von Church Connect mit Startseite, Terminen und Gebetsanliegen"
+                width={1536}
+                height={1024}
+                priority
+                sizes="(max-width: 1024px) 100vw, 58vw"
+                className="h-auto w-full rounded-[1.45rem]"
+              />
             </div>
+            <p className="mt-4 text-center text-xs font-bold uppercase tracking-[0.16em] text-white/55">
+              Startseite · Termine · Gebet
+            </p>
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16 lg:px-8">
-        <div className="mb-10 text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.25em] text-[#d6a63f]">
-            Funktionen
+      <section className="site-container py-14 sm:py-20">
+        <div className="mx-auto max-w-2xl text-center">
+          <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#8e6a1d]">
+            Für das Gemeindeleben
           </p>
-          <h2 className="mt-3 text-3xl font-bold md:text-4xl">
-            Wofür Church Connect gedacht ist
+          <h2 className="mt-3 text-3xl font-extrabold tracking-[-0.035em] sm:text-4xl">
+            Alles Wichtige, angenehm übersichtlich
           </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-[#475569]">
-            Die App ist der interne Bereich. Die Website zeigt nur Informationen,
-            die bewusst öffentlich freigegeben wurden.
+          <p className="mt-4 leading-7 text-[#5c6878]">
+            Church Connect hilft Mitgliedern und Verantwortlichen, informiert
+            zu bleiben und miteinander verbunden zu sein.
           </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-10 grid gap-5 md:grid-cols-3">
           {appFeatures.map((feature) => {
             const Icon = feature.icon;
 
             return (
               <article
                 key={feature.title}
-                className="rounded-3xl border border-[#e5dfd0] bg-white p-7 shadow-sm"
+                className="rounded-3xl border border-[#e5dfd0] bg-white p-7 shadow-[0_18px_45px_rgba(7,29,53,0.07)]"
               >
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#eef3ea] text-[#496b3f]">
-                  <Icon size={28} />
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#eef3ea] text-[#496b3f]">
+                  <Icon size={24} />
                 </div>
-
-                <h3 className="mt-5 text-lg font-bold">{feature.title}</h3>
-                <p className="mt-3 text-sm leading-6 text-[#475569]">
-                  {feature.description}
-                </p>
+                <h3 className="mt-5 text-xl font-extrabold">{feature.title}</h3>
+                <p className="mt-3 leading-7 text-[#5c6878]">{feature.description}</p>
               </article>
             );
           })}
         </div>
       </section>
 
-      <section className="bg-white py-16">
-        <div className="mx-auto grid max-w-6xl gap-8 px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
-          <div className="rounded-3xl bg-[#496b3f] p-8 text-white">
+      <section className="border-y border-[#e5dfd0] bg-white py-14 sm:py-20">
+        <div className="site-container grid items-stretch gap-6 lg:grid-cols-[0.86fr_1.14fr]">
+          <div className="rounded-3xl bg-[#496b3f] p-8 text-white sm:p-10">
             <ShieldCheck className="text-[#f0d28a]" size={42} />
-            <h2 className="mt-6 text-3xl font-bold">
+            <h2 className="mt-6 text-3xl font-extrabold tracking-[-0.035em]">
               Datenschutz zuerst
             </h2>
             <p className="mt-4 leading-7 text-white/80">
-              Mitgliederinformationen, interne Anliegen und private
+              Interne Informationen, Mitgliederangaben und private
               Gebetsanliegen gehören nicht automatisch auf die öffentliche
-              Website. Öffentlich sichtbar wird nur, was bewusst freigegeben
-              wurde.
+              Website. Sichtbar wird nur, was bewusst freigegeben wird.
             </p>
           </div>
 
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className="grid gap-5 sm:grid-cols-3">
             <div className="rounded-3xl border border-[#e5dfd0] bg-[#f8f6f1] p-6">
-              <Lock className="text-[#d6a63f]" size={32} />
-              <h3 className="mt-4 text-xl font-bold">Privat</h3>
-              <p className="mt-3 text-[#475569]">
-                Interne Inhalte bleiben in der App geschützt.
+              <Lock className="text-[#d6a63f]" size={30} />
+              <h3 className="mt-4 text-lg font-extrabold">Privat</h3>
+              <p className="mt-2 text-sm leading-6 text-[#5c6878]">
+                Geschützte Inhalte bleiben in der App.
               </p>
             </div>
-
             <div className="rounded-3xl border border-[#e5dfd0] bg-[#f8f6f1] p-6">
-              <Users className="text-[#d6a63f]" size={32} />
-              <h3 className="mt-4 text-xl font-bold">Gemeinde</h3>
-              <p className="mt-3 text-[#475569]">
-                Inhalte können nur für bestimmte Gemeinden sichtbar sein.
+              <Users className="text-[#d6a63f]" size={30} />
+              <h3 className="mt-4 text-lg font-extrabold">Gemeinde</h3>
+              <p className="mt-2 text-sm leading-6 text-[#5c6878]">
+                Informationen erreichen die richtigen Menschen.
               </p>
             </div>
-
             <div className="rounded-3xl border border-[#e5dfd0] bg-[#f8f6f1] p-6">
-              <Globe2 className="text-[#d6a63f]" size={32} />
-              <h3 className="mt-4 text-xl font-bold">Öffentlich</h3>
-              <p className="mt-3 text-[#475569]">
-                Freigegebene Veranstaltungen erscheinen auf staref.ch.
-              </p>
-            </div>
-
-            <div className="rounded-3xl border border-[#e5dfd0] bg-[#f8f6f1] p-6">
-              <ShieldCheck className="text-[#d6a63f]" size={32} />
-              <h3 className="mt-4 text-xl font-bold">Kontrolliert</h3>
-              <p className="mt-3 text-[#475569]">
-                Leiter entscheiden bewusst, was veröffentlicht wird.
+              <Globe2 className="text-[#d6a63f]" size={30} />
+              <h3 className="mt-4 text-lg font-extrabold">Öffentlich</h3>
+              <p className="mt-2 text-sm leading-6 text-[#5c6878]">
+                Nur freigegebene Inhalte erscheinen auf staref.ch.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16 lg:px-8">
-        <div className="rounded-[2rem] bg-[#d6a63f] p-6 sm:p-8 md:p-12">
-          <div className="grid gap-8 lg:grid-cols-[1fr_0.8fr] md:items-center">
+      <section className="site-container py-14 sm:py-20">
+        <div className="grid items-center gap-7 rounded-[2rem] bg-[#d6a63f] p-7 sm:p-10 lg:grid-cols-[1fr_auto]">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 flex-none items-center justify-center rounded-xl bg-[#071d35] text-white">
+              <Smartphone size={24} />
+            </div>
             <div>
-              <h2 className="text-3xl font-bold text-[#071d35]">
-                App-Zugang für Mitglieder
+              <h2 className="text-2xl font-extrabold tracking-[-0.025em] text-[#071d35] sm:text-3xl">
+                Church Connect kommt bald.
               </h2>
-              <p className="mt-4 max-w-2xl leading-7 text-[#071d35]/75">
-                Die App ist für Mitglieder und Verantwortliche gedacht. Besucher
-                können über die Website Kontakt aufnehmen oder eine Gemeinde
-                besuchen.
+              <p className="mt-2 max-w-2xl leading-7 text-[#071d35]/75">
+                Wir bereiten die Veröffentlichung für App Store und Google Play
+                vor. Bis dahin können Sie einen Testzugang anfragen.
               </p>
             </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap md:justify-end">
-              <Link
-                href="/kontakt"
-                className="inline-flex items-center justify-center rounded-xl bg-[#071d35] px-6 py-3 font-semibold text-white hover:bg-[#12365f]"
-              >
-                Zugang anfragen
-              </Link>
-
-              <Link
-                href="/gemeinden"
-                className="inline-flex items-center justify-center rounded-xl bg-white px-6 py-3 font-semibold text-[#071d35] hover:bg-white/90"
-              >
-                Gemeinde finden
-              </Link>
-            </div>
           </div>
+
+          <Link
+            href="/kontakt"
+            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#071d35] px-6 py-3 font-bold text-white transition hover:bg-[#12365f]"
+          >
+            Kontakt aufnehmen
+            <ArrowRight size={17} />
+          </Link>
         </div>
       </section>
     </main>
